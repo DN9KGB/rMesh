@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>rMesh Web Flasher</title>
+    <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+
+    <style>
+        /* System Font Stack - wie vom Button verwendet */
+        :root {
+            --primary-color: #333333; /* Deine Wunschfarbe (statt Blau) */
+            --bg-color: #f4f4f7;
+            --text-main: #1a1a1a;
+            --text-secondary: #666666;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start; /* Linksbündig */
+        }
+
+        /* Header Bereich */
+        header {
+            width: 100%;
+            background-color: #ffffff;
+            border-bottom: 2px solid var(--primary-color);
+            padding: 30px 40px;
+            box-sizing: border-box;
+            text-align: left;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 26px;
+            font-weight: 700;
+            color: var(--primary-color);
+        }
+
+        header p {
+            margin: 8px 0 0 0;
+            font-size: 15px;
+            color: var(--text-secondary);
+        }
+
+        /* Hauptinhalt */
+        .main-content {
+            padding: 40px;
+            width: 100%;
+            max-width: 900px;
+            box-sizing: border-box;
+        }
+
+        .card {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border: 1px solid #e0e0e0;
+        }
+
+        .instruction-text {
+            line-height: 1.6;
+            margin-bottom: 25px;
+        }
+
+        /* ESP Web Tool Button Styling */
+        esp-web-install-button {
+            /* Diese Variablen ändern die Farbe im Pop-up Fenster */
+            --esp-tools-button-color: var(--primary-color);
+            --esp-tools-button-border-radius: 5px;
+            display: inline-block;
+        }
+
+        /* Der eigentliche Button auf der Seite */
+        button[slot="activate"] {
+            font-family: inherit;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 14px 28px;
+            border-radius: 5px;
+            font-weight: 600;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        button[slot="activate"]:hover {
+            background-color: #000000;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+
+        .footer-note {
+            margin-top: 20px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+    </style>
+</head>
+<body>
+
+
+    <div class="main-content">
+
+            <esp-web-install-button manifest="manifest.json">
+                <button slot="activate">Gerät verbinden</button>
+                <span slot="unsupported">Browser nicht unterstützt (Nutze Chrome oder Edge).</span>
+            </esp-web-install-button>
+
+    </div>
+
+    <script>
+        /* Optional: Automatischer Trigger beim ersten Klick auf der Seite */
+        window.addEventListener('click', function() {
+            const btn = document.getElementById('installButton');
+            // Hier könnte man den Dialog automatisch öffnen, 
+            // wenn der User die Seite betritt und einmal klickt.
+        }, { once: true });
+    </script>
+
+</body>
+</html>

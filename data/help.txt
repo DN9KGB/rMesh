@@ -1,0 +1,15 @@
+Befehlsübersicht:
+
+H ....................... Hilfe
+SEttings ................ Einstellungen anzeigen
+SCan .................... Wifi scannen
+SSid <ssid> ............. WiFi SSID 
+Password <passwort> ..... WiFi Passwort
+Ip <ip-adresse> ......... WiFi IP
+DNs <ip-adresse> ........ WiFi DNS
+Gateway <ip-adresse> .... WiFi Gateway
+NEtmask <ip-maske> ...... WiFi NETmask
+Ap <1/0> ................ AP-Mode ein/aus
+Dhcp <1/0> .............. DHCP-Client aktiv
+Beboot .................. Neustart
+Vsersion ................ Version

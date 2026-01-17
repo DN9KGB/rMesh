@@ -1,0 +1,208 @@
+//#define WS_MAX_QUEUED_MESSAGES 1
+
+#include "webFunctions.h"
+#include <LittleFS.h>
+#include <ESPAsyncWebServer.h>
+#include "settings.h"
+#include "wifiFunctions.h"
+#include <WiFi.h>
+#include "soc/timer_group_struct.h"
+#include "soc/timer_group_reg.h"
+#include "main.h"
+#include "esp_task_wdt.h"
+#include "hal_LILYGO_T3_LoRa32_V1_6_1.h"
+#include "helperFunctions.h"
+#include "frame.h"
+
+
+
+
+AsyncWebServer webServer(80);
+// create an easy-to-use handler
+AsyncWebSocketMessageHandler wsHandler;
+
+// add it to the websocket server
+AsyncWebSocket ws("/socket", wsHandler.eventHandler());
+
+// https://github.com/ESP32Async/ESPAsyncWebServer/wiki
+
+
+void startWebServer() {
+
+  //---------------------- WEBSOCKET -------------------------
+
+  wsHandler.onConnect([](AsyncWebSocket *server, AsyncWebSocketClient *client) {
+    //Serial.printf("Client %" PRIu32 " connected\n", client->id());
+    ws.cleanupClients();
+    delay(10);
+    sendSettings();
+    delay(10);
+    sendPeerList();
+  });
+
+  wsHandler.onDisconnect([](AsyncWebSocket *server, uint32_t clientId) {
+    //Serial.printf("Client %" PRIu32 " disconnected\n", clientId);
+    ws.cleanupClients();
+  });
+
+  wsHandler.onError([](AsyncWebSocket *server, AsyncWebSocketClient *client, uint16_t errorCode, const char *reason, size_t len) {
+    Serial.printf("Client %" PRIu32 " error: %" PRIu16 ": %s\n", client->id(), errorCode, reason);
+    ws.cleanupClients();
+  });
+
+  //Empfangene Daten auswerten
+  wsHandler.onMessage([](AsyncWebSocket *server, AsyncWebSocketClient *client, const uint8_t *data, size_t len) {
+    //JSON 
+    JsonDocument json;
+    DeserializationError error = deserializeJson(json, data, len);
+
+    //PING (nur zum test)
+    if (json["ping"].is<JsonVariant>()) {
+      //Serial.println(json["ping"].as<String>());
+    }
+
+    //Einstellungen speichern
+    if (json["settings"].is<JsonVariant>()) {
+      Serial.println("Einstellungen");
+
+      if (json["settings"]["mycall"].is<JsonVariant>()) { 
+        String mycall = json["settings"]["mycall"].as<String>();
+        mycall.toUpperCase();
+        mycall.toCharArray(settings.mycall, sizeof(settings.mycall));
+        //strlcpy(settings.mycall, json["settings"]["mycall"] | "", sizeof(settings.mycall)); 
+      }
+      if (json["settings"]["ntp"].is<JsonVariant>()) { strlcpy(settings.ntpServer, json["settings"]["ntp"] | "", sizeof(settings.ntpServer)); }
+      if (json["settings"]["dhcpActive"].is<JsonVariant>()) { settings.dhcpActive = json["settings"]["dhcpActive"].as<bool>(); }
+      if (json["settings"]["wifiSSID"].is<JsonVariant>()) { strlcpy(settings.wifiSSID, json["settings"]["wifiSSID"] | "", sizeof(settings.wifiSSID)); }
+      if (json["settings"]["wifiPassword"].is<JsonVariant>()) { strlcpy(settings.wifiPassword, json["settings"]["wifiPassword"] | "", sizeof(settings.wifiPassword)); }
+      if (json["settings"]["apMode"].is<JsonVariant>()) { settings.apMode = json["settings"]["apMode"].as<bool>(); }
+      if (json["settings"]["wifiIP"].is<JsonVariant>()) { 
+        JsonArray ipArray = json["settings"]["wifiIP"];
+        for (int i = 0; i < 4; i++) {settings.wifiIP[i] = ipArray[i] | 0; }
+      }
+      if (json["settings"]["wifiNetMask"].is<JsonVariant>()) { 
+        JsonArray ipArray = json["settings"]["wifiNetMask"];
+        for (int i = 0; i < 4; i++) {settings.wifiNetMask[i] = ipArray[i] | 0; }
+      }
+      if (json["settings"]["wifiGateway"].is<JsonVariant>()) { 
+        JsonArray ipArray = json["settings"]["wifiGateway"];
+        for (int i = 0; i < 4; i++) {settings.wifiGateway[i] = ipArray[i] | 0; }
+      }
+      if (json["settings"]["wifiDNS"].is<JsonVariant>()) { 
+        JsonArray ipArray = json["settings"]["wifiDNS"];
+        for (int i = 0; i < 4; i++) {settings.wifiDNS[i] = ipArray[i] | 0; }
+      }
+      if (json["settings"]["loraFrequency"].is<JsonVariant>()) { settings.loraFrequency = json["settings"]["loraFrequency"].as<float>(); }
+      if (json["settings"]["loraOutputPower"].is<JsonVariant>()) { settings.loraOutputPower = json["settings"]["loraOutputPower"].as<int8_t>(); }
+      if (json["settings"]["loraBandwidth"].is<JsonVariant>()) { settings.loraBandwidth = json["settings"]["loraBandwidth"].as<float>(); }
+      if (json["settings"]["loraSyncWord"].is<JsonVariant>()) { settings.loraSyncWord = json["settings"]["loraSyncWord"].as<uint8_t>(); }
+      if (json["settings"]["loraCodingRate"].is<JsonVariant>()) { settings.loraCodingRate = json["settings"]["loraCodingRate"].as<uint8_t>(); }
+      if (json["settings"]["loraSpreadingFactor"].is<JsonVariant>()) { settings.loraSpreadingFactor = json["settings"]["loraSpreadingFactor"].as<uint8_t>(); }
+      if (json["settings"]["loraPreambleLength"].is<JsonVariant>()) { settings.loraPreambleLength = json["settings"]["loraPreambleLength"].as<int16_t>(); }
+      if (json["settings"]["loraRepeat"].is<JsonVariant>()) { settings.loraRepeat = json["settings"]["loraRepeat"].as<bool>(); }
+      saveSettings();
+    }
+
+
+    //Frame senden (alles ist möglich)
+    if (json["sendFrame"].is<JsonVariant>()) {
+        Frame f;
+        if (json["sendFrame"]["transmitMillis"].is<JsonVariant>()) {f.transmitMillis = json["sendFrame"]["transmitMillis"].as<uint32_t>();}
+        if (json["sendFrame"]["frameType"].is<JsonVariant>()) {f.frameType = json["sendFrame"]["frameType"].as<uint8_t>();}
+        if (json["sendFrame"]["srcCall"].is<JsonVariant>()) {f.srcCall = json["sendFrame"]["srcCall"].as<String>();}
+        if (json["sendFrame"]["dstCall"].is<JsonVariant>()) {f.dstCall = json["sendFrame"]["dstCall"].as<String>();}
+        if (json["sendFrame"]["viaCall"].is<JsonVariant>()) {f.viaCall = json["sendFrame"]["viaCall"].as<String>();}
+        if (json["sendFrame"]["messageText"].is<JsonVariant>()) {f.setMessageText(json["sendFrame"]["messageText"].as<String>());}
+        if (json["sendFrame"]["messageType"].is<JsonVariant>()) {f.messageType = json["sendFrame"]["messageType"].as<uint8_t>();}
+        if (json["sendFrame"]["retry"].is<JsonVariant>()) {f.retry = json["sendFrame"]["retry"].as<uint8_t>();}
+        if (json["sendFrame"]["initRetry"].is<JsonVariant>()) {f.initRetry = json["sendFrame"]["initRetry"].as<uint8_t>();}
+        if (json["sendFrame"]["message"].is<JsonArray>()) {
+            JsonArray jsonMsg = json["sendFrame"]["message"].as<JsonArray>();
+            uint8_t i = 0;
+            for (uint8_t v : jsonMsg) {
+                // Sicherstellen, dass wir niemals über das Ende von f.message (256 Bytes) schreiben
+                if (i < len && i < 256) { 
+                    f.message[i] = v;
+                    i++;
+                }
+            }
+        }
+        if (json["sendFrame"]["messageLength"].is<JsonVariant>()) {f.messageLength = json["sendFrame"]["messageLength"].as<uint16_t>();}
+        sendFrame(f);
+    }   
+
+    //Nachricht senden
+    if (json["sendMessage"].is<JsonVariant>()) {
+      sendMessage(json["sendMessage"]["dstCall"].as<String>(), json["sendMessage"]["text"].as<String>());
+
+         
+
+    }   
+
+    //Trace senden
+    if (json["trace"].is<JsonVariant>()) {
+        String message = "";
+        message += String(settings.mycall);
+        message += " ";
+        message += getFormattedTime("%H:%M:%S");
+        sendTrace(json["trace"]["dstCall"].as<String>(), message);
+    }   
+
+    //Uhrzeit Sync
+    if (json["time"].is<JsonVariant>()) {
+      struct timeval tv;
+      tv.tv_sec = json["time"].as<time_t>();
+      tv.tv_usec = 0;
+      settimeofday(&tv, NULL);
+    }
+
+    //WiFi Scannen
+    if (json["scanWifi"].is<JsonVariant>()) {
+      Serial.println("WiFi Scan....");
+      WiFi.scanNetworks(true);
+    }
+
+    //Announce
+    if (json["announce"].is<JsonVariant>()) {
+      Serial.println("Send manual announce....");
+      announceTimer = 0;
+    }  
+
+    //Tune
+    if (json["tune"].is<JsonVariant>()) {
+      Serial.println("Send tune...");
+      Frame f;
+      f.frameType = Frame::TUNE;
+      f.transmitMillis = 0;
+      //Frame in SendeBuffer
+      txFrameBuffer.push_back(f);
+    }     
+
+    //Reboot
+    if (json["reboot"].is<JsonVariant>()) {
+      Serial.println("Reboot");
+      rebootTimer = millis() + 2500;
+    }    
+
+
+  });
+  
+  //Websocket -> Webserver
+  webServer.addHandler(&ws);
+
+  //---------------------- WEBSERVER -------------------------
+  DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "*");
+  DefaultHeaders::Instance().addHeader("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS");
+  DefaultHeaders::Instance().addHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  //Redirect für Index-Seite
+  webServer.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+
+    request->redirect("/index.html");
+  }); 
+
+  //Statische Webseite aus Filesystem  + Starten
+  webServer.serveStatic("/", LittleFS, "/");
+  webServer.begin(); 
+}
+

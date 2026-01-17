@@ -1,0 +1,203 @@
+
+<style>
+
+
+/* Obere Navigationsleiste */
+        .top-nav {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            height: 100px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #eee;
+            z-index: 900;
+            align-items: stretch; /* Sorgt dafür, dass beide immer exakt gleich hoch sind */
+        }
+
+
+.links {
+    flex-grow: 1;        /* Sagt diesem Div: "Fülle den restlichen Platz aus" */
+    background-color: #e0e0e0;
+    padding: 20px;
+  }
+
+  .rechts {
+    width: 150px;        /* Fixe Breite */
+    flex-shrink: 0;      /* Verhindert, dass das Div bei wenig Platz schrumpft */
+    background-color: #d1d1d1;
+    padding: 20px;
+    text-align: right;   /* Text innerhalb ist rechtsbündig */
+  }
+
+
+/* Mittlerer Inhaltsbereich */
+        .content {
+            /* Das Wichtigste: Platz für Top und Bottom Nav schaffen */
+            padding-top: 100px; 
+            padding-bottom: 100px;
+            /*min-height: calc(100vh - 200px); /* Füllt den Rest des Bildschirms */
+            text-align: center;
+        }
+
+/* Untere Navigationsleiste */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            height: 100px;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            background: #eee;
+            z-index: 1000;
+        }
+</style>
+
+
+
+
+<nav class="top-nav">
+
+    <div class="links">
+        Linke Seite (flexibel) <br>
+        <button onclick="show(1)">1</button>
+        <button onclick="show(2)">2</button>
+        <button onclick="show(3)">3</button>
+
+    </div>
+    <div class="rechts">Rechte Seite (150px)
+        <canvas id="clock" width="150" height="150"></canvas>
+
+    </div>
+
+</nav>
+
+
+<div id="section1" class="content">Inhalt 1</div>
+<div id="section2" class="content" style="display:none">Inhalt 2</div>
+<div id="section3" class="content" style="display:none">Inhalt 3</div>
+
+
+
+<nav class="bottom-nav">
+  <button onclick="show(1)">Home</button>
+  <button onclick="show(2)">Profil</button>
+  <button onclick="show(3)">Profil</button>
+</nav>
+
+
+
+<script>
+  function show(id) {
+    document.querySelectorAll('.content').forEach(el => el.style.display = 'none');
+    document.getElementById('section' + id).style.display = 'block';
+  }
+
+
+    const canvas = document.getElementById("clock");
+    const ctx = canvas.getContext("2d");
+    const radius = canvas.width / 2;
+
+    ctx.translate(radius, radius);
+
+    function drawClock() {
+      drawFace(ctx, radius);
+      drawTicks(ctx, radius);
+      drawHands(ctx, radius);
+    }
+
+    function drawFace(ctx, radius) {
+      ctx.beginPath();
+      ctx.arc(0, 0, radius * 0.95, 0, 2 * Math.PI);
+      ctx.fillStyle = "#333333";
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(0, 0, radius * 0.04, 0, 2 * Math.PI);
+      ctx.fillStyle = "#000000";
+      ctx.fill();
+    }
+
+    function drawTicks(ctx, radius) {
+      for (let i = 0; i < 60; i++) {
+        const angle = (i * Math.PI) / 30;
+        ctx.save();
+        ctx.rotate(angle);
+
+        ctx.beginPath();
+        ctx.strokeStyle = "#ffd600";
+        ctx.lineWidth = (i % 5 === 0) ? radius * 0.018 : radius * 0.01;
+
+        const outer = radius * 0.95;
+        const inner = (i % 5 === 0) ? outer - radius * 0.12 : outer - radius * 0.06;
+
+        ctx.moveTo(0, -inner);
+        ctx.lineTo(0, -outer);
+        ctx.stroke();
+
+        ctx.restore();
+      }
+    }
+
+    function drawHands(ctx, radius) {
+      const now = new Date();
+
+      let hour = now.getHours();
+      let minute = now.getMinutes();
+      let second = now.getSeconds();
+
+      hour = hour % 12;
+
+      const hourAngle =
+        (hour * Math.PI) / 6 +
+        (minute * Math.PI) / (6 * 60) +
+        (second * Math.PI) / (360 * 60);
+
+      const minuteAngle =
+        (minute * Math.PI) / 30 + (second * Math.PI) / (30 * 60);
+
+      const secondAngle = (second * Math.PI) / 30;
+
+      drawHand(ctx, hourAngle, radius * 0.5, radius * 0.05, "#ffffff");
+      drawHand(ctx, minuteAngle, radius * 0.75, radius * 0.035, "#ffffff");
+
+      // Sekundenzeiger
+      const secLength = radius * 0.8;
+      drawHand(ctx, secondAngle, secLength, radius * 0.012, "#ff5252");
+
+      // Kreis am Sekundenzeiger (50% größer, gefüllt)
+      ctx.save();
+      ctx.rotate(secondAngle);
+
+      ctx.beginPath();
+      ctx.lineWidth = radius * 0.012;
+      ctx.strokeStyle = "#ff5252";
+      ctx.fillStyle = "#333333"; // Zifferblattfarbe
+      ctx.arc(0, -secLength * 0.8, radius * 0.06, 0, 2 * Math.PI); // <-- größerer Kreis
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    function drawHand(ctx, angle, length, width, color) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.lineWidth = width;
+      ctx.lineCap = "butt";
+      ctx.strokeStyle = color;
+      ctx.rotate(angle);
+
+      ctx.moveTo(0, 0);
+      ctx.lineTo(0, -length);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    setInterval(drawClock, 1000);
+    drawClock();
+ 
+</script>
