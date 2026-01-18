@@ -1,4 +1,11 @@
-//#define WS_MAX_QUEUED_MESSAGES 1
+#pragma once
+#include <ESPAsyncWebServer.h>
+
+extern AsyncWebSocket ws;
+
+void startWebServer();
+
+/*
 
 #ifndef WEBFUNCTIONS_H
 #define WEBFUNCTIONS_H
@@ -11,7 +18,9 @@ extern AsyncWebSocket ws;
 extern uint32_t rebootTimer;
 extern uint32_t announceTimer;
 
-void startWebServer();
+
 String webProcessor(const String& var);
 
 #endif
+
+*/

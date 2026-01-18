@@ -1,9 +1,6 @@
 #include "hal_LILYGO_T3_LoRa32_V1_6_1.h"
-#include "main.h"
-#include <RadioLib.h>
+#include "RadioLib.h"
 #include "settings.h"
-#include <LittleFS.h>
-#include "helperFunctions.h"
 
 
 
@@ -19,7 +16,22 @@ void printState(int state) {
     if (state != RADIOLIB_ERR_NONE) {Serial.printf("FAILED! code %d\n", state);}
 }
 
-void initRadio() {
+
+void setWiFiLED(bool value) {
+    #ifdef PIN_WIFI_LED
+        digitalWrite(PIN_WIFI_LED, value);
+    #endif
+}
+
+
+void init() {
+    //SPI Init
+    SPI.begin(SPI_SCK, SPI_MISO, SPI_MOSI, SPI_SS);
+
+    //Ausgäne
+    pinMode(PIN_WIFI_LED, OUTPUT); 
+    digitalWrite(PIN_WIFI_LED, 0); 
+
     //Flags zurücksetzen
     int state;
 
@@ -38,14 +50,16 @@ void initRadio() {
     printState(radio.startReceive());
 
     //Test PEER eintragen
-    Peer p;
-    p.lastRX = 0xFFFFFFFF;
-    strncpy(p.call, "DB0LUS", sizeof(p.call)-1);  //DB0LUS in p.call
-    p.available = true;
-    //peerList.push_back(p);
+    //Peer p;
+    //p.lastRX = 0xFFFFFFFF;
+    //strncpy(p.call, "DB0LUS", sizeof(p.call)-1);  //DB0LUS in p.call
+    //p.available = true;
+    //peerList.push_back(p);    
 
 }
 
+
+/*
 
 bool transmitFrame(Frame &f) {
     //Senden
@@ -59,3 +73,4 @@ bool transmitFrame(Frame &f) {
     ws.textAll(f.getMonitorJSON());
     return true;
 }
+*/

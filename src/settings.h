@@ -1,7 +1,4 @@
-#include <Arduino.h>
-#include "ESPAsyncWebServer.h"
-
-
+#pragma once
 
 //Konfiguration
 struct Settings {
@@ -23,15 +20,32 @@ struct Settings {
   uint8_t loraSpreadingFactor;
   int16_t loraPreambleLength;
   bool loraRepeat;
-  uint8_t loraMaxMessageLength;
 };
+
+void loadSettings();
+void saveSettings();
+void showSettings();
+void sendSettings();
+
+extern Settings settings;
+
+
+/*
+
+#include <Arduino.h>
+#include "ESPAsyncWebServer.h"
+
+
+
+
 
 extern Settings settings;
 extern AsyncWebSocket ws;
 
 void defaultSettings();
 void saveSettings();
-void loadSettings();
 bool checkSettings();
 void showSettings();
 void sendSettings();
+
+*/

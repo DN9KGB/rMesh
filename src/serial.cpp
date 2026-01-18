@@ -1,14 +1,19 @@
-#include "serial.h"
 #include <Arduino.h>
-#include "main.h"
-#include "settings.h"
 #include <LittleFS.h>
 #include <WiFi.h>
-#include "webFunctions.h"
+
+#include "serial.h"
+#include "config.h"
+#include "settings.h"
+#include "hal_LILYGO_T3_LoRa32_V1_6_1.h"
+#include "settings.h"
+#include "main.h"
 #include "wifiFunctions.h"
 
-String serialRxBuffer;
-//uint8_t serialrxBufferLength = 0;
+//String serialRxBuffer;
+
+char serialRxBuffer[200] = {0}; 
+
 
 void checkSerialRX() {
     if (Serial.available() > 0) {
@@ -17,22 +22,31 @@ void checkSerialRX() {
         Serial.write(rx);
         if ((rx == 13) || (rx == 10)) {
             //Auswerten
-            if (serialRxBuffer.length() > 0 ) {
-                //Befehl & Parameter auseinanderwurschteln
-                String parameter = "";
-                if (serialRxBuffer.indexOf(" ") > 0) {
-                    //Leerzeichen gefunden -> Befehl ausschneiden
-                    parameter = serialRxBuffer.substring(serialRxBuffer.indexOf(" ") + 1);
-                    serialRxBuffer = serialRxBuffer.substring(0, serialRxBuffer.indexOf(" "));
-                }   
-                serialRxBuffer.toLowerCase();
-                Serial.println();
-                // Serial.printf("Befehl: ***%s***\n", serialRxBuffer);
-                // Serial.printf("Parameter: ***%s***\n", parameter);
+            if (strlen(serialRxBuffer) > 0 ) {
+
+                //Parameter kopieren
+                char parameter[200] = {0};
+                char* pos = strchr(serialRxBuffer, ' ');
+                if (pos != nullptr) {
+                    pos++; // hinter das Leerzeichen
+                    strncpy(parameter, pos, sizeof(parameter) - 1); // sicheren Copy
+                    Serial.println(parameter);
+                }
+
+                //Puffer nach Kleinbuchstaben
+                for (int i = 0; serialRxBuffer[i] != '\0'; i++) {
+                    serialRxBuffer[i] = tolower(serialRxBuffer[i]);
+                }
                 
                 //Befehle auswerten
+
+                //Testfunktionen
+                if (strncmp(serialRxBuffer, "t", 1) == 0) {
+
+                }
+
                 //Hilfe
-                if (serialRxBuffer.substring(0, 1) == "h") {
+                if (strncmp(serialRxBuffer, "h", 1) == 0) {
                     File file = LittleFS.open("/help.txt", "r");
                     if (file) {
                         while (file.available()) {
@@ -45,61 +59,58 @@ void checkSerialRX() {
                 }
 
                 //Version
-                if (serialRxBuffer.substring(0, 1) == "v") {
-                    Serial.println(String(VERSION));
-                }
-
-                //Testfunktionen
-                if (serialRxBuffer.substring(0, 1) == "t") {
-                    Frame f;
-                    f.frameType = Frame::FrameType::TEXT_MESSAGE;
-                    f.messageType = Frame::MessageTypes::TRACE;
-                    uint8_t daten[10] = {0};
-                    memcpy(f.message, daten, 10);
-                    f.messageLength = 1;
-                    txFrameBuffer.push_back(f);
-                }
-
-                //Reboot
-                if (serialRxBuffer.substring(0, 1) == "r") {
-                    Serial.println("Reboot...");
-                    rebootTimer = millis() + 500;
+                if (strncmp(serialRxBuffer, "v", 1) == 0) {
+                    //+ BOARD TYPE
+                    Serial.print("SW: ");
+                    Serial.print(NAME);
+                    Serial.print(" ");
+                    Serial.println(VERSION);
+                    Serial.print("HW: ");
+                    Serial.println(HW_TYPE);
                 }
 
                 //Settings
-                if (serialRxBuffer.substring(0, 2) == "se") {
+                if (strncmp(serialRxBuffer, "se", 2) == 0) {
                     showSettings();
                 }
 
+                //Reboot
+                if (strncmp(serialRxBuffer, "r", 1) == 0) {
+                    Serial.println("Reboot...");
+                    rebootTimer = 0;
+                }
+
                 //Wifi Scannen
-                if (serialRxBuffer.substring(0, 2) == "sc") {
+                if (strncmp(serialRxBuffer, "sc", 2) == 0) {
                     Serial.println("WiFi scan.....");
                     WiFi.scanNetworks(true);
                 }
 
                 //Wifi SSID
-                if (serialRxBuffer.substring(0, 2) == "ss") {
-                    if (parameter.length() > 0) {
-                        parameter.toCharArray(settings.wifiSSID, sizeof(settings.wifiSSID));
+                if (strncmp(serialRxBuffer, "ss", 2) == 0) {
+                    if (strlen(parameter) > 0) {
+                        strncpy(settings.wifiSSID, parameter, sizeof(settings.wifiSSID) - 1);
+                        settings.wifiSSID[sizeof(settings.wifiSSID) - 1] = '\0'; 
                         saveSettings();
                         wifiInit();
                     }
                     Serial.printf("WiFi SSID: %s\n", settings.wifiSSID);
-                }
-
+                }    
+                
                 //Wifi Password
-                if (serialRxBuffer.substring(0, 1) == "p") {
-                    if (parameter.length() > 0) {
-                        parameter.toCharArray(settings.wifiPassword, sizeof(settings.wifiPassword));
+                if (strncmp(serialRxBuffer, "p", 1) == 0) {
+                    if (strlen(parameter) > 0) {
+                        strncpy(settings.wifiPassword, parameter, sizeof(settings.wifiPassword) - 1);
+                        settings.wifiPassword[sizeof(settings.wifiPassword) - 1] = '\0'; 
                         saveSettings();
                         wifiInit();
                     }
                     Serial.printf("WiFi Passwort: %s\n", settings.wifiPassword);
-                }
+                }            
                 
                 //IP-Adresse
-                if (serialRxBuffer.substring(0, 1) == "i") {
-                    if (parameter.length() > 0) {
+                if (strncmp(serialRxBuffer, "i", 1) == 0) {
+                    if (strlen(parameter) > 0) {
                         IPAddress tempIP;
                         if (tempIP.fromString(parameter)) {
                             settings.wifiIP = tempIP;
@@ -110,11 +121,11 @@ void checkSerialRX() {
                         }                    
                     }
                     Serial.printf("IP: %d.%d.%d.%d\n", settings.wifiIP[0], settings.wifiIP[1], settings.wifiIP[2], settings.wifiIP[3]);
-                }
-
+                }       
+                
                 //Gateway
-                if (serialRxBuffer.substring(0, 1) == "g") {
-                    if (parameter.length() > 0) {
+                if (strncmp(serialRxBuffer, "g", 1) == 0) {
+                    if (strlen(parameter) > 0) {
                         IPAddress tempIP;
                         if (tempIP.fromString(parameter)) {
                             settings.wifiGateway = tempIP;
@@ -128,8 +139,8 @@ void checkSerialRX() {
                 }
 
                 //DNS-Adresse
-                if (serialRxBuffer.substring(0, 2) == "dn") {
-                    if (parameter.length() > 0) {
+                if (strncmp(serialRxBuffer, "dn", 2) == 0) {
+                    if (strlen(parameter) > 0) {
                         IPAddress tempIP;
                         if (tempIP.fromString(parameter)) {
                             settings.wifiDNS = tempIP;
@@ -143,8 +154,8 @@ void checkSerialRX() {
                 }
 
                 //Netmask
-                if (serialRxBuffer.substring(0, 2) == "ne") {
-                    if (parameter.length() > 0) {
+                if (strncmp(serialRxBuffer, "ne", 2) == 0) {
+                    if (strlen(parameter) > 0) {
                         IPAddress tempIP;
                         if (tempIP.fromString(parameter)) {
                             settings.wifiNetMask = tempIP;
@@ -158,40 +169,46 @@ void checkSerialRX() {
                 }
 
                 //AP-Mode
-                if (serialRxBuffer.substring(0, 1) == "a") {
-                    if (parameter.length() > 0) {
-                        parameter = parameter.substring(0,1);
+                if (strncmp(serialRxBuffer, "a", 1) == 0) {
+                    if (strlen(parameter) > 0) {
                         bool value = false;
-                        if ((parameter == "1") || (parameter == "e") || (parameter == "t")) {value = true;}
+                        if (parameter[0] == '1') value = true;
+                        if (parameter[0] == 'e') value = true;
+                        if (parameter[0] == 't') value = true;
                         settings.apMode = value;
                         saveSettings();
                         wifiInit();
                     }
                     Serial.printf("AP-Mode: %s\n", settings.apMode ? "true" : "false");
                 }
-                
+
                 //DHCP-Mode
-                if (serialRxBuffer.substring(0, 1) == "d") {
-                    if (parameter.length() > 0) {
-                        parameter = parameter.substring(0,1);
+                if (strncmp(serialRxBuffer, "dh", 2) == 0) {
+                    if (strlen(parameter) > 0) {
                         bool value = false;
-                        if ((parameter == "1") || (parameter == "e") || (parameter == "t")) {value = true;}
+                        if (parameter[0] == '1') value = true;
+                        if (parameter[0] == 'e') value = true;
+                        if (parameter[0] == 't') value = true;
                         settings.dhcpActive = value;
                         saveSettings();
                         wifiInit();
                     }
                     Serial.printf("DHCP: %s\n", settings.dhcpActive ? "true" : "false");
-                }                
+                } 
                 
             }
             //Puffer löschen
-            serialRxBuffer = "";
+            serialRxBuffer[0] = '\0';
         } else {
             //RX-Byte in Puffer
-            if (serialRxBuffer.length() < MAX_SERIAL_BUFFER_LENGTH) {
-                serialRxBuffer.concat(String(rx));
+            size_t len = strlen(serialRxBuffer);
+            if (len < sizeof(serialRxBuffer) - 1) {
+                serialRxBuffer[len] = rx;
+                serialRxBuffer[len + 1] = '\0';
             }
+
         }
     }
+    
 }
 

@@ -1,3 +1,29 @@
+#pragma once
+
+#define HW_TYPE "LILYGO_T3_LoRa32_V1_6_1"
+
+
+// Pin-Definitionen für T3 V1.6.1
+#define LORA_NSS    18
+#define LORA_DIO0   26
+#define LORA_RST    23
+#define LORA_DIO1   33
+#define SPI_SCK         5
+#define SPI_MISO        19
+#define SPI_MOSI        27
+#define SPI_SS          18
+
+
+
+#define PIN_WIFI_LED 25      //LED WiFi-Status (ein = AP-Mode, blinken = Client-Mode, aus = nicht verbunden)
+#define PIN_AP_MODE_SWITCH 0     //Taster Umschaltung WiFi CLient/AP
+
+
+void setWiFiLED(bool value);
+
+
+
+/*
 #ifndef RF_H
 #define RF_H
 #include <RadioLib.h>
@@ -20,3 +46,4 @@ bool transmitFrame(Frame &f);
 
 
 #endif
+*/
