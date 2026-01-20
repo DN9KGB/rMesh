@@ -229,7 +229,7 @@
                 } else {
                     msg += "> ";
                 }
-				const date = new Date(m.time * 1000);
+				const date = new Date(m.timestamp * 1000);
 				msg += date.toLocaleString("de-DE", {day: "2-digit",  month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).replace(",", "") + " ";		
 				msg += m.srcCall;
 				if (m.dstCall)  {msg += " " + m.dstCall; }
@@ -256,7 +256,7 @@
                         msg += ">";
                     }
                     //Zeit
-                    const date = new Date(d.monitor.time * 1000);
+                    const date = new Date(d.monitor.timestamp * 1000);
 				    msg += date.toLocaleString("de-DE", {hour: "2-digit", minute: "2-digit", second: "2-digit" }).replace(",", "") + " ";		
 
                     //Bytes
@@ -305,11 +305,12 @@
 				if (d.peerlist) {
 					var peers = "";
 					peers += "<table>";
-					peers += "<tr> <td>Call</td> <td>Last RX</td> <td>RSSI</td> <td>SNR</td> <td>Frq. Error</td> <td>Available</td> </tr>";
-					if (d.peerlist.count > 0) {
+					peers += "<tr> <td>Port</td> <td>Call</td> <td>Last RX</td> <td>RSSI</td> <td>SNR</td> <td>Frq. Error</td> <td>Available</td> </tr>";
+					if (d.peerlist.peers) {
 						d.peerlist.peers.forEach(function(p, index) {
-							const lastRX = new Date(p.lastRX * 1000);
+							const lastRX = new Date(p.timestamp * 1000);
 							peers += "<tr>";
+							peers += "<td>" + p.port + "</td>";
 							peers += "<td>" + p.call + "</td>";
 							peers += "<td>" + lastRX.toLocaleTimeString('de-DE') + "</td>";
 							peers += "<td>" + p.rssi + "</td>";

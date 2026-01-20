@@ -1,14 +1,10 @@
 #include <Arduino.h>
 #include <LittleFS.h>
 #include <esp_task_wdt.h>
-// #include <time.h>
 #include <vector>
-// #include <HTTPClient.h>
-// #include <HTTPUpdate.h>
-// #include <WiFi.h>
 
 #include "config.h"
-#include "hal_LILYGO_T3_LoRa32_V1_6_1.h"
+#include "Hal.h"
 #include "frame.h"
 #include "settings.h"
 #include "main.h"
@@ -166,7 +162,7 @@ void loop() {
         size_t len = serializeJson(doc, jsonBuffer, sizeof(jsonBuffer));
         ws.textAll(jsonBuffer, len);  // sendet direkt den Puffer
     	//Peer-Liste checken
-    	//checkPeerList();
+    	checkPeerList();
     }
 
     //Reboot

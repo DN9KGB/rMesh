@@ -1,5 +1,7 @@
 #include <Arduino.h>
 
+#include "frame.h"
+
 
 
 void printHexArray(uint8_t* data, size_t length);
@@ -7,7 +9,11 @@ void addJSONtoFile(char* buffer, size_t length, const char* file, const uint16_t
 uint32_t getTOA(uint8_t payloadBytes);
 void availablePeerList(String call, bool available);
 void sendMessage(const char* dstCall, const char* text);
+void sendPeerList();
 
+void addPeerList(Frame &f, bool available);
+void addPeerList(Frame &f);
+void checkPeerList();
 
 /*
 #ifndef HELPER_H

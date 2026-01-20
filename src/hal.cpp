@@ -1,4 +1,4 @@
-#include "hal_LILYGO_T3_LoRa32_V1_6_1.h"
+#include "hal.h"
 #include "RadioLib.h"
 #include "settings.h"
 #include "frame.h"
@@ -99,7 +99,6 @@ bool checkReceive(Frame &f) {
             f.rssi = radio.getRSSI();
             f.snr = radio.getSNR();
             f.frqError = radio.getFrequencyError();
-
             return true;
         }
     }
@@ -128,3 +127,5 @@ void transmitFrame(Frame &f) {
     ws.textAll(jsonBuffer, len);  
 
 }
+
+

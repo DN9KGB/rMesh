@@ -6,7 +6,7 @@
 #include "settings.h"
 #include "main.h"
 #include "wifiFunctions.h"
-#include "hal_LILYGO_T3_LoRa32_V1_6_1.h"
+#include "hal.h"
 #include "helperFunctions.h"
 
 AsyncWebServer webServer(80);
@@ -23,7 +23,7 @@ void startWebServer() {
     //Serial.printf("Client %" PRIu32 " connected\n", client->id());
     ws.cleanupClients();
     sendSettings();
-    //sendPeerList();
+    sendPeerList();
   });
 
   wsHandler.onDisconnect([](AsyncWebSocket *server, uint32_t clientId) {

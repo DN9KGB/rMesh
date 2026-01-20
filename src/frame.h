@@ -6,7 +6,7 @@
 
 
 struct Frame {
-    char srcCall[MAX_CALLSIGN_LENGTH + 1] = {0x33};
+    char srcCall[MAX_CALLSIGN_LENGTH + 1] = {0};
     char dstCall[MAX_CALLSIGN_LENGTH + 1] = {0};
     char nodeCall[MAX_CALLSIGN_LENGTH + 1] = {0};
     char viaCall[MAX_CALLSIGN_LENGTH + 1] = {0};
@@ -25,6 +25,7 @@ struct Frame {
     float frqError = 0;
     bool tx = false;
     bool syncFlag = false;
+    uint8_t port = 0;
 
     size_t exportBinary(uint8_t* data, size_t length);
     void importBinary(uint8_t* data, size_t length);

@@ -2,14 +2,13 @@
 
 #include "frame.h"
 #include "helperFunctions.h"
-#include "hal_LILYGO_T3_LoRa32_V1_6_1.h"
+#include "hal.h"
 
 size_t Frame::exportBinary(uint8_t* data, size_t length) {
     //Binär-Daten erzeugen
     size_t position = 0;
-    //Frame-Typ text
-    data[position] = frameType & 0x0F;
-    data[position] = data[position] | (hopCount & 0x0F) << 4;
+    //Frame-Typ + Hop-Count
+    data[position] = (frameType & 0x0F) | ((hopCount & 0x0F) << 4);
     position ++;
     //Absender hinzufügen
     if (strlen(srcCall) > 0) {
@@ -80,8 +79,8 @@ size_t Frame::monitorJSON(char* buffer, size_t length) {
     doc["monitor"]["tx"] = tx;
     doc["monitor"]["rssi"] = rssi;
     doc["monitor"]["snr"] = snr;
-    doc["monitor"]["frequencyError"] = frqError;
-    doc["monitor"]["time"] = timestamp;
+    doc["monitor"]["frqError"] = frqError;
+    doc["monitor"]["timestamp"] = timestamp;
     doc["monitor"]["srcCall"] = srcCall;
     doc["monitor"]["dstCall"] = dstCall;
     doc["monitor"]["viaCall"] = viaCall;
@@ -109,18 +108,15 @@ size_t Frame::messageJSON(char* buffer, size_t length) {
     doc["message"]["dstCall"] = dstCall;
     doc["message"]["id"] = id;
     doc["message"]["tx"] = tx;
-    doc["message"]["time"] = timestamp;
+    doc["message"]["timestamp"] = timestamp;
     size_t len = serializeJson(doc, buffer, length);
     return len;
 }
 
 
 void Frame::importBinary(uint8_t* data, size_t length) {
-
+    //Abbruch, wenn Frame zu kurz
     if (length <= 1) { return; }
-
-    Serial.println("--------------");
-    printHexArray(data, length);
 
     //Frame-TYP
     frameType = data[0] & 0x0F;
@@ -129,65 +125,82 @@ void Frame::importBinary(uint8_t* data, size_t length) {
     //Frame druchlaufen und nach Headern suchen
     uint8_t header = 0;
     uint8_t payloadLength = 0;
-    size_t i = 1;
+    size_t i = 1;       //Position 1. Header
     while (i < length) {
         //Header prüfen
         header = data[i] >> 4;
-        payloadLength = (data[i] & 0x0F);
-        i = i + 1;
-        if (i >= length) {break;}
+        payloadLength = data[i] & 0x0F;
         switch (header) {
-            case Frame::HeaderTypes::DST_CALL_HEADER:
-                memcpy(dstCall, data + i, sizeof(dstCall)); 
-                if (payloadLength >= sizeof(dstCall)) {payloadLength = sizeof(dstCall) - 1;}
-                dstCall[payloadLength] = '\0';
-                if ((i + payloadLength) < length) {i += payloadLength;}
+            case Frame::HeaderTypes::NODE_CALL_HEADER:
+                if (i + payloadLength < length) {
+                    memcpy(nodeCall, data + i + 1, sizeof(nodeCall)); 
+                    if (payloadLength >= sizeof(nodeCall)) {payloadLength = sizeof(nodeCall) - 1;}
+                    nodeCall[payloadLength] = '\0';
+                    i += payloadLength + 1;
+                } else {
+                    i = length; //Abbruch
+                }
                 break;
             case Frame::HeaderTypes::VIA_CALL_HEADER:
-                memcpy(viaCall, data + i, sizeof(viaCall)); 
-                if (payloadLength >= sizeof(viaCall)) {payloadLength = sizeof(viaCall) - 1;}
-                viaCall[payloadLength] = '\0';
-                if ((i + payloadLength) < length) {i += payloadLength;}
-                break;
-            case Frame::HeaderTypes::NODE_CALL_HEADER:
-                memcpy(nodeCall, data + i, sizeof(nodeCall)); 
-                if (payloadLength >= sizeof(nodeCall)) {payloadLength = sizeof(nodeCall) - 1;}
-                nodeCall[payloadLength] = '\0';
-                if ((i + payloadLength) < length) {i += payloadLength;}
+                if (i + payloadLength < length) {
+                    memcpy(viaCall, data + i + 1, sizeof(viaCall)); 
+                    if (payloadLength >= sizeof(viaCall)) {payloadLength = sizeof(viaCall) - 1;}
+                    viaCall[payloadLength] = '\0';
+                    i += payloadLength + 1;
+                } else {
+                    i = length; //Abbruch
+                }
                 break;
             case Frame::HeaderTypes::SRC_CALL_HEADER:
-                memcpy(srcCall, data + i, sizeof(srcCall)); 
-                if (payloadLength >= sizeof(srcCall)) {payloadLength = sizeof(srcCall) - 1;}
-                srcCall[payloadLength] = '\0';
-                if ((i + payloadLength) < length) {i += payloadLength;}
+                if (i + payloadLength < length) {
+                    memcpy(srcCall, data + i + 1, sizeof(srcCall)); 
+                    if (payloadLength >= sizeof(srcCall)) {payloadLength = sizeof(srcCall) - 1;}
+                    srcCall[payloadLength] = '\0';
+                    i += payloadLength + 1;
+                } else {
+                    i = length; //Abbruch
+                }
+                break;
+            case Frame::HeaderTypes::DST_CALL_HEADER:
+                if (i + payloadLength < length) {
+                    memcpy(dstCall, data + i + 1, sizeof(dstCall)); 
+                    if (payloadLength >= sizeof(dstCall)) {payloadLength = sizeof(dstCall) - 1;}
+                    dstCall[payloadLength] = '\0';
+                    i += payloadLength + 1;
+                } else {
+                    i = length; //Abbruch
+                }
                 break;
             case Frame::HeaderTypes::MESSAGE_HEADER:
-                //Message Type Setzen
-                messageType = (data[i - 1] & 0x0F);
-                //ID ausschneiden
-                if (length >= (i + sizeof(id))) {
-                    id = (data[i + 4] << 24) + (data[i + 3] << 16) + (data[i + 2] << 8) + data[i + 1];  
-                    i += sizeof(id) + 1;
+                if (i + sizeof(id) < length) {
+                    //Message Type 
+                    messageType = payloadLength; //Wird dopplet verwendet 
+                    i++;
+                    //Message ID
+                    memcpy(&id, &data[i], sizeof(id));  
+                    i = i + sizeof(id);
+                    //Message Länge
+                    messageLength = length - i;
+                    //Message
+                    memcpy(message, data + i, messageLength);
+                    //Frame Ende
+                    i = length;
+                } else {
+                    i = length; //Abbruch
                 }
-                //Message Länge
-                messageLength = length - i;
-                //Message
-                memcpy(message, data + i, messageLength);
-                //Suche beenden
-                i = length;
                 break;
-            default:
+            default: //Falscher Header
                 i = length;
                 break;
         }      
     }
 
-    Serial.printf("messageType: *%s*\n", messageType);
-    Serial.printf("messageLength: *%s*\n", messageLength);
-    Serial.printf("id: *%s*\n", id);
-    Serial.printf("dstCall: *%s*\n", dstCall);
-    Serial.printf("srcCall: *%s*\n", srcCall);
-    Serial.printf("nodeCall: *%s*\n", nodeCall);
-    Serial.printf("viaCall: *%s*\n", viaCall);
+    // Serial.printf("messageType: *%d*\n", messageType);
+    // Serial.printf("messageLength: *%d*\n", messageLength);
+    // Serial.printf("id: *%d*\n", id);
+    // Serial.printf("dstCall: *%s*\n", dstCall);
+    // Serial.printf("srcCall: *%s*\n", srcCall);
+    // Serial.printf("nodeCall: *%s*\n", nodeCall);
+    // Serial.printf("viaCall: *%s*\n", viaCall);
 
 }

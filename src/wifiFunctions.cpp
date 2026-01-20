@@ -6,7 +6,7 @@
 
 #include "wifiFunctions.h"
 #include "settings.h"
-#include "hal_LILYGO_T3_LoRa32_V1_6_1.h"
+#include "hal.h"
 #include "config.h"
 #include "webFunctions.h"
 
@@ -16,6 +16,7 @@ byte wifiStatus = 0xff;
 bool wiFiLED = false;
 
 void checkForUpdates() {
+    return;
     WiFiClient client;
     // LittleFS Update prüfen
     httpUpdate.updateSpiffs(client, "http://dh1nfj.de/rMesh/update.php?type=littlefs&version=" + String(VERSION) + "&hw=" + String(PIO_ENV_NAME));

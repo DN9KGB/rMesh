@@ -1,9 +1,7 @@
+
 #pragma once
 
 #include "frame.h"
-
-//#define HW_TYPE "LILYGO_T3_LoRa32_V1_6_1"
-
 
 // Pin-Definitionen für T3 V1.6.1
 #define LORA_NSS    18
@@ -23,8 +21,6 @@ void setWiFiLED(bool value);
 void initHal();
 bool checkReceive(Frame &f);
 void transmitFrame(Frame &f);
-
-
 
 
 extern bool txFlag;
@@ -55,3 +51,4 @@ bool transmitFrame(Frame &f);
 
 #endif
 */
+
