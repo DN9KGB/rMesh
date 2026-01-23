@@ -91,44 +91,34 @@ void startWebServer() {
     }
 
 
-    //Frame senden (alles ist möglich)
+    //Frame senden RAW
     if (json["sendFrame"].is<JsonVariant>()) {
         Frame f;
-        // if (json["sendFrame"]["transmitMillis"].is<JsonVariant>()) {f.transmitMillis = json["sendFrame"]["transmitMillis"].as<uint32_t>();}
-        // if (json["sendFrame"]["frameType"].is<JsonVariant>()) {f.frameType = json["sendFrame"]["frameType"].as<uint8_t>();}
-        // if (json["sendFrame"]["srcCall"].is<JsonVariant>()) {f.srcCall = json["sendFrame"]["srcCall"].as<String>();}
-        // if (json["sendFrame"]["dstCall"].is<JsonVariant>()) {f.dstCall = json["sendFrame"]["dstCall"].as<String>();}
-        // if (json["sendFrame"]["viaCall"].is<JsonVariant>()) {f.viaCall = json["sendFrame"]["viaCall"].as<String>();}
-        // if (json["sendFrame"]["messageText"].is<JsonVariant>()) {f.setMessageText(json["sendFrame"]["messageText"].as<String>());}
-        // if (json["sendFrame"]["messageType"].is<JsonVariant>()) {f.messageType = json["sendFrame"]["messageType"].as<uint8_t>();}
-        // if (json["sendFrame"]["retry"].is<JsonVariant>()) {f.retry = json["sendFrame"]["retry"].as<uint8_t>();}
-        // if (json["sendFrame"]["initRetry"].is<JsonVariant>()) {f.initRetry = json["sendFrame"]["initRetry"].as<uint8_t>();}
-        // if (json["sendFrame"]["message"].is<JsonArray>()) {
-        //     JsonArray jsonMsg = json["sendFrame"]["message"].as<JsonArray>();
-        //     uint8_t i = 0;
-        //     for (uint8_t v : jsonMsg) {
-        //         // Sicherstellen, dass wir niemals über das Ende von f.message (256 Bytes) schreiben
-        //         if (i < len && i < 256) { 
-        //             f.message[i] = v;
-        //             i++;
-        //         }
-        //     }
-        // }
-        // if (json["sendFrame"]["messageLength"].is<JsonVariant>()) {f.messageLength = json["sendFrame"]["messageLength"].as<uint16_t>();}
-        //sendFrame(f);
-        
-        //strncpy(f.srcCall, settings.mycall, sizeof(f.srcCall));
-        //strncpy(f.nodeCall, settings.mycall, sizeof(f.srcCall));
-        //strncpy((char*)f.message, "Hallo Welt!", sizeof(f.message));
-        //f.frameType = Frame::FrameTypes::MESSAGE_FRAME;
-        //f.messageLength = 11;
-        //transmitFrame(f);
-
-        //
-
-
-        
-
+        if (json["sendFrame"]["frameType"].is<JsonVariant>()) {f.frameType = json["sendFrame"]["frameType"].as<uint8_t>();}
+        if (json["sendFrame"]["srcCall"].is<JsonVariant>()) { strlcpy(f.srcCall, json["sendFrame"]["srcCall"] | "", sizeof(f.srcCall)); }
+        if (json["sendFrame"]["dstCall"].is<JsonVariant>()) { strlcpy(f.dstCall, json["sendFrame"]["dstCall"] | "", sizeof(f.dstCall)); }
+        if (json["sendFrame"]["viaCall"].is<JsonVariant>()) { strlcpy(f.viaCall, json["sendFrame"]["viaCall"] | "", sizeof(f.viaCall)); }
+        if (json["sendFrame"]["messageType"].is<JsonVariant>()) {f.messageType = json["sendFrame"]["messageType"].as<uint8_t>();}
+        if (json["sendFrame"]["retry"].is<JsonVariant>()) {f.retry = json["sendFrame"]["retry"].as<uint8_t>();}
+        if (json["sendFrame"]["initRetry"].is<JsonVariant>()) {f.initRetry = json["sendFrame"]["initRetry"].as<uint8_t>();}
+        if (json["sendFrame"]["messageLength"].is<JsonVariant>()) {f.messageLength = json["sendFrame"]["messageLength"].as<uint16_t>();}
+        if (json["sendFrame"]["syncFlag"].is<JsonVariant>()) {f.syncFlag = json["sendFrame"]["syncFlag"].as<bool>();}
+        if (json["sendFrame"]["messageText"].is<JsonVariant>()) { strncpy((char*)f.message, json["sendFrame"]["messageText"], sizeof(f.message)); }
+        if (json["sendFrame"]["message"].is<JsonArray>()) {
+            JsonArray jsonMsg = json["sendFrame"]["message"].as<JsonArray>();
+            uint8_t i = 0;
+            for (uint8_t v : jsonMsg) {
+                // Sicherstellen, dass wir niemals über das Ende von f.message (256 Bytes) schreiben
+                if (i < len && i < sizeof(f.message)) { 
+                    f.message[i] = v;
+                    i++;
+                }
+            }
+        }
+        f.id = millis();
+        f.timestamp = time(NULL);
+        f.tx = true;
+        txBuffer.push_back(f);        
     }   
 
     //Nachricht senden
@@ -138,11 +128,9 @@ void startWebServer() {
 
     //Trace senden
     if (json["trace"].is<JsonVariant>()) {
-        // String message = "";
-        // message += String(settings.mycall);
-        // message += " ";
-        // message += getFormattedTime("%H:%M:%S");
-        // sendTrace(json["trace"]["dstCall"].as<String>(), message);
+        char text[128];
+        getFormattedTime("%H:%M:%S", text, sizeof(text));
+        sendMessage(json["trace"]["dstCall"].as<const char*>(), text, Frame::MessageTypes::TRACE_MESSAGE);
     }   
 
     //Uhrzeit Sync
@@ -155,24 +143,23 @@ void startWebServer() {
 
     //WiFi Scannen
     if (json["scanWifi"].is<JsonVariant>()) {
-      Serial.println("WiFi Scan....");
+      Serial.println("WiFi Scan...");
       WiFi.scanNetworks(true);
     }
 
     //Announce
     if (json["announce"].is<JsonVariant>()) {
-      Serial.println("Send manual announce....");
+      Serial.println("Send manual announce...");
       announceTimer = 0;
     }  
 
     //Tune
     if (json["tune"].is<JsonVariant>()) {
-    //   Serial.println("Send tune...");
-    //   Frame f;
-    //   f.frameType = Frame::TUNE;
-    //   f.transmitMillis = 0;
-    //   //Frame in SendeBuffer
-    //   txBuffer.push_back(f);
+      Serial.println("Send tune...");
+      Frame f;
+      f.frameType = Frame::FrameTypes::TUNE_FRAME;
+      //Frame in SendeBuffer
+      txBuffer.push_back(f);
     }     
 
     //Reboot

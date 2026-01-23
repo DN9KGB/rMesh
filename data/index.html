@@ -186,7 +186,7 @@
                 var sendFrame = {};
                 sendFrame["srcCall"] = document.getElementById("settingsMycall").value;
                 sendFrame["dstCall"] = document.getElementById("messageDstCall").value;
-				sendFrame["frameType"] = 3; //TEXT_MESSAGE
+				sendFrame["frameType"] = 3;     //TEXT_MESSAGE
 				sendFrame["messageType"] = 15; //COMMAND
                 sendFrame["message"] = [0xff]; //VERSION
                 sendFrame["messageLength"] = 1;
@@ -223,29 +223,30 @@
 			});
 			
 			function showMessage(m) {
-                var msg = "<span ";
-                if (m.tx == true) {
-                    msg += "style='color: darkred;'> ";
-                } else {
-                    msg += "> ";
+                if ((m.messageType == 0) || (m.messageType == 1)) { //nur TEXT & TRACE Nachrichten
+                    var msg = "<span ";
+                    if (m.tx == true) {
+                        msg += "style='color: darkred;'> ";
+                    } else {
+                        msg += "> ";
+                    }
+                    const date = new Date(m.timestamp * 1000);
+                    msg += date.toLocaleString("de-DE", {day: "2-digit",  month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).replace(",", "") + " ";		
+                    msg += m.srcCall;
+                    if (m.dstCall)  {msg += " " + m.dstCall; }
+                    if (m.messageType == 1) {msg += " [TRACE] ";}
+                    msg += ": <b>" + m.text + "</b>";
+                    document.getElementById("messages").innerHTML = document.getElementById("messages").innerHTML + "</span><br>" + msg;                     
+                    document.getElementById('messages').scrollTop = document.getElementById("messages").scrollHeight;			
                 }
-				const date = new Date(m.timestamp * 1000);
-				msg += date.toLocaleString("de-DE", {day: "2-digit",  month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).replace(",", "") + " ";		
-				msg += m.srcCall;
-				if (m.dstCall)  {msg += " " + m.dstCall; }
-				msg += ": <b>" + m.text + "</b>";
-				document.getElementById("messages").innerHTML = document.getElementById("messages").innerHTML + "</span><br>" + msg;                     
-				document.getElementById('messages').scrollTop = document.getElementById("messages").scrollHeight;			
-			};
+            };
 			
 
 			function onMessage(event) {
 				var d = JSON.parse(event.data);
 				if (d.status === undefined) {console.log("RX: " + event.data);}
-                //console.log("RX: " + event.data);
-                
 
-				//RAW-RX
+                //RAW-RX
 				if (d.monitor) {
                     f = d.monitor;
 					var msg = "<span ";
@@ -268,7 +269,11 @@
                     //Lesbar anzeigen
                     if (typeof f.nodeCall !== "undefined") { msg += "<b>" + f.nodeCall + "</b> > "; }
                     if (typeof f.viaCall !== "undefined") { msg += "<b>" + f.viaCall + "</b> "; }
-                    if (typeof f.hopCount !== "undefined") { msg += "H" + f.hopCount + " "; }
+                    if (typeof f.hopCount !== "undefined") { 
+                        if (f.hopCount > 0) { 
+                            msg += "H" + f.hopCount + " "; 
+                        }
+                    }
 					switch (f.frameType) {
   						case 0x00: msg += "Announce"; break;
   						case 0x01: msg += "Announce ACK"; break;
@@ -276,13 +281,13 @@
   						case 0x03: 
   						case 0x05: 
                             msg += "Message"; 
-                            if (f.messageType == 0) {msg += ", TEXT ";}
-                            if (f.messageType == 1) {msg += ", TRACE ";}
-                            if (f.messageType == 15) {msg += ", COMMAND ";}
-                            if (f.id > 0) { msg += "ID: <b>" + f.id + "</b> "; }
-                            if (f.srcCall.length > 0) { msg += "SRC: <b>" + f.srcCall + "</b> "; }
-                            if (f.dstCall.length > 0) { msg += "DST: <b>" + f.dstCall + "</b> "; }
-                            if (f.text.length > 0) {
+                            if (f.messageType == 0) {msg += ", [TEXT] ";}
+                            if (f.messageType == 1) {msg += ", [TRACE] ";}
+                            if (f.messageType == 15) {msg += ", [COMMAND] ";}
+                            if (f.id) { msg += "ID: <b>" + f.id + "</b> "; }
+                            if (f.srcCall) { msg += "SRC: <b>" + f.srcCall + "</b> "; }
+                            if (f.dstCall) { msg += "DST: <b>" + f.dstCall + "</b> "; }
+                            if (f.text) {
                                 msg += "MSG: <b>" + f.text + "</b>";
                             }
                             break;

@@ -52,6 +52,11 @@ void checkSerialRX() {
                     Serial.println(chk);
                 }
 
+                if (strncmp(serialRxBuffer, "l", 1) == 0) {
+                    availablePeerList("BBB", false);               
+                }
+
+
                 //Hilfe
                 if (strncmp(serialRxBuffer, "h", 1) == 0) {
                     File file = LittleFS.open("/help.txt", "r");

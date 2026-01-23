@@ -30,23 +30,3 @@ void sendSettings();
 
 extern Settings settings;
 
-
-/*
-
-#include <Arduino.h>
-#include "ESPAsyncWebServer.h"
-
-
-
-
-
-extern Settings settings;
-extern AsyncWebSocket ws;
-
-void defaultSettings();
-void saveSettings();
-bool checkSettings();
-void showSettings();
-void sendSettings();
-
-*/

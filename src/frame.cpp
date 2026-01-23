@@ -68,23 +68,27 @@ size_t Frame::exportBinary(uint8_t* data, size_t length) {
 size_t Frame::monitorJSON(char* buffer, size_t length) {
     //Schreibt Monitor-Daten in JSON-Buffer
     JsonDocument doc;
-    for (size_t i = 0; i < messageLength; i++) {
-        doc["monitor"]["message"][i] = message[i];
-    }    
-    char text[messageLength + 1] = {0};
-    strncpy(text, (char*)message, messageLength);
-    doc["monitor"]["text"] = text;
+    if (messageLength > 0) {
+        for (size_t i = 0; i < messageLength; i++) {
+            doc["monitor"]["message"][i] = message[i];
+        }    
+        char text[messageLength + 1];
+        safeUtf8Copy(text, (uint8_t*)message, messageLength);
+        doc["monitor"]["text"] = text;
+    }
     doc["monitor"]["messageType"] = messageType;
     doc["monitor"]["messageLength"] = messageLength;
     doc["monitor"]["tx"] = tx;
-    doc["monitor"]["rssi"] = rssi;
-    doc["monitor"]["snr"] = snr;
-    doc["monitor"]["frqError"] = frqError;
+    if (tx == false) {
+        doc["monitor"]["rssi"] = rssi;
+        doc["monitor"]["snr"] = snr;
+        doc["monitor"]["frqError"] = frqError;
+    }
     doc["monitor"]["timestamp"] = timestamp;
-    doc["monitor"]["srcCall"] = srcCall;
-    doc["monitor"]["dstCall"] = dstCall;
-    doc["monitor"]["viaCall"] = viaCall;
-    doc["monitor"]["nodeCall"] = nodeCall;
+    if (strlen(srcCall) > 0) {doc["monitor"]["srcCall"] = srcCall;}
+    if (strlen(dstCall) > 0) {doc["monitor"]["dstCall"] = dstCall;}
+    if (strlen(viaCall) > 0) {doc["monitor"]["viaCall"] = viaCall;}
+    if (strlen(nodeCall) > 0) {doc["monitor"]["nodeCall"] = nodeCall;}
     doc["monitor"]["frameType"] = frameType;
     doc["monitor"]["id"] = id;
     doc["monitor"]["hopCount"] = hopCount;
@@ -100,9 +104,9 @@ size_t Frame::messageJSON(char* buffer, size_t length) {
     for (size_t i = 0; i < messageLength; i++) {
         doc["message"]["message"][i] = message[i];
     }    
-    char text[messageLength + 1] = {0};
-    strncpy(text, (char*)message, messageLength);
-    doc["message"]["text"] = text;
+    char text[messageLength + 1];
+    safeUtf8Copy(text, (uint8_t*)message, messageLength);
+    doc["message"]["text"] = text;    
     doc["message"]["messageType"] = messageType;
     doc["message"]["srcCall"] = srcCall;
     doc["message"]["dstCall"] = dstCall;
