@@ -16,12 +16,12 @@ byte wifiStatus = 0xff;
 bool wiFiLED = false;
 
 void checkForUpdates() {
-    return;
     WiFiClient client;
+    client.setTimeout(1000); // Timeout in ms
     // LittleFS Update prüfen
-    httpUpdate.updateSpiffs(client, "http://dh1nfj.de/rMesh/update.php?type=littlefs&version=" + String(VERSION) + "&hw=" + String(PIO_ENV_NAME));
+    httpUpdate.updateSpiffs(client, "http://dh1nfj.de/rMesh/update.php?t=littlefs&v=" + String(VERSION) + "&h=" + String(PIO_ENV_NAME));
     //Firmware prüfen
-    httpUpdate.update(client, "http://dh1nfj.de/rMesh/update.php?type=firmware&version=" + String(VERSION) + "&hw=" + String(PIO_ENV_NAME));
+    httpUpdate.update(client, "http://dh1nfj.de/rMesh/update.php?t=firmware&v=" + String(VERSION) + "&h=" + String(PIO_ENV_NAME));
 }
 
 void showWiFiStatus() {
@@ -37,7 +37,7 @@ void showWiFiStatus() {
         //CLient-Mode
         if (wifiStatus != WiFi.status()) {
             wifiStatus = WiFi.status();   
-            if (WiFi.status() == WL_CONNECTED) { checkForUpdates(); }
+            if (WiFi.status() == WL_CONNECTED) { checkForUpdates();}
         } 
 
         if (WiFi.status() == WL_CONNECTED) {

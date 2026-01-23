@@ -2,18 +2,14 @@
 
 
 // Parameter vom ESP32 abgreifen
-$type = $_GET['type'];    // 'firmware' oder 'fs'
-$version = $_GET['version']; // Die Version, die der ESP aktuell hat
 
+$h  = mb_strtolower($_GET['h'], 'UTF-8');
+$v   = mb_strtolower($_GET['v'], 'UTF-8');
+$t = mb_strtolower($_GET['t'], 'UTF-8');
 
-switch ($version) {
-	case "V1.0.0-a":
-		if ($type == "firmware") { serveFile("firmware_V1.0.1-a.bin"); } 
-		if ($type == "littlefs") { serveFile("littlefs_V1.0.1-a.bin"); }
-		break;
-	default:
-		header($_SERVER["SERVER_PROTOCOL"].' 304 Not Modified');
-}
+if ($h == "lilygo_t3_lora32_v1_6_1" && $v == "v1.0.0-a" && $t == "firmware") { serveFile("firmware_V1.0.1-a.bin"); } 
+if ($h == "lilygo_t3_lora32_v1_6_1" && $v == "v1.0.0-a" && $t == "littlefs") { serveFile("littlefs_V1.0.1-a.bin"); } 
+
 
 
 function serveFile($path) {
