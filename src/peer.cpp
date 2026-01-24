@@ -19,8 +19,25 @@ void checkPeerList() {
         //portEXIT_CRITICAL(&peerListMux);
         sendPeerList();
     } 
-}
 
+    //Doppelte Peers -> mit weniger SNR -> available = false
+    for (size_t i = 0; i < peerList.size(); i++) {
+        if (!peerList[i].available) continue;
+        for (size_t j = i + 1; j < peerList.size(); j++) {
+            if (!peerList[j].available) continue;
+            if (strcmp(peerList[i].nodeCall, peerList[j].nodeCall) == 0) {
+                if (peerList[i].snr < peerList[j].snr) {
+                    peerList[i].available = false;
+                    break; 
+                } else {
+                    peerList[j].available = false;
+                }
+            }
+        }
+    }
+
+    
+}
 
 void sendPeerList() {
     JsonDocument doc;
@@ -42,9 +59,9 @@ void sendPeerList() {
 }
 
 
-void availablePeerList(const char* call, bool available) {
+void availablePeerList(const char* call, bool available, uint8_t port) {
     // Suchen, ob Peer bereits existiert
-    auto it = std::find_if(peerList.begin(), peerList.end(), [&](const Peer& peer) { return strcmp(peer.nodeCall, call) == 0; });
+    auto it = std::find_if(peerList.begin(), peerList.end(), [&](const Peer& peer) { return (strcmp(peer.nodeCall, call) == 0) && (peer.port == port); });
 
     if (it != peerList.end()) {
         // Peer existiert: update
@@ -52,12 +69,13 @@ void availablePeerList(const char* call, bool available) {
     }
 
     //Peer Liste neu senden
+    checkPeerList();
     sendPeerList();
 }
 
 void addPeerList(Frame &f) {
     // Suchen, ob Peer bereits existiert
-    auto it = std::find_if(peerList.begin(), peerList.end(), [&](const Peer& peer) { return strcmp(peer.nodeCall, f.nodeCall) == 0; });
+    auto it = std::find_if(peerList.begin(), peerList.end(), [&](const Peer& peer) { return (strcmp(peer.nodeCall, f.nodeCall) == 0) && (peer.port == f.port) ; });
 
     if (it != peerList.end()) {
         // Peer existiert: update, aber available Flag behalten
@@ -84,7 +102,7 @@ void addPeerList(Frame &f) {
 
     // Sortieren nach SNR (absteigend)
     std::sort(peerList.begin(), peerList.end(), [](const Peer& a, const Peer& b) { return a.snr > b.snr; });
-
+    checkPeerList();
     sendPeerList();
 }
 

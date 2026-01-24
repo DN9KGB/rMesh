@@ -11,6 +11,8 @@
 #define MAX_STORED_MESSAGES 500                  //max. in "messages.json" gespeicherte Nachrichten
 #define MAX_STORED_ACK 100                       //max. ACK Frames in "ack.json"
 
+//UDP Timing
+#define UDP_TX_RETRY_TIME 1000
 
 //Interner Quatsch
 #define NAME "rMesh"                             //Versions-String
@@ -19,3 +21,4 @@
 #define CORE_DEBUG_LEVEL 0                       // 0 bedeutet keine Logs
 #define TX_BUFFER_SIZE 50
 #define PEER_LIST_SIZE 20
+#define UDP_PORT 3333

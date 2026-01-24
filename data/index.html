@@ -74,6 +74,7 @@
 					<tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td> Subnet </td> <td> <input style='width: 100px;' id='settingsWifiNetMask'> </td> </tr>
 					<tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td> Gateway </td> <td> <input style='width: 100px;' id='settingsWifiGateway'> </td> </tr>
 					<tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td> DNS </td> <td> <input style='width: 100px;' id='settingsWifiDNS'> </td> </tr>
+					<tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td> Brodcast </td> <td> <input style='width: 100px;' id='settingsWifiBrodcast'> </td> </tr>
 
 					<tr> <td>Frequency</td> <td><input style="width: 200px;" id="settingsLoraFrequency"></td> </tr>
 					<tr> <td>Output Power</td> <td><input style="width: 200px;" id="settingsLoraOutputPower"></td> </tr>
@@ -138,6 +139,7 @@
 				settings["wifiNetMask"] = document.getElementById("settingsWifiNetMask").value.split('.').map(Number);
 				settings["wifiGateway"] = document.getElementById("settingsWifiGateway").value.split('.').map(Number);
 				settings["wifiDNS"] = document.getElementById("settingsWifiDNS").value.split('.').map(Number);
+				settings["wifiBrodcast"] = document.getElementById("settingsWifiBrodcast").value.split('.').map(Number);
 				settings["loraFrequency"] = parseFloat(document.getElementById("settingsLoraFrequency").value);
 				settings["loraOutputPower"] = parseInt(document.getElementById("settingsLoraOutputPower").value);
 				settings["loraBandwidth"] = parseFloat(document.getElementById("settingsLoraBandwidth").value);
@@ -241,6 +243,9 @@
                     } else {
                         msg += ">";
                     }
+                    //Port
+                    msg += f.port + ": ";
+
                     //Zeit
                     const date = new Date(d.monitor.timestamp * 1000);
 				    msg += date.toLocaleString("de-DE", {hour: "2-digit", minute: "2-digit", second: "2-digit" }).replace(",", "") + " ";		
@@ -325,6 +330,7 @@
 					document.getElementById("settingsWifiNetMask").value = d.settings.wifiNetMask[0] + "." + d.settings.wifiNetMask[1] + "." + d.settings.wifiNetMask[2] + "." + d.settings.wifiNetMask[3];
 					document.getElementById("settingsWifiGateway").value = d.settings.wifiGateway[0] + "." + d.settings.wifiGateway[1] + "." + d.settings.wifiGateway[2] + "." + d.settings.wifiGateway[3];
 					document.getElementById("settingsWifiDNS").value = d.settings.wifiDNS[0] + "." + d.settings.wifiDNS[1] + "." + d.settings.wifiDNS[2] + "." + d.settings.wifiDNS[3];
+					document.getElementById("settingsWifiBrodcast").value = d.settings.wifiBrodcast[0] + "." + d.settings.wifiBrodcast[1] + "." + d.settings.wifiBrodcast[2] + "." + d.settings.wifiBrodcast[3];
 					document.getElementById("settingsDHCP").checked = d.settings.dhcpActive; 
 					document.getElementById("settingsApMode").checked = d.settings.apMode; 
 					document.getElementById("settingsLoraFrequency").value = d.settings.loraFrequency; 

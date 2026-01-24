@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Arduino.h>
+
 
 //Konfiguration
 struct Settings {
@@ -21,6 +23,7 @@ struct Settings {
   uint8_t loraSpreadingFactor;
   int16_t loraPreambleLength;
   bool loraRepeat;
+  IPAddress wifiBrodcast = IPAddress(255, 255, 255, 255);
 };
 
 void loadSettings();

@@ -78,6 +78,10 @@ void startWebServer() {
         JsonArray ipArray = json["settings"]["wifiDNS"];
         for (int i = 0; i < 4; i++) {settings.wifiDNS[i] = ipArray[i] | 0; }
       }
+      if (json["settings"]["wifiBrodcast"].is<JsonVariant>()) { 
+        JsonArray ipArray = json["settings"]["wifiBrodcast"];
+        for (int i = 0; i < 4; i++) {settings.wifiBrodcast[i] = ipArray[i] | 0; }
+      }
       if (json["settings"]["loraFrequency"].is<JsonVariant>()) { settings.loraFrequency = json["settings"]["loraFrequency"].as<float>(); }
       if (json["settings"]["loraOutputPower"].is<JsonVariant>()) { settings.loraOutputPower = json["settings"]["loraOutputPower"].as<int8_t>(); }
       if (json["settings"]["loraBandwidth"].is<JsonVariant>()) { settings.loraBandwidth = json["settings"]["loraBandwidth"].as<float>(); }

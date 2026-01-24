@@ -15,13 +15,12 @@
 #include "helperFunctions.h"
 #include "peer.h"
 #include "ack.h"
+#include "udp.h"
 
 
 
 //Uhrzeitformat
 const char* TZ_INFO = "CET-1CEST,M3.5.0,M10.5.0/3";
-
-
 
 //Sendepuffer
 std::vector<Frame> txBuffer;
@@ -35,6 +34,224 @@ uint32_t rebootTimer = 0xFFFFFFFF;
 //Anderes Zeug -> muss weg
 uint16_t irqFlags = 0;
 
+
+void processRxFrame(Frame &f) {
+    //Monitor
+    char* jsonBuffer = (char*)malloc(4096);
+    size_t len = f.monitorJSON(jsonBuffer, 4096);
+    ws.textAll(jsonBuffer, len); 
+    free(jsonBuffer);
+    jsonBuffer = nullptr;
+
+    //Peer List
+    addPeerList(f);
+
+    //Auswerten
+    Frame tf;                   //ggf. Antwort-Frame
+    bool found = false;         //z.b.V.
+    File file;                  //z.b.V
+    switch (f.frameType) {
+
+        //Antwort auf announce
+        case Frame::FrameTypes::ANNOUNCE_FRAME:
+            if (strlen(f.nodeCall) > 0 ){
+                tf.frameType = Frame::FrameTypes::ANNOUNCE_ACK_FRAME;
+                tf.port = f.port;
+                switch (tf.port){
+                    case 0: tf.transmitMillis = millis() + ACK_TIME; break;  //Time On Air für Antwort
+                    case 1: tf.transmitMillis = millis(); break; //Bei UDP schneller
+                }
+                memcpy(tf.viaCall, f.nodeCall, sizeof(tf.viaCall));
+                txBuffer.push_back(tf);
+            }
+            break;
+        //In Peer Liste eintragen
+        case Frame::FrameTypes::ANNOUNCE_ACK_FRAME:
+            if (strcmp(f.viaCall, settings.mycall) == 0) {
+                availablePeerList(f.nodeCall, true, f.port);    
+            }
+            break;
+
+        //Senden abbrechen
+        case Frame::FrameTypes::MESSAGE_ACK_FRAME:
+            //In Peer Liste eintragen
+            if (strcmp(f.viaCall, settings.mycall) == 0) {
+                availablePeerList(f.nodeCall, true, f.port);
+                //Wenn ich ein ACK direkt bekommen habe, dann extra Eintrag
+                addACK(f.srcCall, settings.mycall, f.id);    
+            }
+
+            //Im TX-Puffer nach MSG-ID und NODE-Call suchen und löschen
+            txBuffer.erase(
+                std::remove_if(txBuffer.begin(), txBuffer.end(),
+                    [&](const Frame& txB) {
+                        return (strcmp(txB.viaCall, f.nodeCall) == 0) && (txB.id == f.id);
+                    }),
+                txBuffer.end()
+            );
+
+            //ACKs in Datei speichern (für REPEAT und ACK für fremde Frames senden)
+            addACK(f.srcCall, f.nodeCall, f.id);
+            break;
+
+        //Nachricht empfangen
+        case Frame::FrameTypes::MESSAGE_FRAME:  
+            //Alle "alten" ACKs im TX-Puffer löschen
+            txBuffer.erase(
+                std::remove_if(txBuffer.begin(), txBuffer.end(),
+                    [&](const Frame& txB) {
+                        return (strcmp(txB.srcCall, f.srcCall) == 0) && (txB.id == f.id) && (txB.frameType == Frame::FrameTypes::MESSAGE_ACK_FRAME);
+                    }),
+                txBuffer.end()
+            );
+
+            //ACK-Senden bei mir immer, bei anderen nur 1x
+            if ((strcmp(f.viaCall, settings.mycall) == 0) || ((strlen(f.viaCall) > 0) && (checkACK(f.srcCall, f.nodeCall, f.id) == false) && (checkACK(f.srcCall, settings.mycall, f.id) == false))) {
+                addACK(f.srcCall, f.nodeCall, f.id);
+                tf.frameType = Frame::FrameTypes::MESSAGE_ACK_FRAME;
+                memcpy(tf.viaCall, f.nodeCall, sizeof(tf.viaCall));
+                memcpy(tf.srcCall, f.nodeCall, sizeof(tf.srcCall));
+                tf.id = f.id;
+                tf.port = f.port;
+                tf.transmitMillis = millis() + ACK_TIME;
+                if (tf.port == 1) {tf.transmitMillis = 0;} //Bei UDP sofort ACK
+                txBuffer.push_back(tf);
+            }
+
+            //Message ID und SRC-Call in Datei suchen
+            file = LittleFS.open("/messages.json", "r");
+            found = false;  
+            if (file) {
+                JsonDocument doc;
+                while (file.available()) {
+                    DeserializationError error = deserializeJson(doc, file);
+                    if (error == DeserializationError::Ok) {
+                        if ((doc["message"]["id"].as<uint32_t>() == f.id) && (strcmp(doc["message"]["srcCall"], f.srcCall) == 0)) {
+                            found = true;
+                            break; 
+                        }
+                    } else if (error != DeserializationError::EmptyInput) {
+                        file.readStringUntil('\n');
+                    }
+                }
+                file.close();                    
+            }
+
+            if (found == false) {
+                //Neue Nachricht empfangen
+                
+                //Message an Websocket senden & speichern
+                char* jsonBuffer = (char*)malloc(2048);
+                size_t len = f.messageJSON(jsonBuffer, 2048);
+                ws.textAll(jsonBuffer, len);
+                addJSONtoFile(jsonBuffer, len, "/messages.json", MAX_STORED_MESSAGES);
+                free(jsonBuffer);
+                jsonBuffer = nullptr;
+
+                //ECHO für Tracking-Message
+                if ((strcmp(f.dstCall, settings.mycall) == 0) && (f.messageType == Frame::MessageTypes::TRACE_MESSAGE) && (strstr((char*)f.message, "ECHO") == NULL)) {
+                        char message[512];
+                        size_t messageLength = f.messageLength;
+                        memcpy(message, f.message, f.messageLength);
+                        memcpy(&message[messageLength], " -> ECHO ", 9);
+                        messageLength += 9;
+                        memcpy(&message[messageLength], settings.mycall, strlen(settings.mycall));
+                        messageLength += strlen(settings.mycall);
+                        memcpy(&message[messageLength], " ", 1);
+                        messageLength += 1;
+                        char text[128];
+                        getFormattedTime("%H:%M:%S", text, sizeof(text));                            
+                        memcpy(&message[messageLength], text, strlen(text));
+                        messageLength += strlen(text);
+                        if (messageLength > 255) {messageLength = 255;}
+                        sendMessage(f.srcCall, message, Frame::MessageTypes::TRACE_MESSAGE);
+                }
+
+                //Fernsteuerung
+                if ((strcmp(f.dstCall, settings.mycall) == 0) && (f.messageType == Frame::MessageTypes::COMMAND_MESSAGE) ) {
+                    switch (f.message[0]) {
+                        case 0xff: //Firmware
+                            sendMessage(f.srcCall, NAME " " VERSION " " PIO_ENV_NAME);
+                            break;
+                        case 0xfe: //Reboot
+                            rebootTimer = millis() + 2500;
+                            break;
+                    }
+                }
+
+
+                //Messages wiederholen
+                if (settings.loraRepeat == true) {
+                    //Frame vorbereiten
+                    tf.frameType = f.frameType;
+                    memcpy(tf.srcCall, f.srcCall, sizeof(tf.srcCall));
+                    memcpy(tf.dstCall, f.dstCall, sizeof(tf.srcCall));
+                    tf.hopCount = f.hopCount;
+                    if (tf.hopCount < 15) {tf.hopCount ++;}
+                    tf.messageType = f.messageType;                        
+                    memcpy(tf.message, f.message, sizeof(tf.message));
+                    tf.messageLength = f.messageLength;
+                    tf.id = f.id;
+                    tf.timestamp = time(NULL);
+                    tf.retry = TX_RETRY;
+                    tf.initRetry = TX_RETRY;
+                    tf.syncFlag = true;
+
+                    //Ports duchlaufen
+                    for (tf.port = 0; tf.port <= 1; tf.port++) {
+
+                        switch (tf.port){
+                            case 0: tf.transmitMillis = millis() + TX_RETRY_TIME; break;  //Time On Air für Antwort
+                            case 1: tf.transmitMillis = millis() + UDP_TX_RETRY_TIME; break; //Bei UDP schneller
+                        }
+
+                        //Prüfen, ob Tracking ein
+                        if (f.messageType == Frame::MessageTypes::TRACE_MESSAGE) {
+                            //EIN -> Rufzeichen und Uhrzeit dazu
+                            memcpy(&tf.message[tf.messageLength], " -> ", 4);
+                            tf.messageLength += 4;
+                            memcpy(&tf.message[tf.messageLength], settings.mycall, strlen(settings.mycall));
+                            tf.messageLength += strlen(settings.mycall);
+                            memcpy(&tf.message[tf.messageLength], " ", 1);
+                            tf.messageLength += 1;
+                            char text[128];
+                            getFormattedTime("%H:%M:%S", text, sizeof(text));                            
+                            memcpy(&tf.message[tf.messageLength], text, strlen(text));
+                            tf.messageLength += strlen(text);
+                            if (tf.messageLength > 255) {tf.messageLength = 255;}
+                        } 
+
+                        //Prüfen, an wen man das Frame so senden könnte
+                        bool sentVia = false;
+                        for (int i = 0; i < peerList.size(); i++) {
+                            //Prüfen, ob das Peer das Frame schon mal wiederholt hat (in ACK-Liste)
+                            found = checkACK(f.srcCall, peerList[i].nodeCall, f.id);
+
+                            //In TX-Puffer eintragen
+                            if ((found == false) && (peerList[i].available == true) && (peerList[i].port == tf.port) && (strcmp(peerList[i].nodeCall, f.nodeCall) != 0)) {
+                                memcpy(tf.viaCall, peerList[i].nodeCall, sizeof(tf.viaCall));
+                                txBuffer.push_back(tf);
+                                sentVia = true;
+                            }
+                        } 
+                        
+                        //Wenn keine Peers da, dann Frame 1x wiederholen
+                        if (sentVia == false) {
+                            tf.retry = 1;
+                            tf.initRetry = 1;
+                            tf.viaCall[0] = 0x00;
+                            txBuffer.push_back(tf);
+                            sentVia = true;
+                        }
+                    }
+
+                }
+
+            }
+            break;
+    }
+ 
+}
 
 
 void setup() {
@@ -94,6 +311,9 @@ void loop() {
 		f.transmitMillis = 0;
 		//Frame in SendeBuffer
         //portENTER_CRITICAL(&txBufferMux);
+        f.port = 0;
+		txBuffer.push_back(f);
+        f.port = 1;
 		txBuffer.push_back(f);
         //portEXIT_CRITICAL(&txBufferMux);
 	}  
@@ -101,9 +321,9 @@ void loop() {
     //Prüfen, ob was gesendet werden muss
 	if ((txFlag == false) && (rxFlag == false)) {
 	    //Frames mit retry > 1 werden synchron gesendet !!!
-        //Prüfen, ob es Frames gibt, die noch nicht synchron gesendet wurden
         bool sendNewSyncFrame = true;
         for (int i = 0; i < txBuffer.size(); i++) {
+            //Prüfen, ob es Frames gibt, die noch nicht synchron gesendet wurden
             if (txBuffer[i].syncFlag == true) {sendNewSyncFrame = false;}
         }
 
@@ -112,7 +332,10 @@ void loop() {
             for (int i = 0; i < txBuffer.size(); i++) {
                 if(txBuffer[i].retry > 1) {
                     txBuffer[i].syncFlag = true; 
-                    txBuffer[i].transmitMillis = millis() + TX_RETRY_TIME + getTOA(30); //Time On Air für Antwort
+                    switch (txBuffer[i].port){
+                        case 0: txBuffer[i].transmitMillis = millis() + TX_RETRY_TIME + getTOA(30); break;  //Time On Air für Antwort
+                        case 1: txBuffer[i].transmitMillis = millis() + UDP_TX_RETRY_TIME; break; //Bei UDP schneller
+                    }
                     break;   
                 }
             }
@@ -123,16 +346,22 @@ void loop() {
     		//Prüfen, ob Frame gesendet werden muss
     		if ((millis() > txBuffer[i].transmitMillis) && ((txBuffer[i].retry <= 1) || (txBuffer[i].syncFlag == true))) {
     			//Frame senden
-                transmitFrame(txBuffer[i]);
+                switch (txBuffer[i].port){
+                    case 0: transmitFrame(txBuffer[i]); break;
+                    case 1: sendUDP(txBuffer[i]); break;
+                }
                 //Retrys runterzählen
                 if (txBuffer[i].retry > 0) {txBuffer[i].retry --;}
                 //Nächsten Sendezeitpunkt festlegen (nur relevant, wenn retry > 1)
-                txBuffer[i].transmitMillis = millis() + TX_RETRY_TIME + getTOA(30); //Time On Air für Antwort
+                switch (txBuffer[i].port){
+                    case 0: txBuffer[i].transmitMillis = millis() + TX_RETRY_TIME + getTOA(30); //Time On Air für Antwort
+                    case 1: txBuffer[i].transmitMillis = millis() + UDP_TX_RETRY_TIME; break; //Bei UDP schneller
+                }
                 //Wenn kein Retry mehr übrig, dann löschen
                 if (txBuffer[i].retry == 0) {  
                     //Aus Peer-Liste löschen
                     if (txBuffer[i].initRetry > 1) {
-                        availablePeerList(txBuffer[i].viaCall, false);
+                        availablePeerList(txBuffer[i].viaCall, false, txBuffer[i].port);
                     }
                     //Frame löschen
                     txBuffer.erase(txBuffer.begin() + i);
@@ -144,217 +373,10 @@ void loop() {
 
     //Prüfen, ob was empfangen wurde
     Frame f;
-    if (checkReceive(f)) {
-        //Monitor
-        char* jsonBuffer = (char*)malloc(4096);
-        size_t len = f.monitorJSON(jsonBuffer, 4096);
-        ws.textAll(jsonBuffer, len); 
-        free(jsonBuffer);
-        jsonBuffer = nullptr;
+    if (checkReceive(f)) { processRxFrame(f); }
 
-
-        //Peer List
-        addPeerList(f);
-
-        //Auswerten
-        Frame tf;                   //ggf. Antwort-Frame
-        bool found = false;         //z.b.V.
-        File file;                  //z.b.V
-        switch (f.frameType) {
-
-
-            //Antwort auf announce
-            case Frame::FrameTypes::ANNOUNCE_FRAME:
-                if (strlen(f.nodeCall) > 0 ){
-                    tf.frameType = Frame::FrameTypes::ANNOUNCE_ACK_FRAME;
-                    tf.transmitMillis = millis() + ACK_TIME;
-                    memcpy(tf.viaCall, f.nodeCall, sizeof(tf.viaCall));
-                    txBuffer.push_back(tf);
-                }
-                break;
-            //In Peer Liste eintragen
-            case Frame::FrameTypes::ANNOUNCE_ACK_FRAME:
-                if (strcmp(f.viaCall, settings.mycall) == 0) {
-                    availablePeerList(f.nodeCall, true);    
-                }
-                break;
-
-
-            //Senden abbrechen
-            case Frame::FrameTypes::MESSAGE_ACK_FRAME:
-                //In Peer Liste eintragen
-                if (strcmp(f.viaCall, settings.mycall) == 0) {
-                    availablePeerList(f.nodeCall, true);
-                    //Wenn ich ein ACK direkt bekommen habe, dann extra Eintrag
-                    addACK(f.srcCall, settings.mycall, f.id);    
-                }
-
-                //Im TX-Puffer nach MSG-ID und NODE-Call suchen und löschen
-                txBuffer.erase(
-                    std::remove_if(txBuffer.begin(), txBuffer.end(),
-                        [&](const Frame& txB) {
-                            return (strcmp(txB.viaCall, f.nodeCall) == 0) && (txB.id == f.id);
-                        }),
-                    txBuffer.end()
-                );
-
-                //ACKs in Datei speichern (für REPEAT und ACK für fremde Frames senden)
-                addACK(f.srcCall, f.nodeCall, f.id);
-                break;
-
-            //Nachricht empfangen
-            case Frame::FrameTypes::MESSAGE_FRAME:  
-                //Alle "alten" ACKs im TX-Puffer löschen
-                txBuffer.erase(
-                    std::remove_if(txBuffer.begin(), txBuffer.end(),
-                        [&](const Frame& txB) {
-                            return (strcmp(txB.srcCall, f.srcCall) == 0) && (txB.id == f.id) && (txB.frameType == Frame::FrameTypes::MESSAGE_ACK_FRAME);
-                        }),
-                    txBuffer.end()
-                );
-
-                //ACK-Senden bei mir immer, bei anderen nur 1x
-                if ((strcmp(f.viaCall, settings.mycall) == 0) || ((strlen(f.viaCall) > 0) && (checkACK(f.srcCall, f.nodeCall, f.id) == false) && (checkACK(f.srcCall, settings.mycall, f.id) == false))) {
-                    addACK(f.srcCall, f.nodeCall, f.id);
-                    tf.frameType = Frame::FrameTypes::MESSAGE_ACK_FRAME;
-                    memcpy(tf.viaCall, f.nodeCall, sizeof(tf.viaCall));
-                    memcpy(tf.srcCall, f.nodeCall, sizeof(tf.srcCall));
-                    tf.id = f.id;
-                    tf.transmitMillis = millis() + ACK_TIME;
-                    txBuffer.push_back(tf);
-                }
-
-                //Message ID und SRC-Call in Datei suchen
-                file = LittleFS.open("/messages.json", "r");
-                found = false;  
-                if (file) {
-                    JsonDocument doc;
-                    while (file.available()) {
-                        DeserializationError error = deserializeJson(doc, file);
-                        if (error == DeserializationError::Ok) {
-                            if ((doc["message"]["id"].as<uint32_t>() == f.id) && (strcmp(doc["message"]["srcCall"], f.srcCall) == 0)) {
-                                found = true;
-                                break; 
-                            }
-                        } else if (error != DeserializationError::EmptyInput) {
-                            file.readStringUntil('\n');
-                        }
-                    }
-                    file.close();                    
-                }
-
-                if (found == false) {
-                    //Neue Nachricht empfangen
-                    
-                    //Message an Websocket senden & speichern
-                    char* jsonBuffer = (char*)malloc(2048);
-                    size_t len = f.messageJSON(jsonBuffer, 2048);
-                    ws.textAll(jsonBuffer, len);
-                    addJSONtoFile(jsonBuffer, len, "/messages.json", MAX_STORED_MESSAGES);
-                    free(jsonBuffer);
-                    jsonBuffer = nullptr;
-
-                    //ECHO für Tracking-Message
-                    if ((strcmp(f.dstCall, settings.mycall) == 0) && (f.messageType == Frame::MessageTypes::TRACE_MESSAGE) && (strstr((char*)f.message, "ECHO") == NULL)) {
-                            char message[512];
-                            size_t messageLength = f.messageLength;
-                            memcpy(message, f.message, f.messageLength);
-                            memcpy(&message[messageLength], " -> ECHO ", 9);
-                            messageLength += 9;
-                            memcpy(&message[messageLength], settings.mycall, strlen(settings.mycall));
-                            messageLength += strlen(settings.mycall);
-                            memcpy(&message[messageLength], " ", 1);
-                            messageLength += 1;
-                            char text[128];
-                            getFormattedTime("%H:%M:%S", text, sizeof(text));                            
-                            memcpy(&message[messageLength], text, strlen(text));
-                            messageLength += strlen(text);
-                            if (messageLength > 255) {messageLength = 255;}
-                            sendMessage(f.srcCall, message, Frame::MessageTypes::TRACE_MESSAGE);
-                    }
-
-                    //Fernsteuerung
-                    if ((strcmp(f.dstCall, settings.mycall) == 0) && (f.messageType == Frame::MessageTypes::COMMAND_MESSAGE) ) {
-                        switch (f.message[0]) {
-                            case 0xff: //Firmware
-                                sendMessage(f.srcCall, NAME " " VERSION " " PIO_ENV_NAME);
-                                break;
-                            case 0xfe: //Reboot
-                                rebootTimer = millis() + 2500;
-                                break;
-                        }
-                    }
-
-
-                    //Messages wiederholen
-                    if (settings.loraRepeat == true) {
-                        //Frame vorbereiten
-                        tf.frameType = f.frameType;
-                        memcpy(tf.srcCall, f.srcCall, sizeof(tf.srcCall));
-                        memcpy(tf.dstCall, f.dstCall, sizeof(tf.srcCall));
-                        tf.hopCount = f.hopCount;
-                        if (tf.hopCount < 15) {tf.hopCount ++;}
-                        tf.messageType = f.messageType;                        
-                        memcpy(tf.message, f.message, sizeof(tf.message));
-                        tf.messageLength = f.messageLength;
-                        tf.id = f.id;
-                        tf.timestamp = time(NULL);
-                        tf.retry = TX_RETRY;
-                        tf.initRetry = TX_RETRY;
-                        tf.syncFlag = true;
-                        tf.transmitMillis = millis() + TX_RETRY_TIME;
-
-                        //Prüfen, ob Tracking ein
-                        if (f.messageType == Frame::MessageTypes::TRACE_MESSAGE) {
-                            //EIN -> Rufzeichen und Uhrzeit dazu
-                            memcpy(&tf.message[tf.messageLength], " -> ", 4);
-                            tf.messageLength += 4;
-                            memcpy(&tf.message[tf.messageLength], settings.mycall, strlen(settings.mycall));
-                            tf.messageLength += strlen(settings.mycall);
-                            memcpy(&tf.message[tf.messageLength], " ", 1);
-                            tf.messageLength += 1;
-                            char text[128];
-                            getFormattedTime("%H:%M:%S", text, sizeof(text));                            
-                            memcpy(&tf.message[tf.messageLength], text, strlen(text));
-                            tf.messageLength += strlen(text);
-                            if (tf.messageLength > 255) {tf.messageLength = 255;}
-                        } 
-
-                        //Prüfen, an wen man das Frame so senden könnte
-                        //ACK-File schon mal auf machen
-                        bool sentVia = false;
-                        file = LittleFS.open("/ack.json", "r");
-                        for (int i = 0; i < peerList.size(); i++) {
-                            //Prüfen, ob das Peer das Frame schon mal wiederholt hat (in ACK-Liste)
-                            found = checkACK(f.srcCall, peerList[i].nodeCall, f.id);
-
-                            //In TX-Puffer eintragen
-                            if ((found == false) && (peerList[i].available == true) && (strcmp(peerList[i].nodeCall, f.nodeCall) != 0)) {
-                                memcpy(tf.viaCall, peerList[i].nodeCall, sizeof(tf.viaCall));
-                                txBuffer.push_back(tf);
-                                sentVia = true;
-                            }
-                        } 
-                        file.close();  
-                        
-                        //Wenn keine Peers da, dann Frame 1x wiederholen
-                        if (sentVia == false) {
-                            tf.retry = 1;
-                            tf.initRetry = 1;
-                            tf.viaCall[0] = 0x00;
-                            txBuffer.push_back(tf);
-                            sentVia = true;
-                        }
-                    }
-
-                }
-                break;
-        }
-        
-        
-
-    }
-
+    //Prüfen, ob was über UDP empfangen wurde
+    if (checkUDP(f)) { processRxFrame(f); }
 
     //Status über Websocket senden
     if (millis() > statusTimer) {

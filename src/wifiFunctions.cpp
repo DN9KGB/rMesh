@@ -9,6 +9,7 @@
 #include "hal.h"
 #include "config.h"
 #include "webFunctions.h"
+#include "udp.h"
 
 
 uint64_t ledTimer = 0;
@@ -37,7 +38,10 @@ void showWiFiStatus() {
         //CLient-Mode
         if (wifiStatus != WiFi.status()) {
             wifiStatus = WiFi.status();   
-            if (WiFi.status() == WL_CONNECTED) { checkForUpdates();}
+            if (WiFi.status() == WL_CONNECTED) { 
+                checkForUpdates();
+                initUDP();
+            }
         } 
 
         if (WiFi.status() == WL_CONNECTED) {

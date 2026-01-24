@@ -22,6 +22,7 @@ void showSettings() {
         Serial.printf("NetMask: %d.%d.%d.%d\n", settings.wifiNetMask[0], settings.wifiNetMask[1], settings.wifiNetMask[2], settings.wifiNetMask[3]);
         Serial.printf("DNS: %d.%d.%d.%d\n", settings.wifiDNS[0], settings.wifiDNS[1], settings.wifiDNS[2], settings.wifiDNS[3]);
         Serial.printf("Gateway: %d.%d.%d.%d\n", settings.wifiGateway[0], settings.wifiGateway[1], settings.wifiGateway[2], settings.wifiGateway[3]);
+        Serial.printf("Brodcast: %d.%d.%d.%d\n", settings.wifiBrodcast[0], settings.wifiBrodcast[1], settings.wifiBrodcast[2], settings.wifiBrodcast[3]);
     }
     Serial.printf("NTP-Server: %s\n", settings.ntpServer);
     Serial.printf("myCall: %s\n", settings.mycall);
@@ -51,7 +52,7 @@ void showSettings() {
         Serial.printf("NetMask: %d.%d.%d.%d\n", WiFi.subnetMask()[0], WiFi.subnetMask()[1], WiFi.subnetMask()[2], WiFi.subnetMask()[3]); 
         Serial.printf("Gateway: %d.%d.%d.%d\n", WiFi.gatewayIP()[0], WiFi.gatewayIP()[1], WiFi.gatewayIP()[2], WiFi.gatewayIP()[3]); 
         Serial.printf("DNS: %d.%d.%d.%d\n", WiFi.dnsIP()[0], WiFi.dnsIP()[1], WiFi.dnsIP()[2], WiFi.dnsIP()[3]); 
-        Serial.printf("Brodcast: %d.%d.%d.%d\n", WiFi.broadcastIP()[0], WiFi.broadcastIP()[1], WiFi.broadcastIP()[2], WiFi.broadcastIP()[3]); 
+        //Serial.printf("Brodcast: %d.%d.%d.%d\n", WiFi.broadcastIP()[0], WiFi.broadcastIP()[1], WiFi.broadcastIP()[2], WiFi.broadcastIP()[3]); 
         break;
     case 4:
         Serial.println("WL_CONNECT_FAILED");
@@ -96,6 +97,10 @@ void sendSettings() {
     doc["settings"]["wifiDNS"][1] = settings.wifiDNS[1];
     doc["settings"]["wifiDNS"][2] = settings.wifiDNS[2];
     doc["settings"]["wifiDNS"][3] = settings.wifiDNS[3];
+    doc["settings"]["wifiBrodcast"][0] = settings.wifiBrodcast[0];
+    doc["settings"]["wifiBrodcast"][1] = settings.wifiBrodcast[1];
+    doc["settings"]["wifiBrodcast"][2] = settings.wifiBrodcast[2];
+    doc["settings"]["wifiBrodcast"][3] = settings.wifiBrodcast[3];
     doc["settings"]["loraFrequency"] = settings.loraFrequency;
     doc["settings"]["loraOutputPower"] = settings.loraOutputPower;
     doc["settings"]["loraBandwidth"] = settings.loraBandwidth;
@@ -123,6 +128,13 @@ void loadSettings() {
     EEPROM.begin(4095);
     EEPROM.get(0, settings); 
 
+    //IP-Adressen fixen 
+    settings.wifiIP       = IPAddress(settings.wifiIP[0], settings.wifiIP[1], settings.wifiIP[2], settings.wifiIP[3]);
+    settings.wifiNetMask  = IPAddress(settings.wifiNetMask[0], settings.wifiNetMask[1], settings.wifiNetMask[2], settings.wifiNetMask[3]);
+    settings.wifiGateway  = IPAddress(settings.wifiGateway[0], settings.wifiGateway[1], settings.wifiGateway[2], settings.wifiGateway[3]);
+    settings.wifiDNS      = IPAddress(settings.wifiDNS[0], settings.wifiDNS[1], settings.wifiDNS[2], settings.wifiDNS[3]);
+    settings.wifiBrodcast = IPAddress(settings.wifiBrodcast[0], settings.wifiBrodcast[1], settings.wifiBrodcast[2], settings.wifiBrodcast[3]);
+
     //Prüfen, ob Einstellungen plausiebel
     bool valid = true;
     if (strlen(settings.wifiSSID) >= 64) {valid = false;}
@@ -143,6 +155,7 @@ void loadSettings() {
         settings.wifiNetMask = IPAddress(255,255,255,0);
         settings.wifiGateway = IPAddress(192,168,33,4);
         settings.wifiDNS = IPAddress(192,168,33,4);
+        settings.wifiBrodcast = IPAddress(255,255,255,255);
         settings.loraFrequency = 434.950;
         settings.loraOutputPower = 20;
         settings.loraBandwidth = 250;

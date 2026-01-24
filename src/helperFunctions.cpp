@@ -25,7 +25,6 @@ void printHexArray(uint8_t* data, size_t length) {
 
 void sendMessage(const char* dstCall, const char* text, uint8_t messageType) {
     //Neuen Frame für alle Peers zusammenbauen
-    uint8_t availableNodeCount = 0;
     Frame f;
     f.frameType = Frame::FrameTypes::MESSAGE_FRAME;
     f.messageType = messageType;
@@ -37,25 +36,30 @@ void sendMessage(const char* dstCall, const char* text, uint8_t messageType) {
     f.timestamp = time(NULL);
     f.tx = true;
 
-    //An alle Peers senden
-    bool first = true;
-    if (txBuffer.size() > 0) {first = false;}
-    for (int i = 0; i < peerList.size(); i++) {
-        if (peerList[i].available) {
-            availableNodeCount ++;
-            memcpy(f.viaCall, peerList[i].nodeCall, sizeof(f.viaCall));
-            f.retry = TX_RETRY;
-            f.initRetry = TX_RETRY;
-            f.syncFlag = first;
-            txBuffer.push_back(f);
-            first = false;
-        }
-    } 
+    for (int port = 0; port <= 1; port++) {
+        uint8_t availableNodeCount = 0;
+        //An alle Peers senden
+        bool first = true;
+        if (txBuffer.size() > 0) {first = false;}
+        for (int i = 0; i < peerList.size(); i++) {
+            if ((peerList[i].available) && (peerList[i].port == port)) {
+                availableNodeCount ++;
+                memcpy(f.viaCall, peerList[i].nodeCall, sizeof(f.viaCall));
+                f.retry = TX_RETRY;
+                f.initRetry = TX_RETRY;
+                f.syncFlag = first;
+                f.port = peerList[i].port;
+                txBuffer.push_back(f);
+                first = false;
+            }
+        } 
 
-    //Wenn keine Peers, Frame ohne Ziel und Retry senden
-    if (availableNodeCount == 0) {
-        //Frame in Sendebuffer
-        txBuffer.push_back(f);
+        //Wenn keine Peers, Frame ohne Ziel und Retry senden
+        if (availableNodeCount == 0) {
+            //Frame in Sendebuffer
+            f.port = port;
+            txBuffer.push_back(f);
+        }
     }
 
     //Message an Websocket senden & speichern

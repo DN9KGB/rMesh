@@ -94,6 +94,7 @@ size_t Frame::monitorJSON(char* buffer, size_t length) {
     doc["monitor"]["hopCount"] = hopCount;
     doc["monitor"]["initRetry"] = initRetry;
     doc["monitor"]["retry"] = retry;
+    doc["monitor"]["port"] = port;
     size_t len = serializeJson(doc, buffer, length);
     return len;
 }

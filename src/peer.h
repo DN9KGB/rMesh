@@ -13,7 +13,7 @@ struct Peer {
 };
 
 void checkPeerList();
-void availablePeerList(const char* call, bool available);
+void availablePeerList(const char* call, bool available, uint8_t port);
 void addPeerList(Frame &f);
 void sendPeerList();
 

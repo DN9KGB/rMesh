@@ -40,6 +40,8 @@ void initHal() {
     int state;
 
     //Init
+    radio.reset();
+    delay(100);
     printState(radio.begin());
     printState(radio.setSyncWord(settings.loraSyncWord));
     printState(radio.setFrequency(settings.loraFrequency));
@@ -101,6 +103,7 @@ bool checkReceive(Frame &f) {
             f.rssi = radio.getRSSI();
             f.snr = radio.getSNR();
             f.frqError = radio.getFrequencyError();
+            f.port = 0;
             return true;
         }
     }

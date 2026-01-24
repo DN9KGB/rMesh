@@ -103,11 +103,13 @@ bool checkReceive(Frame &f) {
             f.rssi = radio.getRSSI();
             f.snr = radio.getSNR();
             f.frqError = radio.getFrequencyError();
+            f.port = 0;
             return true;
         }
     }
     return false;
 }
+
 
 void transmitFrame(Frame &f) {
     uint8_t txBuffer[255];
@@ -118,6 +120,7 @@ void transmitFrame(Frame &f) {
     statusTimer = 0;
     strncpy(f.nodeCall, settings.mycall, sizeof(f.nodeCall));
     f.tx = true;
+    f.port = 0;
 
     //Senden
     txBufferLength = f.exportBinary(txBuffer, sizeof(txBuffer));
