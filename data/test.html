@@ -1,91 +1,370 @@
 
+<head>
 <style>
 
+@font-face {
+  font-family: 'FixedsysExcelsior';
+  /* Stelle sicher, dass die Datei im selben Ordner wie die CSS-Datei liegt */
+  src: url('Fixedsys_Excelsior.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+
+}
+
+html {
+    /* Verhindert Glättung von Bildern/Icons beim Skalieren */
+    image-rendering: pixelated;
+    image-rendering: crisp-edges; /* Für Firefox */
+
+    /* Verhindert Schriftglättung (Antialiasing) */
+    -webkit-font-smoothing: none;
+    -moz-osx-font-smoothing: grayscale;
+    font-smooth: never;
+}
+
+body, button {
+    font-family: 'FixedsysExcelsior', 'Courier New', monospace;
+    font-size: 18px;
+    padding: 0px;
+    margin: 0px;
+}
 
 /* Obere Navigationsleiste */
         .top-nav {
             position: fixed;
-            top: 0;
+            top: 0px;
             width: 100%;
-            height: 100px;
+            height: 25%;
             display: flex;
-            justify-content: center;
+            background: #ff5e00;
+            color: #FFFFFF;
+        }
+
+        .links {
+            flex-grow: 1;  
+            display: flex;     
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .upper-input {
+            background: #5555ff;
+            border: none;
+            outline: none;
+            padding: 0;
+            margin: 0;
+            resize: none; 
+            overflow: hidden;             
+            font-family: inherit;
+            font-size: inherit;
+            color: inherit;
+            font-weight: inherit;
+            width: 100%;
+            height: calc(100% - 55px);
+        }
+
+        .channel-switch {
+            background: #aa1f1f;
+            width: 100%;
+            height: 35px;
+            display: flex;       /* Aktiviert Flexbox für die Button-Reihe */
+            width: 100%;         /* Nutzt die volle Breite von .links */
+            gap: 0px;
+            border-top: 1px solid #ffffff;
+            border-left: 1px solid #ffffff;
+        }
+
+        .status-box {
+            background: #aa00aa;
+            width: 100%;
+            height: 30px;
+            display: flex;       /* Aktiviert Flexbox für die Button-Reihe */
+            width: 100%;         /* Nutzt die volle Breite von .links */
+            gap: 0px;
+        }        
+
+        .status {
+            height: 22px;
+            width: 100%;         /* Nutzt die volle Breite von .links */
+            border: 1px solid #ffffff;
+            padding: 3px;
+            text-align: left;
             align-items: center;
-            background: #eee;
-            z-index: 900;
-            align-items: stretch; /* Sorgt dafür, dass beide immer exakt gleich hoch sind */
+            display: flex;
+            justify-content: flex-start;  
+        }        
+
+        .rechts {
+            width: 150px;        /* Fixe Breite */
+            flex-shrink: 0;      /* Verhindert, dass das Div bei wenig Platz schrumpft */
+            text-align: center;   /* Text innerhalb ist rechtsbündig */
+            background: #00aa00;
+            border: 1px solid #ffffff;
         }
 
+        .clock {
+            width: 100%;
+            height: calc(100% - 52px);
+            aspect-ratio: 1 / 1;
+        }
 
-.links {
-    flex-grow: 1;        /* Sagt diesem Div: "Fülle den restlichen Platz aus" */
-    background-color: #e0e0e0;
-    padding: 20px;
-  }
+        .grey-text-box {
+            background: #555555;
+            margin-top: 4px;
+            margin-bottom: 4px;
+            margin-left: 5px;
+            margin-right: 5px;
+            height: 18px;
+            border: 1px solid #ffffff;
+        }
 
-  .rechts {
-    width: 150px;        /* Fixe Breite */
-    flex-shrink: 0;      /* Verhindert, dass das Div bei wenig Platz schrumpft */
-    background-color: #d1d1d1;
-    padding: 20px;
-    text-align: right;   /* Text innerhalb ist rechtsbündig */
-  }
+        .top-button {
+            position: fixed;
+            top: 110%;
+            height: 40px;
+            width: 100%;
+            background: #ff42428f;
+        }        
 
-
-/* Mittlerer Inhaltsbereich */
         .content {
-            /* Das Wichtigste: Platz für Top und Bottom Nav schaffen */
-            padding-top: 100px; 
-            padding-bottom: 100px;
-            /*min-height: calc(100vh - 200px); /* Füllt den Rest des Bildschirms */
-            text-align: center;
+            position: fixed;
+            top: 25%;
+            width: 100%;
+            height: 50%;
+            background: #555555;
+            color: #FFFFFF;
+            z-index: 0;          
         }
 
-/* Untere Navigationsleiste */
+        .monitor {
+            position: fixed;
+            top: 75%;
+            width: 100%;
+            height: 50%;
+            background: #0000aa;
+            color: #aaaaaa;
+            border-top: 4px solid #aaaaaa;
+      
+        }        
+
         .bottom-nav {
             position: fixed;
             bottom: 0;
             width: 100%;
-            height: 100px;
+            height: 10%;
             display: flex;
-            justify-content: space-around;
-            align-items: center;
-            background: #eee;
-            z-index: 1000;
+            background: #aa1f1f;
+            border: 1px solid #ffffff;
+            gap: 0px;
         }
+
+
+.channel-button {
+    flex-grow: 1;        /* Das ist der Zaubertrick: Jeder Button dehnt sich maximal aus */
+    flex-basis: 0;
+  background-color: #555555;
+  color: #aaaaaa;
+  margin: 2px; 
+  
+  /* Sehr feiner Rahmen statt dicker Kante */
+  border: 1px solid #222;
+  border-radius: 0px;
+  cursor: pointer;
+            font-family: inherit;
+            font-size: inherit;  
+            text-shadow: 1px 1px 0px #000000;
+  /* Minimaler Schatten für Tiefe */
+  box-shadow: 
+    inset 1px 1px 1px rgba(255, 255, 255, 0.1), /* Ganz feine Lichtkante oben */
+    0px 2px 4px rgba(0, 0, 0, 0.4);            /* Weicher Schatten nach unten */
+    
+  outline: none;
+}
+
+/* Der dezente Drück-Effekt */
+.channel-button:active {
+  /* Schatten verschwindet fast ganz */
+  box-shadow: inset 1px 1px 2px rgba(0, 0, 0, 0.5); 
+    
+  /* Nur 1 Pixel Bewegung nach unten */
+  transform: translateY(1px);
+  
+  /* Hintergrund wird minimal dunkler */
+  background-color: #812222;
+
+}
+
+
+.main-button {
+    flex-grow: 1;
+    flex-basis: 0;
+    background-color: #00aaaa;
+    color: #000000;
+    margin: 2px;
+    height: calc(100% - 4px);
+    
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end; /* Schiebt den Text nach unten */
+    padding: 4px;
+    
+    border: 1px solid #222;
+    border-radius: 0px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: inherit;
+    outline: none;
+    
+    /* WICHTIG: Erlaubt absoluten Kindern, sich an diesem Button auszurichten */
+    position: relative; 
+    overflow: hidden; /* Verhindert, dass das Bild über den Button-Rand ragt */
+
+    box-shadow: 
+        inset 1px 1px 1px rgba(255, 255, 255, 0.1),
+        0px 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+/* Das Bild oben links */
+.button-icon {
+    image-rendering: pixelated;
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    left: 0px; 
+    height: 90%; 
+    width: auto;
+    z-index: 0;
+    object-fit: contain;
+    pointer-events: none;
+}
+
+/* Der Text unten rechts */
+.button-text {
+    align-self: flex-end;   /* Explizit rechts */
+    line-height: 1;
+    z-index: 50;         /* Hinter dem Text */
+}
+
+/* Drück-Effekt */
+.main-button:active {
+    box-shadow: inset 2px 2px 2px rgba(0, 0, 0, 0.5);
+    transform: translateY(1px);
+    /* background-color: #812222; */
+}
+
 </style>
 
+</head>
 
 
+<body>
+    
 
-<nav class="top-nav">
+<div class="top-nav">
 
     <div class="links">
-        Linke Seite (flexibel) <br>
-        <button onclick="show(1)">1</button>
-        <button onclick="show(2)">2</button>
-        <button onclick="show(3)">3</button>
+        
+        <textarea class="upper-input"></textarea>
+        <div class="channel-switch"> 
+            <button class="channel-button" onclick="show(1)">1: all</button>
+            <button class="channel-button" onclick="show(1)">2: DH1NFJ</button>
+            <button class="channel-button" onclick="show(1)">3: Herzog</button>
+            <button class="channel-button" onclick="show(1)">4: .........</button>
+            <button class="channel-button" onclick="show(1)">5: .........</button>
+        </div>
+
+        <div class="channel-switch" style="border-top: none;"> 
+            <button class="channel-button" onclick="show(1)">6: .........</button>
+            <button class="channel-button" onclick="show(1)">7: .........</button>
+            <button class="channel-button" onclick="show(1)">8: .........</button>
+            <button class="channel-button" onclick="show(1)">9: .........</button>
+            <button class="channel-button" onclick="show(1)">10: .........</button>
+        </div>
+        <div class="status-box">
+            <div class="status">MyCall: DH1NFJ</div>
+            <div class="status">UN_ACK: </div>
+            <div class="status">Buffer: 0</div>
+        </div>
 
     </div>
-    <div class="rechts">Rechte Seite (150px)
-        <canvas id="clock" width="150" height="150"></canvas>
-
+    <div class="rechts">
+         <canvas class="clock" id="clock" ></canvas>
+         <div class="grey-text-box">rMesh</div>
+         <div class="grey-text-box">01.01.2023</div>
     </div>
 
-</nav>
+</div>
+<div id="section1" class="content">
+    contenet
+</div>
 
 
-<div id="section1" class="content">Inhalt 1</div>
+<div class="monitor">
+    monitor
+</div>
+
+
+<nav class="bottom-nav">
+
+    <button class="main-button" onclick="show(1)">
+        <img src="monitor.png" class="button-icon">
+        <span class="button-text">Monitor</span>
+    </button>
+
+    <button class="main-button" onclick="show(2)">
+        <img src="mh.png" class="button-icon">
+        <span class="button-text">Peers</span>
+    </button>    
+
+    <button class="main-button" onclick="show(2)">
+        <img src="edit.png" class="button-icon">
+        <span class="button-text">Routing</span>
+    </button>    
+
+    <button class="main-button" onclick="show(2)">
+        <img src="dos.png" class="button-icon">
+        <span class="button-text">DOS</span>
+    </button>    
+
+    <button class="main-button" onclick="show(2)">
+        <img src="tune.png" class="button-icon">
+        <span class="button-text">Tune</span>
+    </button>    
+
+    <button class="main-button" onclick="show(2)">
+        <img src="announce.png" class="button-icon">
+        <span class="button-text">Announce</span>
+    </button>    
+
+    <button class="main-button" onclick="show(2)">
+        <img src="setup.png" class="button-icon">
+        <span class="button-text">Setup</span>
+    </button>    
+
+    <button class="main-button" onclick="show(2)">
+        <img src="network.png" class="button-icon">
+        <span class="button-text">Network</span>
+    </button>    
+
+
+</nav> 
+
+
+
+       
+   
+
+</div>
 <div id="section2" class="content" style="display:none">Inhalt 2</div>
 <div id="section3" class="content" style="display:none">Inhalt 3</div>
 
 
 
-<nav class="bottom-nav">
+<div class="bottom-navdsf">
   <button onclick="show(1)">Home</button>
   <button onclick="show(2)">Profil</button>
   <button onclick="show(3)">Profil</button>
-</nav>
+</div>
 
 
 
@@ -96,28 +375,28 @@
   }
 
 
-    const canvas = document.getElementById("clock");
-    const ctx = canvas.getContext("2d");
-    const radius = canvas.width / 2;
 
-    ctx.translate(radius, radius);
-
-    function drawClock() {
-      drawFace(ctx, radius);
-      drawTicks(ctx, radius);
-      drawHands(ctx, radius);
-    }
+function drawClock() {
+    var canvas = document.getElementById("clock");
+    var ctx = canvas.getContext("2d");
+    canvas.width = canvas.clientWidth;
+    canvas.height = canvas.clientHeight;
+    var centerX = canvas.width / 2;
+    var centerY = canvas.height / 2;
+    var radius = Math.min(centerX, centerY);
+    ctx.setTransform(1, 0, 0, 1, 0, 0); 
+    ctx.translate(centerX, centerY);
+    drawFace(ctx, radius);
+    drawTicks(ctx, radius);
+    drawHands(ctx, radius);
+}
 
     function drawFace(ctx, radius) {
       ctx.beginPath();
       ctx.arc(0, 0, radius * 0.95, 0, 2 * Math.PI);
-      ctx.fillStyle = "#333333";
+      ctx.fillStyle = "#555555";
       ctx.fill();
 
-      ctx.beginPath();
-      ctx.arc(0, 0, radius * 0.04, 0, 2 * Math.PI);
-      ctx.fillStyle = "#000000";
-      ctx.fill();
     }
 
     function drawTicks(ctx, radius) {
@@ -127,7 +406,7 @@
         ctx.rotate(angle);
 
         ctx.beginPath();
-        ctx.strokeStyle = "#ffd600";
+        ctx.strokeStyle = "#ecec5e";
         ctx.lineWidth = (i % 5 === 0) ? radius * 0.018 : radius * 0.01;
 
         const outer = radius * 0.95;
@@ -165,7 +444,7 @@
 
       // Sekundenzeiger
       const secLength = radius * 0.8;
-      drawHand(ctx, secondAngle, secLength, radius * 0.012, "#ff5252");
+      drawHand(ctx, secondAngle, secLength, radius * 0.012, "#e95555");
 
       // Kreis am Sekundenzeiger (50% größer, gefüllt)
       ctx.save();
@@ -174,7 +453,6 @@
       ctx.beginPath();
       ctx.lineWidth = radius * 0.012;
       ctx.strokeStyle = "#ff5252";
-      ctx.fillStyle = "#333333"; // Zifferblattfarbe
       ctx.arc(0, -secLength * 0.8, radius * 0.06, 0, 2 * Math.PI); // <-- größerer Kreis
       ctx.fill();
       ctx.stroke();
@@ -201,3 +479,6 @@
     drawClock();
  
 </script>
+
+
+</body>
