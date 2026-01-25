@@ -204,7 +204,7 @@ void processRxFrame(Frame &f) {
                         }
 
                         //Prüfen, ob Tracking ein
-                        if ((f.messageType == Frame::MessageTypes::TRACE_MESSAGE) && (f.port == tf.port)) {
+                        if (f.messageType == Frame::MessageTypes::TRACE_MESSAGE) {
                             //EIN -> Rufzeichen und Uhrzeit dazu
                             memcpy(&tf.message[tf.messageLength], " -> ", 4);
                             tf.messageLength += 4;
