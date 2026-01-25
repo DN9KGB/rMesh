@@ -32,7 +32,7 @@ void sendFrame(Frame &f) {
 
     bool first = true;
     if (txBuffer.size() > 0) {first = false;}
-    for (int port = 1; port >= 0; port--) {
+    for (int port = 0; port <= 1; port++) {
         uint8_t availableNodeCount = 0;
         f.viaCall[0] = 0;
         f.retry = TX_RETRY;
