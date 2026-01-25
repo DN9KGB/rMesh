@@ -57,6 +57,10 @@ void sendMessage(const char* dstCall, const char* text, uint8_t messageType) {
         //Wenn keine Peers, Frame ohne Ziel und Retry senden
         if (availableNodeCount == 0) {
             //Frame in Sendebuffer
+            f.viaCall[0] = 0;
+            f.retry = 1;
+            f.initRetry = 1;
+            f.syncFlag = false;            
             f.port = port;
             txBuffer.push_back(f);
         }

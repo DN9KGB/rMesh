@@ -193,8 +193,6 @@ void processRxFrame(Frame &f) {
                     tf.messageLength = f.messageLength;
                     tf.id = f.id;
                     tf.timestamp = time(NULL);
-                    tf.retry = TX_RETRY;
-                    tf.initRetry = TX_RETRY;
                     tf.syncFlag = true;
 
                     //Ports duchlaufen
@@ -206,7 +204,7 @@ void processRxFrame(Frame &f) {
                         }
 
                         //Prüfen, ob Tracking ein
-                        if (f.messageType == Frame::MessageTypes::TRACE_MESSAGE) {
+                        if ((f.messageType == Frame::MessageTypes::TRACE_MESSAGE) && (f.port == tf.port)) {
                             //EIN -> Rufzeichen und Uhrzeit dazu
                             memcpy(&tf.message[tf.messageLength], " -> ", 4);
                             tf.messageLength += 4;
@@ -230,19 +228,23 @@ void processRxFrame(Frame &f) {
                             //In TX-Puffer eintragen
                             if ((found == false) && (peerList[i].available == true) && (peerList[i].port == tf.port) && (strcmp(peerList[i].nodeCall, f.nodeCall) != 0)) {
                                 memcpy(tf.viaCall, peerList[i].nodeCall, sizeof(tf.viaCall));
+                                tf.retry = TX_RETRY;
+                                tf.initRetry = TX_RETRY;
                                 txBuffer.push_back(tf);
                                 sentVia = true;
                             }
                         } 
                         
                         //Wenn keine Peers da, dann Frame 1x wiederholen
-                        if (sentVia == false) {
-                            tf.retry = 1;
-                            tf.initRetry = 1;
-                            tf.viaCall[0] = 0x00;
-                            txBuffer.push_back(tf);
-                            sentVia = true;
-                        }
+                        #ifdef REPEAT_WITHOUT_PEER
+                            if (sentVia == false) {
+                                tf.retry = 1;
+                                tf.initRetry = 1;
+                                tf.viaCall[0] = 0x00;
+                                txBuffer.push_back(tf);
+                                sentVia = true;
+                            }
+                        #endif
                     }
 
                 }
@@ -320,6 +322,7 @@ void loop() {
 
     //Prüfen, ob was gesendet werden muss
 	if ((txFlag == false) && (rxFlag == false)) {
+
 	    //Frames mit retry > 1 werden synchron gesendet !!!
         bool sendNewSyncFrame = true;
         for (int i = 0; i < txBuffer.size(); i++) {
@@ -327,16 +330,18 @@ void loop() {
             if (txBuffer[i].syncFlag == true) {sendNewSyncFrame = false;}
         }
 
-        //Im Puffer nach synchronen Frames duchen und den 1. gefundenen zum Senden freigeben
+        //Im Puffer nach synchronen Frames duchen und den 1. gefundenen (pro Port) zum Senden freigeben
         if (sendNewSyncFrame == true) {
-            for (int i = 0; i < txBuffer.size(); i++) {
-                if(txBuffer[i].retry > 1) {
-                    txBuffer[i].syncFlag = true; 
-                    switch (txBuffer[i].port){
-                        case 0: txBuffer[i].transmitMillis = millis() + TX_RETRY_TIME + getTOA(30); break;  //Time On Air für Antwort
-                        case 1: txBuffer[i].transmitMillis = millis() + UDP_TX_RETRY_TIME; break; //Bei UDP schneller
+            for (int port = 0; port <= 1; port++) {
+                for (int i = 0; i < txBuffer.size(); i++) {
+                    if ((txBuffer[i].retry > 1) && (txBuffer[i].port = port)) {
+                        txBuffer[i].syncFlag = true; 
+                        switch (txBuffer[i].port){
+                            case 0: txBuffer[i].transmitMillis = millis() + TX_RETRY_TIME + getTOA(30); break;  //Time On Air für Antwort
+                            case 1: txBuffer[i].transmitMillis = millis() + UDP_TX_RETRY_TIME; break; //Bei UDP schneller
+                        }
+                        break;   
                     }
-                    break;   
                 }
             }
         }
@@ -354,7 +359,7 @@ void loop() {
                 if (txBuffer[i].retry > 0) {txBuffer[i].retry --;}
                 //Nächsten Sendezeitpunkt festlegen (nur relevant, wenn retry > 1)
                 switch (txBuffer[i].port){
-                    case 0: txBuffer[i].transmitMillis = millis() + TX_RETRY_TIME + getTOA(30); //Time On Air für Antwort
+                    case 0: txBuffer[i].transmitMillis = millis() + TX_RETRY_TIME + getTOA(30); break;; //Time On Air für Antwort
                     case 1: txBuffer[i].transmitMillis = millis() + UDP_TX_RETRY_TIME; break; //Bei UDP schneller
                 }
                 //Wenn kein Retry mehr übrig, dann löschen

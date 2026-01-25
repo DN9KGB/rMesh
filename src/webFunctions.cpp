@@ -123,6 +123,9 @@ void startWebServer() {
         f.id = millis();
         f.timestamp = time(NULL);
         f.tx = true;
+        f.port = 0;
+        txBuffer.push_back(f);        
+        f.port = 1;
         txBuffer.push_back(f);        
     }   
 
