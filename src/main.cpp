@@ -196,8 +196,7 @@ void processRxFrame(Frame &f) {
                     tf.syncFlag = true;
 
                     //Ports duchlaufen
-                    for (tf.port = 0; tf.port <= 1; tf.port++) {
-
+                    for (tf.port = 1; tf.port >= 0; tf.port--) {
                         switch (tf.port){
                             case 0: tf.transmitMillis = millis() + TX_RETRY_TIME; break;  //Time On Air für Antwort
                             case 1: tf.transmitMillis = millis() + UDP_TX_RETRY_TIME; break; //Bei UDP schneller

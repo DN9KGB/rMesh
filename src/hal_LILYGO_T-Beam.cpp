@@ -119,6 +119,8 @@ void transmitFrame(Frame &f) {
     statusTimer = 0;
     strncpy(f.nodeCall, settings.mycall, sizeof(f.nodeCall));
     f.tx = true;
+    f.timestamp = time(NULL);
+    f.port = 0;
 
     //Senden
     txBufferLength = f.exportBinary(txBuffer, sizeof(txBuffer));
