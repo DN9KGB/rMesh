@@ -168,6 +168,7 @@ function saveSettings() {
 function showMessages() {
     var msg = "";
     messages.forEach(function(m) {
+        if (m.delimiter == true) {msg += "<span>^</span>";}
         if ((m.messageType == 0) || (m.messageType == 1)) { //nur TEXT & TRACE Nachrichten
             //if (m.dstCall.length == 0) {m.dstCall = "all";}
             msg += "<span ";
@@ -216,6 +217,10 @@ function initWebSocket() {
                 const m = JSON.parse(line);
                 messages.push(m.message);
         });
+
+        const result = {"delimiter": true};
+        messages.push(result);
+
         for (let i = 1; i <= 10; i++) {
             document.getElementById("channel" + i).innerHTML = "not implemented yet....";
         }
