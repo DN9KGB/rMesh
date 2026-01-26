@@ -17,7 +17,6 @@
 #define NAME "rMesh"                             //Versions-String
 #define VERSION "V1.0.1-a"                       //Versions-String
 #define MAX_CALLSIGN_LENGTH 9                    //maximale Länge des Rufzeichens  1....16
-#define CORE_DEBUG_LEVEL 0                       // 0 bedeutet keine Logs
 #define TX_BUFFER_SIZE 50
 #define PEER_LIST_SIZE 20
 #define UDP_PORT 3333

@@ -14,7 +14,7 @@ function onMessage(event) {
             msg += ">";
         }
         //Port
-        msg += f.port;
+        if (f.port == 0) {msg += "LoRa";} else {msg += "Wifi";}
         //Zeit
         const date = new Date(d.monitor.timestamp * 1000);
         msg += " " + date.toLocaleString("de-DE", {hour: "2-digit", minute: "2-digit", second: "2-digit" }).replace(",", "");		
@@ -68,7 +68,7 @@ function onMessage(event) {
 				if (p.port == 0) {port = "LoRa";} else {port = "Wifi";}
                 const lastRX = new Date(p.timestamp * 1000);
                 peers += "<tr>";
-                peers += "<td>" + p.port + "</td>";
+                peers += "<td>" + port + "</td>";
                 peers += "<td";
                 if (p.available == true) { peers += " class='green' "} else { peers += " class='red' "}
                 peers += ">" + p.call + "</td>";

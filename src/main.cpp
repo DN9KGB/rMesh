@@ -264,6 +264,10 @@ void setup() {
 
     //CPU Frqg fest (soll wegen SPI sinnvoll sein)
     setCpuFrequencyMhz(240);
+    esp_log_level_set("NetworkUdp", ESP_LOG_NONE);
+    esp_log_level_set("NetworkUdp", ESP_LOG_ERROR);
+    esp_log_level_set("vfs", ESP_LOG_WARN);
+    esp_log_level_set("vfs", ESP_LOG_NONE);
 
     //Puffer
     peerList.reserve(PEER_LIST_SIZE);
