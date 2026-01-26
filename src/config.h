@@ -7,7 +7,7 @@
 #define TX_RETRY_TIME 4000 + random(0, 4000)     //Pause zwischen wiederholungen (muss größer als ACK_TIME sein)
 #define MAX_STORED_MESSAGES 1000                  //max. in "messages.json" gespeicherte Nachrichten
 #define MAX_STORED_ACK 100                       //max. ACK Frames in "ack.json"
-//#define REPEAT_WITHOUT_PEER                      //Wenn ein Node keine Peers hat, wird die Nachricht trotzdem wiederholt
+#define REPEAT_WITHOUT_PEER                      //Wenn ein Node keine Peers hat, wird die Nachricht trotzdem wiederholt
 
 
 //UDP Timing
