@@ -205,6 +205,7 @@ body, button {
             align-items: center;       
             padding-top: 10px;
             box-sizing: border-box;
+			overflow: auto;
         }
 
         .routing {
@@ -227,6 +228,7 @@ body, button {
             flex-direction: column;    /* Inhalt untereinander stapeln */
             justify-content: center;   /* Vertikal zentrieren */
             align-items: center;       /* Horizontal zentrieren */
+			overflow: auto;
         }        
 
         .network {
@@ -240,6 +242,7 @@ body, button {
             flex-direction: column;    /* Inhalt untereinander stapeln */
             justify-content: center;   /* Vertikal zentrieren */
             align-items: center;       /* Horizontal zentrieren */
+			overflow: auto;
         }        
 
         .bottom {

@@ -65,12 +65,12 @@ function onMessage(event) {
         peers += "<tr> <td>Port</td> <td>Call</td> <td>Last RX</td> <td>RSSI</td> <td>SNR</td> <td>Frq. Error</td> </tr>";
         if (d.peerlist.peers) {
             d.peerlist.peers.forEach(function(p, index) {
+				if (p.port == 0) {port = "LoRa";} else {port = "Wifi";}
                 const lastRX = new Date(p.timestamp * 1000);
                 peers += "<tr>";
                 peers += "<td>" + p.port + "</td>";
                 peers += "<td";
                 if (p.available == true) { peers += " class='green' "} else { peers += " class='red' "}
-
                 peers += ">" + p.call + "</td>";
                 peers += "<td>" + lastRX.toLocaleTimeString('de-DE') + "</td>";
                 peers += "<td>" + p.rssi + "</td>";
