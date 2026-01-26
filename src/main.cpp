@@ -193,7 +193,7 @@ void processRxFrame(Frame &f) {
                     tf.messageLength = f.messageLength;
                     tf.id = f.id;
                     tf.timestamp = time(NULL);
-                    tf.syncFlag = true;
+                    tf.syncFlag = false;
 
                     //Ports duchlaufen
                     for (tf.port = 0; tf.port <= 1; tf.port++) {
