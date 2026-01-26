@@ -54,6 +54,8 @@ void initHal() {
     printState(radio.setSpreadingFactor(settings.loraSpreadingFactor));
     printState(radio.setPreambleLength(settings.loraPreambleLength));
     printState(radio.setCRC(true));
+    printState(radio.setCurrentLimit(240));
+    printState(radio.setGain(0));
 
     //RX einschalten
     printState(radio.startReceive());

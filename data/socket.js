@@ -122,6 +122,9 @@ function onMessage(event) {
             document.getElementById("statusTRX").innerHTML = "TRX:&nbsp;<span>stby</span>"; 
         }
         document.getElementById("statusTxBufferCount").innerHTML = "TX-Buffer: " + d.status.txBufferCount; 
+        document.getElementById("statusRetry").innerHTML = "Retry: " + d.status.retry; 
+
+        
     }
 
     //WiFi Scan

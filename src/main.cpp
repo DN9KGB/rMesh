@@ -30,9 +30,7 @@ std::vector<Frame> txBuffer;
 uint32_t announceTimer = 5000;      //Erstes Announce nach 5 Sekunden
 uint32_t statusTimer = 0;
 uint32_t rebootTimer = 0xFFFFFFFF;
-
-//Anderes Zeug -> muss weg
-uint16_t irqFlags = 0;
+uint8_t currentRetry = 0;
 
 
 void processRxFrame(Frame &f) {
@@ -351,6 +349,7 @@ void loop() {
         }
         
         //Sendepuffer duchlaufen und ggg. Frames senden
+        if (txBuffer.size() == 0) {currentRetry = 0;}
     	for (int i = 0; i < txBuffer.size(); i++) {
     		//Prüfen, ob Frame gesendet werden muss
     		if ((millis() > txBuffer[i].transmitMillis) && ((txBuffer[i].retry <= 1) || (txBuffer[i].syncFlag == true))) {
@@ -361,6 +360,7 @@ void loop() {
                 }
                 //Retrys runterzählen
                 if (txBuffer[i].retry > 0) {txBuffer[i].retry --;}
+                currentRetry = txBuffer[i].initRetry - txBuffer[i].retry;
                 //Nächsten Sendezeitpunkt festlegen (nur relevant, wenn retry > 1)
                 switch (txBuffer[i].port){
                     case 0: txBuffer[i].transmitMillis = millis() + TX_RETRY_TIME + getTOA(30); break;; //Time On Air für Antwort
@@ -396,6 +396,7 @@ void loop() {
         doc["status"]["tx"] = txFlag;
         doc["status"]["rx"] = rxFlag;
         doc["status"]["txBufferCount"] = txBuffer.size();
+        doc["status"]["retry"] = currentRetry;
         char* jsonBuffer = (char*)malloc(1024);
         size_t len = serializeJson(doc, jsonBuffer, 1024);
         ws.textAll(jsonBuffer, len);  // sendet direkt den Puffer
