@@ -35,10 +35,6 @@ void initHal() {
     //SPI Init
     SPI.begin(SPI_SCK, SPI_MISO, SPI_MOSI, SPI_SS);
 
-    //Ausgäne
-    pinMode(PIN_WIFI_LED, OUTPUT); 
-    digitalWrite(PIN_WIFI_LED, 0); 
-
     //Flags zurücksetzen
     int state;
 
