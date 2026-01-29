@@ -25,10 +25,10 @@ $manifest = '{
     {
       "chipFamily": "ESP32",
       "parts": [
-        { "path": "'.$device.'/bootloader.bin", "offset": 4096 },
-        { "path": "'.$device.'/partitions.bin", "offset": 32768 },
-        { "path": "'.$device.'/firmware.bin", "offset": 65536 },
-        { "path": "'.$device.'/littlefs.bin", "offset": 2686976 }
+        { "path": "'.$device.'/bootloader.bin", "offset": "0x1000" },
+        { "path": "'.$device.'/partitions.bin", "offset": "0x8000" },
+        { "path": "'.$device.'/firmware.bin", "offset": "0x10000",  "size": "0x140000" },
+        { "path": "'.$device.'/littlefs.bin", "offset": "0x290000", "size": "0x170000" }
       ]
     }
   ],

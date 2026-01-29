@@ -2,6 +2,7 @@
 #include <nvs_flash.h>
 #include <ArduinoJson.h>
 #include <WiFi.h>
+#include <Preferences.h>
 
 #include "settings.h"
 #include "config.h"
@@ -9,6 +10,8 @@
 #include "hal.h"
 
 Settings settings;
+
+Preferences prefs;
 
 void showSettings() {
     //Einstellungen als Debug-Ausgabe
@@ -126,8 +129,20 @@ void sendSettings() {
 void loadSettings() {
     //Einstellungen aus EEPROM lesen
     Serial.println("Lade Einstellungen...");
-    EEPROM.begin(4095);
-    EEPROM.get(0, settings); 
+    prefs.begin("custom_settings", false);
+    prefs.getBytes("config", &settings, sizeof(settings));
+    size_t storedLen = prefs.getBytesLength("config");
+
+
+    //Prüfen, ob Einstellungen plausiebel
+    Serial.println(F("\n--- Aktuelle Einstellungen ---"));
+    Serial.print(F("WiFi SSID:     ")); Serial.println(settings.wifiSSID);
+    Serial.print(F("WiFi Password: ")); Serial.println(settings.wifiPassword); // PW aus Sicherheitsgründen maskiert
+    Serial.print(F("Callsign:      ")); Serial.println(settings.mycall);
+    Serial.print(F("NTP Server:    ")); Serial.println(settings.ntpServer);
+    Serial.print(F("Betriebsmodus: ")); 
+    Serial.println(settings.apMode ? F("Access Point (AP)") : F("Station (STA)"));
+
 
     //IP-Adressen fixen 
     settings.wifiIP       = IPAddress(settings.wifiIP[0], settings.wifiIP[1], settings.wifiIP[2], settings.wifiIP[3]);
@@ -136,15 +151,7 @@ void loadSettings() {
     settings.wifiDNS      = IPAddress(settings.wifiDNS[0], settings.wifiDNS[1], settings.wifiDNS[2], settings.wifiDNS[3]);
     settings.wifiBrodcast = IPAddress(settings.wifiBrodcast[0], settings.wifiBrodcast[1], settings.wifiBrodcast[2], settings.wifiBrodcast[3]);
 
-    //Prüfen, ob Einstellungen plausiebel
-    bool valid = true;
-    if (strlen(settings.wifiSSID) >= 64) {valid = false;}
-    if (strlen(settings.wifiPassword) >= 64) {valid = false;}
-    if (strlen(settings.mycall) >= 17) {valid = false;}
-    if (strlen(settings.ntpServer) >= 64) {valid = false;}
-    if (strlen(settings.wifiSSID) == 0) {settings.apMode = true;}
-
-    if (valid == false) {
+    if (storedLen != sizeof(settings)) {
         //Defaults laden
         Serial.println("Lade Default-Settings");
         strcpy(settings.wifiSSID, "");
@@ -153,13 +160,13 @@ void loadSettings() {
         strcpy(settings.mycall, "XX0XX");
         settings.apMode = true;
         settings.dhcpActive = true;
-        settings.wifiIP = IPAddress(192,168,33,68);
+        settings.wifiIP = IPAddress(192,168,33,60);
         settings.wifiNetMask = IPAddress(255,255,255,0);
         settings.wifiGateway = IPAddress(192,168,33,4);
         settings.wifiDNS = IPAddress(192,168,33,4);
         settings.wifiBrodcast = IPAddress(255,255,255,255);
         settings.loraFrequency = 434.950;
-        settings.loraOutputPower = 20;
+        settings.loraOutputPower = LORA_DEFAULT_TX_POWER;
         settings.loraBandwidth = 250;
         settings.loraSyncWord = 0x2b;
         settings.loraCodingRate = 6;
@@ -178,11 +185,7 @@ void loadSettings() {
 void saveSettings() {
     //Einstellungen im EEPROM speichern
     Serial.println("Speichere Einstellungen...");
-    nvs_flash_erase(); // Löscht die gesamte NVS-Partition
-    nvs_flash_init();  // Initialisiert sie neu    
-    EEPROM.begin(4096);
-    EEPROM.put(0, settings);
-    EEPROM.commit();
+    prefs.putBytes("config", &settings, sizeof(settings));
     loadSettings();
     sendSettings();
 }

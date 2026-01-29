@@ -28,6 +28,11 @@ void setWiFiLED(bool value) {
     #endif
 }
 
+bool getKeyApMode() {
+    return false;
+}
+
+
 void initHal() {
     txFlag = false;
     rxFlag = false;

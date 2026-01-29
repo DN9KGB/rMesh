@@ -10,11 +10,13 @@
 #include "config.h"
 #include "webFunctions.h"
 #include "udp.h"
+#include "main.h"
 
 
 uint64_t ledTimer = 0;
 byte wifiStatus = 0xff;
 bool wiFiLED = false;
+bool apModeKey = false;
 
 void checkForUpdates() {
     WiFiClient client;
@@ -26,6 +28,22 @@ void checkForUpdates() {
 }
 
 void showWiFiStatus() {
+    //AP-Mode umschalten
+    if (getKeyApMode() != apModeKey) {
+        apModeKey = getKeyApMode();
+        if (apModeKey == 1) {
+            if (settings.apMode == false) {
+                settings.apMode = true;
+            } else {
+                settings.apMode = false;
+            }
+            Serial.println(settings.apMode);
+            saveSettings();
+            rebootTimer = 0;
+            delay(500);
+        }
+    }
+
     //Status-LED
     if (settings.apMode) {
         //AP-Mode
@@ -49,10 +67,10 @@ void showWiFiStatus() {
             if (millis() > ledTimer) {
                 if (wiFiLED == true) {
                     wiFiLED = false;
-                    ledTimer = millis() + 900;
+                    ledTimer = millis() + 950;
                 } else {
                     wiFiLED = true;
-                    ledTimer = millis() + 100;
+                    ledTimer = millis() + 50;
                 }
                 setWiFiLED(wiFiLED);
             }

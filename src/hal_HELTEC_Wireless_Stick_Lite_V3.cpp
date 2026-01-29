@@ -10,7 +10,9 @@
 
 
 
-SX1278 radio = new Module(LORA_NSS, LORA_DIO0, LORA_RST, LORA_DIO1);
+SX1262 radio = new Module( LORA_NSS, LORA_DIO1, LORA_RST, LORA_BUSY );
+
+
 #if defined(ESP8266) || defined(ESP32)
   ICACHE_RAM_ATTR
 #endif
@@ -23,9 +25,11 @@ void printState(int state) {
 }
 
 void setWiFiLED(bool value) {
-    #ifdef PIN_WIFI_LED
-        digitalWrite(PIN_WIFI_LED, value);
-    #endif
+    digitalWrite(PIN_WIFI_LED, value);
+}
+
+bool getKeyApMode() {
+    return !digitalRead(PIN_AP_MODE_SWITCH);
 }
 
 void initHal() {
@@ -33,11 +37,14 @@ void initHal() {
     rxFlag = false;
 
     //SPI Init
-    SPI.begin(SPI_SCK, SPI_MISO, SPI_MOSI, SPI_SS);
+    SPI.begin(LORA_SCK, LORA_MISO, LORA_MOSI, LORA_NSS);
 
     //Ausgäne
     pinMode(PIN_WIFI_LED, OUTPUT); 
     digitalWrite(PIN_WIFI_LED, 0); 
+
+    //Eingänge
+    pinMode(PIN_AP_MODE_SWITCH, INPUT);
 
     //Flags zurücksetzen
     int state;
@@ -46,6 +53,7 @@ void initHal() {
     radio.reset();
     delay(100);
     printState(radio.begin());
+    printState(radio.setDio2AsRfSwitch(true));
     printState(radio.setSyncWord(settings.loraSyncWord));
     printState(radio.setFrequency(settings.loraFrequency));
     printState(radio.setOutputPower(settings.loraOutputPower));
@@ -54,16 +62,11 @@ void initHal() {
     printState(radio.setSpreadingFactor(settings.loraSpreadingFactor));
     printState(radio.setPreambleLength(settings.loraPreambleLength));
     printState(radio.setCRC(true));
+    printState(radio.setCurrentLimit(140)) ;
+    printState(radio.setRxBoostedGainMode(true));
 
     //RX einschalten
     printState(radio.startReceive());
-
-    //Test PEER eintragen
-    //Peer p;
-    //p.lastRX = 0xFFFFFFFF;
-    //strncpy(p.call, "DB0LUS", sizeof(p.call)-1);  //DB0LUS in p.call
-    //p.available = true;
-    //peerList.push_back(p);    
 
 }
 
@@ -71,9 +74,9 @@ void initHal() {
 
 bool checkReceive(Frame &f) {
     //IRQ-Flags auslesen
-    uint16_t irqFlags = radio.getIRQFlags();
-     //Prüfen ob Kanal belegt
-    if (irqFlags & RADIOLIB_SX127X_CLEAR_IRQ_FLAG_VALID_HEADER) {
+    uint16_t irqFlags = radio.getIrqFlags();
+    //Prüfen ob Kanal belegt
+    if (irqFlags & RADIOLIB_SX126X_IRQ_HEADER_VALID) {
         if (rxFlag == false) {
             rxFlag = true;
             statusTimer = 0;
@@ -85,13 +88,13 @@ bool checkReceive(Frame &f) {
         }
     }
     //Senden fertig
-    if (irqFlags & RADIOLIB_SX127X_CLEAR_IRQ_FLAG_TX_DONE) {
+    if (irqFlags & RADIOLIB_SX126X_IRQ_TX_DONE) {
         radio.startReceive();
         txFlag = false;
         statusTimer = 0;
     }      
     //Daten Empfangen -> rxBuffer
-    if (irqFlags & RADIOLIB_SX127X_CLEAR_IRQ_FLAG_RX_DONE) {
+    if (irqFlags & RADIOLIB_SX126X_IRQ_RX_DONE) {
         //Prüfen, ob was empfangen wurde
         uint8_t rxBuffer[256];
         size_t rxBufferLength;

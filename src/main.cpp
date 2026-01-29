@@ -26,7 +26,8 @@ std::vector<Frame> txBuffer;
 //portMUX_TYPE txBufferMux = portMUX_INITIALIZER_UNLOCKED;
 
 //Timing
-uint32_t announceTimer = 5000;      //Erstes Announce nach 5 Sekunden
+//uint32_t announceTimer = 5000;      //Erstes Announce nach 5 Sekunden
+uint32_t announceTimer = 0xFFFFFFFF;
 uint32_t statusTimer = 0;
 uint32_t rebootTimer = 0xFFFFFFFF;
 uint8_t currentRetry = 0;
@@ -274,9 +275,14 @@ void setup() {
     loadSettings();
 
     //Initialize LittleFS
-    if (!LittleFS.begin(true)) {
-        Serial.println("An error has occurred while mounting LittleFS");
-    } 
+    if (!LittleFS.begin(true, "/littlefs", 20, "storage")) {
+        Serial.println("Fehler: Partition 'storage' nicht gefunden!");
+        // Falls es beim ersten Mal scheitert, mit formatOnFail probieren:
+        // LittleFS.begin(true, "/littlefs", 10, "storage");
+    }    
+    // if (!LittleFS.begin(true)) {
+    //     Serial.println("An error has occurred while mounting LittleFS");
+    // } 
 
     //Init Hardware
     initHal();
@@ -294,11 +300,7 @@ void setup() {
 
     //Init OK
     Serial.printf("\n\n\n%s\n%s %s\nREADY.\n", PIO_ENV_NAME, NAME, VERSION);  
-    
-
 }
-
-
 
 
 void loop() {

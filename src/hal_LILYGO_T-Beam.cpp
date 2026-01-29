@@ -23,9 +23,6 @@ void printState(int state) {
 }
 
 void setWiFiLED(bool value) {
-    #ifdef PIN_WIFI_LED
-        digitalWrite(PIN_WIFI_LED, value);
-    #endif
 }
 
 void initHal() {
@@ -50,19 +47,19 @@ void initHal() {
     printState(radio.setSpreadingFactor(settings.loraSpreadingFactor));
     printState(radio.setPreambleLength(settings.loraPreambleLength));
     printState(radio.setCRC(true));
+    printState(radio.setCurrentLimit(240));
+    printState(radio.setGain(0));
 
     //RX einschalten
     printState(radio.startReceive());
 
-    //Test PEER eintragen
-    //Peer p;
-    //p.lastRX = 0xFFFFFFFF;
-    //strncpy(p.call, "DB0LUS", sizeof(p.call)-1);  //DB0LUS in p.call
-    //p.available = true;
-    //peerList.push_back(p);    
 
 }
 
+
+bool getKeyApMode() {
+    return false;
+}
 
 
 bool checkReceive(Frame &f) {
