@@ -154,11 +154,11 @@ void loadSettings() {
         settings.wifiGateway = IPAddress(192,168,33,4);
         settings.wifiDNS = IPAddress(192,168,33,4);
         settings.wifiBrodcast = IPAddress(255,255,255,255);
-        settings.loraFrequency = 434.950;
+        settings.loraFrequency = 434.850;
         settings.loraOutputPower = LORA_DEFAULT_TX_POWER;
         settings.loraBandwidth = 250;
         settings.loraSyncWord = 0x2b;
-        settings.loraCodingRate = 6;
+        settings.loraCodingRate = 8;
         settings.loraSpreadingFactor = 11;
         settings.loraPreambleLength = 10;
         settings.loraRepeat = true;

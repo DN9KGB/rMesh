@@ -12,16 +12,20 @@ bool txFlag = false;
 bool rxFlag = false;
 
 void setWiFiLED(bool value) {
-    //digitalWrite(PIN_WIFI_LED, value);
+    digitalWrite(PIN_WIFI_LED, value);
 }
 
 bool getKeyApMode() {
-    //digitalRead(PIN_AP_MODE_SWITCH);
-    return false;
+    return !digitalRead(PIN_AP_MODE_SWITCH);
 }
 
-
 void initHal() {
+   //Ausgäne
+    pinMode(PIN_WIFI_LED, OUTPUT); 
+    digitalWrite(PIN_WIFI_LED, 0); 
+
+    //Eingänge
+    pinMode(PIN_AP_MODE_SWITCH, INPUT);
 
 }
 
