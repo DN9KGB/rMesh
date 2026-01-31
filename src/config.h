@@ -2,16 +2,12 @@
 //Timing
 #define ANNOUNCE_TIME 5 * 60 * 1000 + random(0, 1 * 60 * 1000)  //ANNOUNCE Baken
 #define PEER_TIMEOUT 30 * 60 * 1000              //Zeit, nach dem ein Call aus der Peer-Liste gelöscht wird
-#define ACK_TIME random(0, 5000)                 //Zeit, bis ein ACK gesendet wird
 #define TX_RETRY 10                              //Retrys beim Senden 
-#define TX_RETRY_TIME 5000 + random(0, 5000)     //Pause zwischen wiederholungen (muss größer als ACK_TIME sein)
 #define MAX_STORED_MESSAGES 500                  //max. in "messages.json" gespeicherte Nachrichten
 #define MAX_STORED_ACK 100                       //max. ACK Frames in "ack.json"
-#define REPEAT_WITHOUT_PEER                      //Wenn ein Node keine Peers hat, wird die Nachricht trotzdem wiederholt
-
 
 //UDP Timing
-#define UDP_TX_RETRY_TIME 2000
+#define UDP_TX_RETRY_TIME 5000
 
 //Interner Quatsch
 #define NAME "rMesh"                             //Versions-String

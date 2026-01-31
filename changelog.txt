@@ -1,0 +1,20 @@
+V1.0.3-alpha
+- Timing für UDP langsamer 
+- Speichern Button hat QRG nicht übernommen
+- HELTEC_WiFi_LoRa_32_V4
+- WLAN AP Bandbreite 20MHz
+- Keine einmalige Wiederholung von Frames, wenn niemand in der Peer Liste
+- Bei direkt Adressierten Nachrichten landet der Absender in der Peer Liste
+- getTOA gefixt. Hat fast die doppelte Zeit ausgegeben
+- Dynamisches Timing
+- Announce Timer in V1.0.2 war denke falsch
+
+V1.0.2-alpha
+- mehr Hardware
+- direkte Nachrichten
+- Gruppen
+- GUI: ungelesene Kanäle gelb
+- Ton bei neuen Nachrichten
+
+V1.0.1-alpha
+- erstes alpha Release

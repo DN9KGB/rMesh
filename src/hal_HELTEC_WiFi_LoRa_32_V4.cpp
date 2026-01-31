@@ -41,17 +41,13 @@ void initHal() {
 
     //Ausgäne
     pinMode(PIN_WIFI_LED, OUTPUT); 
-    digitalWrite(PIN_WIFI_LED, 0); 
-
-
     pinMode( PIN_PA_CPS, OUTPUT); 
     pinMode( PIN_PA_CSD, OUTPUT); 
     pinMode( PIN_VFEM, OUTPUT); 
-    digitalWrite(PIN_VFEM, 1); 
-
-    digitalWrite(PIN_PA_CSD, 1); 
+    digitalWrite(PIN_VFEM, 1);      //Spannung PA ein
+    digitalWrite(PIN_WIFI_LED, 0);  //LED
+    digitalWrite(PIN_PA_CSD, 1);    
     digitalWrite(PIN_PA_CPS, 1); 
-
 
     //Eingänge
     pinMode(PIN_AP_MODE_SWITCH, INPUT);

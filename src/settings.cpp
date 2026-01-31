@@ -177,5 +177,6 @@ void saveSettings() {
     Serial.println("Speichere Einstellungen...");
     prefs.putBytes("config", &settings, sizeof(settings));
     sendSettings();
+    initHal();
 }
 
