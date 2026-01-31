@@ -7,8 +7,7 @@
 #include "main.h"
 #include "webFunctions.h"
 #include "peer.h"
-
-
+#include "config.h"
 
 
 void printHexArray(uint8_t* data, size_t length) {
@@ -51,17 +50,15 @@ void sendFrame(Frame &f) {
         } 
 
         //Wenn keine Peers, Frame ohne Ziel und Retry senden
-        #ifdef REPEAT_WITHOUT_PEER
-            if (availableNodeCount == 0) {
-                //Frame in Sendebuffer
-                f.viaCall[0] = 0;
-                f.retry = 1;
-                f.initRetry = 1;
-                f.syncFlag = false;            
-                f.port = port;
-                txBuffer.push_back(f);
-            }
-        #endif
+        if (availableNodeCount == 0) {
+            //Frame in Sendebuffer
+            f.viaCall[0] = 0;
+            f.retry = 1;
+            f.initRetry = 1;
+            f.syncFlag = false;            
+            f.port = port;
+            txBuffer.push_back(f);
+        }
     }
 
     //Message an Websocket senden & speichern
@@ -140,31 +137,32 @@ void addJSONtoFile(char* buffer, size_t length, const char* file, const uint16_t
 }
 
 uint32_t getTOA(uint8_t payloadBytes) {
-    //Parameter aus Settings holen
-    uint8_t SF  = settings.loraSpreadingFactor;   // 7–12
-    uint32_t BW = settings.loraBandwidth * 1000;  // kHz → Hz
-    uint8_t CR  = settings.loraCodingRate;        // 1–4 (CR = 4/5 → 1, 4/6 → 2 ...)
-    bool CRC    = true;         // true/false
-    bool IH     = false;        // true/false
-    uint16_t preamble = settings.loraPreambleLength;
+    uint8_t SF  = settings.loraSpreadingFactor; 
+    uint32_t BW = settings.loraBandwidth * 1000; 
+    uint8_t CR = (settings.loraCodingRate > 4) ? (settings.loraCodingRate - 4) : settings.loraCodingRate;
     if (BW == 0) return 0;
-    bool DE = (SF >= 11 && BW <= 125000);
+    bool DE = ( ( (1 << SF) * 1000 / BW ) > 16 ); 
     float Tsym = (float)(1 << SF) / (float)BW * 1000.0f;
-    float Tpreamble = (preamble + 4.25f) * Tsym;
-    float payloadBits =
-        8.0f * payloadBytes
-        - 4.0f * SF
-        + 28.0f
-        + (CRC ? 16.0f : 0.0f)
-        - (IH ? 20.0f : 0.0f);
-    float denominator = 4.0f * (SF - (DE ? 2 : 0));
-    float payloadSymbols = 8.0f + fmaxf(ceilf(payloadBits / denominator) * (CR + 4), 0.0f);
-    float total = Tpreamble + payloadSymbols * Tsym;
-    return (uint32_t)roundf(total);
+    float Tpreamble = (settings.loraPreambleLength + 4.25f) * Tsym;
+    float payloadBits = 8.0f * payloadBytes - 4.0f * SF + 28.0f + 16.0f; // +16 für CRC
+    float bitsPerSymbol = 4.0f * (SF - (DE ? 2 : 0));
+    float payloadSymbols = 8.0f + fmaxf(ceilf(payloadBits / bitsPerSymbol) * (CR + 4), 0.0f);
+    return (uint32_t)roundf(Tpreamble + (payloadSymbols * Tsym));
 }
 
+uint32_t calculateAckTime() {
+    uint32_t time = getTOA(10 + 2 * MAX_CALLSIGN_LENGTH); //Zeit für 1 ACK-Frame
+    time = time * 10;   //10 ACK Frames
+    time = random(0, time);
+    return time;
+}
 
-
+uint32_t calculateRetryTime() {
+    uint32_t time = 3 * getTOA(255);  //2x max. Message Frame
+    time = random(0, time);
+    time = time + calculateAckTime() + 500;
+    return time;
+}
 
 static inline bool isCont(uint8_t b) {
     return (b & 0xC0) == 0x80; // 0b10xxxxxx

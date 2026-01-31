@@ -14,4 +14,5 @@ void sendGroup(const char* dst, const char* text, uint8_t messageType = Frame::M
 void safeUtf8Copy(char* dest, const uint8_t* src, size_t maxLength);
 void getFormattedTime(const char* format, char* outBuffer, size_t outSize);
 void sendFrame(Frame &f);
-
+uint32_t calculateAckTime();
+uint32_t calculateRetryTime();

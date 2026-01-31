@@ -11,6 +11,7 @@
 #include "webFunctions.h"
 #include "udp.h"
 #include "main.h"
+#include "esp_wifi.h"
 
 
 uint64_t ledTimer = 0;
@@ -169,6 +170,7 @@ void wifiInit() {
         //AP-Mode
         //Serial.println("Starte WiFi AP-Mode");
         WiFi.mode(WIFI_AP);
+        esp_wifi_set_bandwidth(WIFI_IF_AP, WIFI_BW_HT20);
         WiFi.softAPConfig(IPAddress(192,168,1,1), IPAddress(192,168,1,1), IPAddress(255,255,255,0));
         WiFi.softAP("rMesh");
     } else {
