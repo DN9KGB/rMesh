@@ -130,6 +130,7 @@ void addJSONtoFile(char* buffer, size_t length, const char* file, const uint16_t
         dstFile.write((const uint8_t*)buffer, length);
         dstFile.print("\n");
     }
+    dstFile.flush();
     dstFile.close();
 
     LittleFS.remove(file);
@@ -152,13 +153,13 @@ uint32_t getTOA(uint8_t payloadBytes) {
 
 uint32_t calculateAckTime() {
     uint32_t time = getTOA(10 + 2 * MAX_CALLSIGN_LENGTH); //Zeit für 1 ACK-Frame
-    time = time * 10;   //10 ACK Frames
+    time = time * 12;   //10 ACK Frames
     time = random(0, time);
     return time;
 }
 
 uint32_t calculateRetryTime() {
-    uint32_t time = 3 * getTOA(255);  //2x max. Message Frame
+    uint32_t time = 4 * getTOA(255);  //2x max. Message Frame
     time = random(0, time);
     time = time + calculateAckTime() + 500;
     return time;

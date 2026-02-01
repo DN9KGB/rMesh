@@ -1,3 +1,9 @@
+V1.0.4-alpha
+- Timing um ca. 25% "verlangsamt"
+- Alle LittleFS Schreibvorgänge mit flush() abgeschlossen.
+- Update Prüfung 1h nach Einschalten und dann alle 24h
+
+
 V1.0.3-alpha
 - Timing für UDP langsamer 
 - Speichern Button hat QRG nicht übernommen

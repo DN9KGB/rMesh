@@ -58,7 +58,6 @@ void showWiFiStatus() {
         if (wifiStatus != WiFi.status()) {
             wifiStatus = WiFi.status();   
             if (WiFi.status() == WL_CONNECTED) { 
-                checkForUpdates();
                 initUDP();
             }
         } 

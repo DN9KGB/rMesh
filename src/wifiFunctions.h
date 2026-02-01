@@ -2,4 +2,6 @@
 
 void wifiInit();
 void showWiFiStatus();
+void checkForUpdates();
+
 

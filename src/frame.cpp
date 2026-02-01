@@ -219,12 +219,4 @@ void Frame::importBinary(uint8_t* data, size_t length) {
         }      
     }
 
-    // Serial.printf("messageType: *%d*\n", messageType);
-    // Serial.printf("messageLength: *%d*\n", messageLength);
-    // Serial.printf("id: *%d*\n", id);
-    // Serial.printf("dstCall: *%s*\n", dstCall);
-    // Serial.printf("srcCall: *%s*\n", srcCall);
-    // Serial.printf("nodeCall: *%s*\n", nodeCall);
-    // Serial.printf("viaCall: *%s*\n", viaCall);
-
 }
