@@ -234,6 +234,7 @@
 
 			document.addEventListener('DOMContentLoaded', async function() {
                 //Init
+                setUI("monitor");
                 drawClock(new Date(0));
                 let okSound = new Audio("ok.wav");
 
@@ -242,7 +243,6 @@
                 var json = Cookie.get("channels", JSON.stringify(channels)) ;
                 channels = JSON.parse(json);
                 channels[1].dstCall = "all";
-
 
                 //Channel Buttons + Message input
                 for (let i = 1; i <= 10; i++) {

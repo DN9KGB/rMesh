@@ -31,9 +31,15 @@ uint32_t announceTimer = 5000;      //Erstes Announce nach 5 Sekunden
 uint32_t statusTimer = 0;
 uint32_t rebootTimer = 0xFFFFFFFF;
 uint8_t currentRetry = 0;
+uint32_t updateCheckTimer = 60 * 60 * 1000;  //Erster Check nach 1 Stunde
+
+
 
 
 void processRxFrame(Frame &f) {
+
+    uint32_t pft = millis();
+
     //Monitor
     char* jsonBuffer = (char*)malloc(4096);
     size_t len = f.monitorJSON(jsonBuffer, 4096);
@@ -224,7 +230,6 @@ void processRxFrame(Frame &f) {
                         } 
 
                         //Prüfen, an wen man das Frame so senden könnte
-                        bool sentVia = false;
                         for (int i = 0; i < peerList.size(); i++) {
                             //Prüfen, ob das Peer das Frame schon mal wiederholt hat (in ACK-Liste)
                             found = checkACK(f.srcCall, peerList[i].nodeCall, f.id);
@@ -235,20 +240,9 @@ void processRxFrame(Frame &f) {
                                 tf.retry = TX_RETRY;
                                 tf.initRetry = TX_RETRY;
                                 txBuffer.push_back(tf);
-                                sentVia = true;
                             }
                         } 
-                        
-                        //Wenn keine Peers da, dann Frame 1x wiederholen
-                        // #ifdef REPEAT_WITHOUT_PEER
-                        //     if (sentVia == false) {
-                        //         tf.retry = 1;
-                        //         tf.initRetry = 1;
-                        //         tf.viaCall[0] = 0x00;
-                        //         txBuffer.push_back(tf);
-                        //         sentVia = true;
-                        //     }
-                        // #endif
+
                     }
 
                 }
@@ -256,8 +250,10 @@ void processRxFrame(Frame &f) {
             }
             break;
     }
- 
-}
+
+    pft = millis() - pft;
+    Serial.printf("processRxFrame Time: %d\n", pft);
+ }
 
 
 void setup() {
@@ -411,6 +407,12 @@ void loop() {
 
     //Reboot
     if (millis() > rebootTimer) {ESP.restart();}
+
+    //Update Check
+    if (millis() > updateCheckTimer) {
+        updateCheckTimer = millis() + 24 * 60 * 60 * 1000; //24 Stunden
+        checkForUpdates();
+    }
 }
 
 
