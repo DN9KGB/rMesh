@@ -9,6 +9,7 @@ V1.0.4-alpha
 - GUI kann jetzt Messageboxen
 - Keine Frames an srcCall repeaten
 - Beim setzen von SSID oder PW über UART wird AP-Mode abgeschaltet
+- Frames ohne nodeCall werden ignoriert
 
 
 V1.0.3-alpha

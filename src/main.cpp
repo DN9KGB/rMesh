@@ -37,7 +37,8 @@ uint32_t updateCheckTimer = 60 * 60 * 1000;  //Erster Check nach 1 Stunde
 
 
 void processRxFrame(Frame &f) {
-
+    //Abbruch, wenn kein nodeCall
+    if (strlen(f.nodeCall) == 0) {return;}
     uint32_t pft = millis();
     Serial.println("RX");
 
