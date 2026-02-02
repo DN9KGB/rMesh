@@ -99,6 +99,7 @@ void checkSerialRX() {
                     if (strlen(parameter) > 0) {
                         strncpy(settings.wifiSSID, parameter, sizeof(settings.wifiSSID) - 1);
                         settings.wifiSSID[sizeof(settings.wifiSSID) - 1] = '\0'; 
+                        settings.apMode = false;
                         saveSettings();
                         wifiInit();
                     }
@@ -110,6 +111,7 @@ void checkSerialRX() {
                     if (strlen(parameter) > 0) {
                         strncpy(settings.wifiPassword, parameter, sizeof(settings.wifiPassword) - 1);
                         settings.wifiPassword[sizeof(settings.wifiPassword) - 1] = '\0'; 
+                        settings.apMode = false;
                         saveSettings();
                         wifiInit();
                     }

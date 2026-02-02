@@ -7,6 +7,8 @@ V1.0.4-alpha
 - Default Rufzeichen = ""
 - Nachrichten mit Länge = 0 werden nicht gesendet
 - GUI kann jetzt Messageboxen
+- Keine Frames an srcCall repeaten
+- Beim setzen von SSID oder PW über UART wird AP-Mode abgeschaltet
 
 
 V1.0.3-alpha

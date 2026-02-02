@@ -140,6 +140,10 @@ void loadSettings() {
     settings.wifiDNS      = IPAddress(settings.wifiDNS[0], settings.wifiDNS[1], settings.wifiDNS[2], settings.wifiDNS[3]);
     settings.wifiBrodcast = IPAddress(settings.wifiBrodcast[0], settings.wifiBrodcast[1], settings.wifiBrodcast[2], settings.wifiBrodcast[3]);
 
+
+     settings.loraCodingRate = 6;
+
+     
     if (storedLen != sizeof(settings)) {
         //Defaults laden
         Serial.println("Lade Default-Settings !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
@@ -158,7 +162,7 @@ void loadSettings() {
         settings.loraOutputPower = LORA_DEFAULT_TX_POWER;
         settings.loraBandwidth = 250;
         settings.loraSyncWord = 0x2b;
-        settings.loraCodingRate = 8;
+        settings.loraCodingRate = 6;
         settings.loraSpreadingFactor = 11;
         settings.loraPreambleLength = 10;
         settings.loraRepeat = true;

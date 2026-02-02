@@ -243,8 +243,8 @@ void processRxFrame(Frame &f) {
                             //Prüfen, ob das Peer das Frame schon mal wiederholt hat (in ACK-Liste)
                             found = checkACK(f.srcCall, peerList[i].nodeCall, f.id);
 
-                            //In TX-Puffer eintragen
-                            if ((found == false) && (peerList[i].available == true) && (peerList[i].port == tf.port) && (strcmp(peerList[i].nodeCall, f.nodeCall) != 0)) {
+                            //In TX-Puffer eintragen: NICHT an nodeCall und nicht an srcCall
+                            if ((found == false) && (peerList[i].available == true) && (peerList[i].port == tf.port) && (strcmp(peerList[i].nodeCall, f.nodeCall) != 0) && (strcmp(peerList[i].nodeCall, f.srcCall) != 0)) {
                                 memcpy(tf.viaCall, peerList[i].nodeCall, sizeof(tf.viaCall));
                                 tf.retry = TX_RETRY;
                                 tf.initRetry = TX_RETRY;
