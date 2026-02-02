@@ -287,6 +287,11 @@
                 
 			});
 
+            document.addEventListener("visibilitychange", function() {
+                if (!document.hidden) { setUI(ui); }
+            });
+
+
 			document.getElementById("tuneButton").addEventListener("click", function() {
 				sendWS(JSON.stringify({tune: true }));
 			});   

@@ -1,3 +1,4 @@
+
 function setUI(value) {
     ui = value;
     //Alles ausblenden
@@ -156,15 +157,23 @@ function setUI(value) {
     }
 
     document.getElementById('monitor').scrollTop = document.getElementById("monitor").scrollHeight;
+    var globalUnread = false;
     for (let i = 1; i <= 10; i++) {
         document.getElementById('channel' + i).scrollTop = document.getElementById("channel" + i).scrollHeight
         //Ungelesene Nachrichten anzeigen
         if (activeChannel == i) {channels[i].unread = 0;}
-        if (channels[i].unread > 0) {document.getElementById("channelButton" + i).classList.add('unread');}
+        if (channels[i].unread > 0) {document.getElementById("channelButton" + i).classList.add('unread'); globalUnread = true;}
     }      
-    
 
+    //Fenstertitel
+    if (document.hidden) {globalUnread = true;}
+    if (globalUnread) {
+        if (settings) {document.title = settings.altTitel; }
+    } else {
+        if (settings) {document.title = settings.titel; }
+    }
 }
+
 
 
 function settingsVisibility() {

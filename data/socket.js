@@ -1,8 +1,8 @@
-		
+var settings;
 
 function onMessage(event) {
     var d = JSON.parse(event.data);
-    if (d.status === undefined) {console.log("RX: " + event.data);}
+    //if (d.status === undefined) {console.log("RX: " + event.data);}
 
     //RAW-RX
     if (d.monitor) {
@@ -88,6 +88,7 @@ function onMessage(event) {
 
     //Einstellungen
     if (d.settings) {
+        settings = d.settings;
         document.getElementById("settingsMycall").value = d.settings.mycall;
         document.getElementById("settingsNTP").value = d.settings.ntp;
         document.getElementById("settingsSSID").value = d.settings.wifiSSID;
@@ -106,11 +107,12 @@ function onMessage(event) {
         document.getElementById("settingsLoraCodingRate").value = d.settings.loraCodingRate; 
         document.getElementById("settingsLoraSpreadingFactor").value = d.settings.loraSpreadingFactor; 
         document.getElementById("settingsLoraPreambleLength").value = d.settings.loraPreambleLength; 
-        document.title = d.settings.name + " " + d.settings.version + " " + d.settings.mycall;
         document.getElementById("version").innerHTML = d.settings.name + " " + d.settings.version;
         document.getElementById("statusMyCall").innerHTML = "MyCall: " + d.settings.mycall;
         document.getElementById("settingsLoraRepeat").checked = d.settings.loraRepeat; 
         document.getElementById("settingsLoraMaxMessageLength").innerHTML = d.settings.loraMaxMessageLength + " characters"; 
+        settings.titel = settings.name + " - " + settings.mycall;
+        settings.altTitel = "🚨" + settings.name + " - " + settings.mycall + "🚨"
         setUI(ui);
         settingsVisibility();
     }
@@ -196,7 +198,6 @@ function saveSettings() {
 }
 
 function showMessages(parseAll = false) {
-    console.log(parseAll);
     if (parseAll) {
         //Alles löschen
         for (let i = 1; i <= 10; i++) { document.getElementById("channel" + i).innerHTML = ""; }

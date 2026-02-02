@@ -2,6 +2,7 @@ V1.0.4-alpha
 - Timing um ca. 25% "verlangsamt"
 - Alle LittleFS Schreibvorgänge mit flush() abgeschlossen.
 - Update Prüfung 1h nach Einschalten und dann alle 24h
+- GUI: Hinweis im Fenstertitel, wenn neue Nachrichten
 
 
 V1.0.3-alpha
