@@ -39,6 +39,7 @@ uint32_t updateCheckTimer = 60 * 60 * 1000;  //Erster Check nach 1 Stunde
 void processRxFrame(Frame &f) {
 
     uint32_t pft = millis();
+    Serial.println("RX");
 
     //Monitor
     char* jsonBuffer = (char*)malloc(4096);

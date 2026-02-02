@@ -64,7 +64,7 @@ void initHal() {
     printState(radio.setCRC(true));
     printState(radio.setCurrentLimit(140)) ;
     printState(radio.setRxBoostedGainMode(true));
-
+    
     //RX einschalten
     printState(radio.startReceive());
 
