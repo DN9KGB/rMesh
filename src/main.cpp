@@ -40,7 +40,6 @@ void processRxFrame(Frame &f) {
     //Abbruch, wenn kein nodeCall
     if (strlen(f.nodeCall) == 0) {return;}
     uint32_t pft = millis();
-    Serial.println("RX");
 
     //Monitor
     char* jsonBuffer = (char*)malloc(4096);
@@ -56,6 +55,8 @@ void processRxFrame(Frame &f) {
     Frame tf;                   //ggf. Antwort-Frame
     bool found = false;         //z.b.V.
     File file;                  //z.b.V
+
+    pft = millis() - pft; Serial.printf("addPeer Time: %d\n", pft); pft = millis();
     switch (f.frameType) {
 
         //Antwort auf announce
@@ -69,6 +70,8 @@ void processRxFrame(Frame &f) {
                 }
                 memcpy(tf.viaCall, f.nodeCall, sizeof(tf.viaCall));
                 txBuffer.push_back(tf);
+                pft = millis() - pft; Serial.printf("ANNOUNCE_FRAME Time: %d\n", pft); pft = millis();
+
             }
             break;
         //In Peer Liste eintragen
@@ -76,6 +79,8 @@ void processRxFrame(Frame &f) {
             if (strcmp(f.viaCall, settings.mycall) == 0) {
                 availablePeerList(f.nodeCall, true, f.port);    
             }
+            pft = millis() - pft; Serial.printf("ANNOUNCE_ACK_FRAME Time: %d\n", pft); pft = millis();
+
             break;
 
         //Senden abbrechen
@@ -98,6 +103,8 @@ void processRxFrame(Frame &f) {
 
             //ACKs in Datei speichern (für REPEAT und ACK für fremde Frames senden)
             addACK(f.srcCall, f.nodeCall, f.id);
+
+            pft = millis() - pft; Serial.printf("MESSAGE_ACK_FRAME Time: %d\n", pft); pft = millis();
             break;
 
         //Nachricht empfangen
@@ -124,6 +131,9 @@ void processRxFrame(Frame &f) {
                     }),
                 txBuffer.end()
             );
+
+            pft = millis() - pft; Serial.printf("Alle alten ACKs im TX-Puffer löschen Time: %d\n", pft); pft = millis();
+
 
             //ACK-Senden bei mir immer, bei anderen nur 1x
             if ((strcmp(f.viaCall, settings.mycall) == 0) || ((strlen(f.viaCall) > 0) && (checkACK(f.srcCall, f.nodeCall, f.id) == false) && (checkACK(f.srcCall, settings.mycall, f.id) == false))) {
@@ -157,6 +167,9 @@ void processRxFrame(Frame &f) {
                 file.close();                    
             }
 
+            pft = millis() - pft; Serial.printf("Message ID und SRC-Call in Datei suchen Time: %d\n", pft); pft = millis();
+
+
             if ((found == false) && (f.messageLength > 0)) {
                 //Neue Nachricht empfangen
                 
@@ -167,6 +180,9 @@ void processRxFrame(Frame &f) {
                 addJSONtoFile(jsonBuffer, len, "/messages.json", MAX_STORED_MESSAGES);
                 free(jsonBuffer);
                 jsonBuffer = nullptr;
+                pft = millis() - pft; Serial.printf("Message an Websocket senden & speichern Time: %d\n", pft); pft = millis();
+
+
 
                 //ECHO für Tracking-Message
                 if ((strcmp(f.dstCall, settings.mycall) == 0) && (f.messageType == Frame::MessageTypes::TRACE_MESSAGE) && (strstr((char*)f.message, "ECHO") == NULL)) {
@@ -262,6 +278,8 @@ void processRxFrame(Frame &f) {
                 }
 
             }
+            pft = millis() - pft; Serial.printf("Fertig Time: %d\n", pft); pft = millis();
+
             break;
     }
 
