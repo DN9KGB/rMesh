@@ -162,7 +162,6 @@ async function sendMessage(text, channel) {
     var message = {};
     message["text"] = text;
     message["dst"] = dstCall;
-    console.log(message);
     if (channel == 2) {
         //Private Nachricht
         sendWS(JSON.stringify({sendMessage: message}));                    
@@ -224,7 +223,7 @@ function showMessages(parseAll = false) {
             if (m.dstCall)  {msg += " " + m.dstCall; }
             if (m.dstGroup)  {msg += " " + m.dstGroup; }
             if (m.messageType == 1) {msg += " [TRACE] ";}
-            msg += ": " + m.text;
+            if (m.text) {msg += ": " + m.text;}
             msg += "</span>"
         }
         
@@ -285,6 +284,7 @@ function showMessages(parseAll = false) {
 function initWebSocket() {
     var baseURL = "";
     var gateway = "";
+    messages = [];
 
     //Debug
     if (!window.location.hostname.includes("127.0.0.1")) {
