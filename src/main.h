@@ -1,5 +1,6 @@
 #pragma once
 
+
 #include "config.h"
 #include "frame.h"
 
@@ -13,5 +14,8 @@ extern uint32_t statusTimer;
 extern uint32_t announceTimer;
 extern const char* TZ_INFO;
 extern std::vector<Frame> txBuffer;
+extern SemaphoreHandle_t fsMutex;
+extern MSG messages[MAX_STORED_MESSAGES_RAM];
+extern uint16_t messagesHead;
 //extern portMUX_TYPE txBufferMux;
 
