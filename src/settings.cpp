@@ -160,10 +160,10 @@ void loadSettings() {
         settings.wifiBrodcast = IPAddress(255,255,255,255);
         settings.loraFrequency = 434.850;
         settings.loraOutputPower = LORA_DEFAULT_TX_POWER;
-        settings.loraBandwidth = 250;
+        settings.loraBandwidth = 62.5;
         settings.loraSyncWord = 0x2b;
         settings.loraCodingRate = 6;
-        settings.loraSpreadingFactor = 11;
+        settings.loraSpreadingFactor = 7;
         settings.loraPreambleLength = 10;
         settings.loraRepeat = true;
         prefs.putBytes("config", &settings, sizeof(settings));
