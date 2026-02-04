@@ -363,7 +363,6 @@ void setup() {
         }
         file.close();                    
     }
-    LittleFS.remove("/messages.json");
     
     //Init Hardware
     initHal();
