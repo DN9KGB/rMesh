@@ -146,7 +146,7 @@ void loadSettings() {
      
     if (storedLen != sizeof(settings)) {
         //Defaults laden
-        Serial.println("Lade Default-Settings !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+        Serial.println("Lade Default-Settings");
         strcpy(settings.wifiSSID, "");
         strcpy(settings.wifiPassword, "");
         strcpy(settings.ntpServer, "de.pool.ntp.org");
