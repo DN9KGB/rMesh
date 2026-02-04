@@ -3,6 +3,7 @@
 #include <esp_task_wdt.h>
 #include <vector>
 #include <nvs_flash.h>
+#include <freertos/semphr.h>
 
 #include "config.h"
 #include "Hal.h"
@@ -30,6 +31,7 @@ std::vector<Frame> txBuffer;
 MSG messages[MAX_STORED_MESSAGES_RAM];
 uint16_t messagesHead = 0;
 
+SemaphoreHandle_t fsMutex = NULL;
 
 //Timing
 uint32_t announceTimer = 5000;      //Erstes Announce nach 5 Sekunden
@@ -340,6 +342,7 @@ void setup() {
     if (!LittleFS.begin(true)) {
         Serial.println("An error has occurred while mounting LittleFS");
     } 
+    fsMutex = xSemaphoreCreateMutex();
 
     //Messages JSON in messages Ringpuffer speichern
     File file = LittleFS.open("/messages.json", "r");
@@ -360,6 +363,7 @@ void setup() {
         }
         file.close();                    
     }
+    LittleFS.remove("/messages.json");
     
     //Init Hardware
     initHal();

@@ -4,6 +4,12 @@
 
 #include "frame.h"
 
+struct FileWriteParams {
+    char* content;
+    size_t length;
+    String fileName;
+    uint16_t maxLines;
+};
 
 
 void printHexArray(uint8_t* data, size_t length);

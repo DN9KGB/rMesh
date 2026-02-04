@@ -10,6 +10,7 @@
 #include "config.h"
 
 
+
 void printHexArray(uint8_t* data, size_t length) {
   for (size_t i = 0; i < length; i++) {
     if (data[i] < 0x10) {
@@ -61,6 +62,12 @@ void sendFrame(Frame &f) {
         }
     }
 
+    //Message in Ringpuffer speichern
+    strncpy(messages[messagesHead].srcCall, f.srcCall, MAX_CALLSIGN_LENGTH);
+    messages[messagesHead].id = f.id;
+    messagesHead++;
+    if (messagesHead >= MAX_STORED_MESSAGES_RAM) { messagesHead = 0; }                        
+
     //Message an Websocket senden & speichern
     char* jsonBuffer = (char*)malloc(2048);
     size_t len = f.messageJSON(jsonBuffer, 2048);
@@ -96,46 +103,129 @@ void sendGroup(const char* dst, const char* text, uint8_t messageType) {
     sendFrame(f);
 }
 
-void addJSONtoFile(char* buffer, size_t length, const char* file, const uint16_t lines) {
-    //Zeilen zählen
-    size_t lineCount = 0;
-    File countFile = LittleFS.open(file, "r");
-    if (countFile) {
-        while (countFile.available()) {
-            if (countFile.read() == '\n') lineCount++;
-        }
-        countFile.close();
-    }
-    size_t linesToSkip = (lineCount >= lines) ? (lineCount - lines - 1) : 0;
 
-    File srcFile = LittleFS.open(file, "r");   
-    File dstFile = LittleFS.open("/temp.json", "w");   
-    //char lineBuffer[2048]; // Puffer für eine Zeile
-    char* lineBuffer = (char*)malloc(2048);
-    size_t currentLine = 0;
-    if (srcFile) {
-        while (srcFile.available()) {
-            int len = srcFile.readBytesUntil('\n', lineBuffer, 2048);
-            // Nur Zeilen kopieren, die nach dem Skip-Limit liegen
-            if (currentLine >= linesToSkip) {
-                dstFile.write((const uint8_t*)lineBuffer, len);
-                dstFile.print("\n");
+
+
+void addJSONtoFileTask(void * pvParameters) {
+    FileWriteParams* p = (FileWriteParams*) pvParameters;
+    Serial.println(p->content);
+
+    // Warten, bis das Dateisystem frei ist (max 20 Sekunden warten)
+    if (xSemaphoreTake(fsMutex, pdMS_TO_TICKS(20000))) {
+        //Zeilen zählen
+        size_t lineCount = 0;
+        File countFile = LittleFS.open(p->fileName, "r");
+        if (countFile) {
+            while (countFile.available()) {
+                if (countFile.read() == '\n') lineCount++;
             }
-            currentLine++;
+            countFile.close();
         }
-        srcFile.close();
-    }
-    free(lineBuffer);
-    lineBuffer = nullptr;    
+        size_t linesToSkip = (lineCount >= p->maxLines) ? (lineCount - p->maxLines - 1) : 0;
 
-    if (buffer != nullptr && length > 0) {
-        dstFile.write((const uint8_t*)buffer, length);
-        dstFile.print("\n");
-    }
-    dstFile.close();
+        File srcFile = LittleFS.open(p->fileName, "r");   
+        File dstFile = LittleFS.open("/temp.json", "w");   
+        //char lineBuffer[2048]; // Puffer für eine Zeile
+        char* lineBuffer = (char*)malloc(2048);
+        size_t currentLine = 0;
+        if (srcFile) {
+            while (srcFile.available()) {
+                int len = srcFile.readBytesUntil('\n', lineBuffer, 2048);
+                // Nur Zeilen kopieren, die nach dem Skip-Limit liegen
+                if (currentLine >= linesToSkip) {
+                    dstFile.write((const uint8_t*)lineBuffer, len);
+                    dstFile.print("\n");
+                }
+                currentLine++;
+            }
+            srcFile.close();
+        }
+        free(lineBuffer);
+        lineBuffer = nullptr;    
 
-    LittleFS.remove(file);
-    LittleFS.rename("/temp.json", file);
+        if (p->content != nullptr && p->length > 0) {
+            dstFile.write((const uint8_t*)p->content, p->length);
+            dstFile.print("\n");
+        }
+        dstFile.close();
+
+        LittleFS.remove(p->fileName);
+        LittleFS.rename("/temp.json", p->fileName);
+
+
+
+        xSemaphoreGive(fsMutex); // Schloss wieder freigeben
+    } else {
+        Serial.println("FS-Mutex blockiert! Schreiben abgebrochen.");
+    }
+
+    Serial.println("---------------- DATEI GESCHRIEBEN -------------------------");
+    free(p->content);
+    delete p;
+    vTaskDelete(NULL);
+}
+
+
+
+
+void addJSONtoFile(char* buffer, size_t length, const char* file, const uint16_t lines) {
+
+    // Parameter für den Task vorbereiten
+    FileWriteParams* p = new FileWriteParams();
+    p->content = (char*)malloc(length);
+    memcpy(p->content, buffer, length);
+    p->length = length;
+    p->fileName = String(file);
+    p->maxLines = lines;
+
+    xTaskCreate(
+        addJSONtoFileTask, 
+        "FileWriteTask", 
+        8192,      // Genug Stack für LittleFS & JSON
+        p,         // Parameter übergeben
+        1,         // Priorität (niedrig reicht)
+        NULL
+    );
+
+    // //Zeilen zählen
+    // size_t lineCount = 0;
+    // File countFile = LittleFS.open(file, "r");
+    // if (countFile) {
+    //     while (countFile.available()) {
+    //         if (countFile.read() == '\n') lineCount++;
+    //     }
+    //     countFile.close();
+    // }
+    // size_t linesToSkip = (lineCount >= lines) ? (lineCount - lines - 1) : 0;
+
+    // File srcFile = LittleFS.open(file, "r");   
+    // File dstFile = LittleFS.open("/temp.json", "w");   
+    // //char lineBuffer[2048]; // Puffer für eine Zeile
+    // char* lineBuffer = (char*)malloc(2048);
+    // size_t currentLine = 0;
+    // if (srcFile) {
+    //     while (srcFile.available()) {
+    //         int len = srcFile.readBytesUntil('\n', lineBuffer, 2048);
+    //         // Nur Zeilen kopieren, die nach dem Skip-Limit liegen
+    //         if (currentLine >= linesToSkip) {
+    //             dstFile.write((const uint8_t*)lineBuffer, len);
+    //             dstFile.print("\n");
+    //         }
+    //         currentLine++;
+    //     }
+    //     srcFile.close();
+    // }
+    // free(lineBuffer);
+    // lineBuffer = nullptr;    
+
+    // if (buffer != nullptr && length > 0) {
+    //     dstFile.write((const uint8_t*)buffer, length);
+    //     dstFile.print("\n");
+    // }
+    // dstFile.close();
+
+    // LittleFS.remove(file);
+    // LittleFS.rename("/temp.json", file);
 }
 
 uint32_t getTOA(uint8_t payloadBytes) {
@@ -156,13 +246,14 @@ uint32_t calculateAckTime() {
     uint32_t time = getTOA(10 + 2 * MAX_CALLSIGN_LENGTH); //Zeit für 1 ACK-Frame
     time = time * 12;   //10 ACK Frames
     time = random(0, time);
+    time = time + 500;
     return time;
 }
 
 uint32_t calculateRetryTime() {
-    uint32_t time = 4 * getTOA(255);  //2x max. Message Frame
+    uint32_t time = 5 * getTOA(255);  //2x max. Message Frame
     time = random(0, time);
-    time = time + calculateAckTime() + 500;
+    time = time + calculateAckTime() + 1000;
     return time;
 }
 
