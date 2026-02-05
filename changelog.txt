@@ -1,3 +1,7 @@
+V1.0.5-alpha
+- Frames aus dem TX-Puffer löschen, wenn man merkt, dass ein anderes Node den Frame schon wiederholt.
+
+
 V1.0.4-alpha
 - Timing um ca. 25% verlangsamt
 - Alle LittleFS Schreibvorgänge mit flush() abgeschlossen. -> hinfällig

@@ -116,7 +116,16 @@ void processRxFrame(Frame &f) {
                         return (strcmp(txB.srcCall, f.srcCall) == 0) && (strcmp(txB.viaCall, f.viaCall) == 0) && (txB.id == f.id) && (txB.initRetry == TX_RETRY);
                     }),
                 txBuffer.end()
-            );            
+            );   
+
+            //Aus dem TX-Puffer löschen, wenn man merkt, dass ein anderes Node den Frame schon wiederholt.
+            txBuffer.erase(
+                std::remove_if(txBuffer.begin(), txBuffer.end(),
+                    [&](const Frame& txB) {
+                        return (strcmp(txB.srcCall, f.srcCall) == 0) && (strcmp(txB.viaCall, f.nodeCall) == 0) && (txB.id == f.id) && (txB.initRetry == TX_RETRY);
+                    }),
+                txBuffer.end()
+            ); 
 
             //Alle "alten" ACKs im TX-Puffer löschen
             txBuffer.erase(
