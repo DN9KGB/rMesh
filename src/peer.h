@@ -18,5 +18,4 @@ void addPeerList(Frame &f);
 void sendPeerList();
 
 extern std::vector<Peer> peerList;
-//extern portMUX_TYPE peerListMux;
 

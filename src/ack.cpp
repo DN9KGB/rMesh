@@ -13,8 +13,8 @@ void addACK(const char* srcCall, const char* nodeCall, const uint32_t id) {
     bool found =  checkACK(srcCall, nodeCall, id);
     //In ACK Liste speichern
     if (found == false) {
-        memcpy(acks[ackHead].srcCall, srcCall, MAX_CALLSIGN_LENGTH);
-        memcpy(acks[ackHead].nodeCall, nodeCall, MAX_CALLSIGN_LENGTH);
+        memcpy(acks[ackHead].srcCall, srcCall, MAX_CALLSIGN_LENGTH + 1);
+        memcpy(acks[ackHead].nodeCall, nodeCall, MAX_CALLSIGN_LENGTH + 1);
         acks[ackHead].id = id;
 
         ackHead++;

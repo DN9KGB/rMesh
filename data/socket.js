@@ -77,7 +77,7 @@ function onMessage(event) {
                 peers += "<td";
                 if (p.available == true) { peers += " class='green' "} else { peers += " class='red' "}
                 peers += ">" + p.call + "</td>";
-                peers += "<td>" + lastRX.toLocaleTimeString('de-DE') + "</td>";
+                peers += "<td>" + lastRX.toLocaleString("de-DE", {day: "2-digit",  month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).replace(",", "")  + "</td>";
                 peers += "<td>" + p.rssi + "</td>";
                 peers += "<td>" + p.snr + "</td>";
                 peers += "<td>" + parseInt(p.frqError) + "</td>";
@@ -87,6 +87,23 @@ function onMessage(event) {
         peers += "</table>";
         document.getElementById("peer").innerHTML = peers;
     }
+
+    //Routing Liste
+    if (d.routingList) {
+        var routing = "";
+        routing += "<table>";
+        routing += "<tr> <td>Call</td> <td>Node</td> </tr>";
+        if (d.routingList.routes) {
+            d.routingList.routes.forEach(function(r, index) {
+                routing += "<tr>";
+                routing += "<td>" + r.srcCall + "</td>";
+                routing += "<td>" + r.viaCall + "</td>";
+                routing += "</tr>";
+            });
+        }
+        routing += "</table>";
+        document.getElementById("routing").innerHTML = routing;
+    }    
 
     //Einstellungen
     if (d.settings) {

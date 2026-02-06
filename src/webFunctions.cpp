@@ -55,7 +55,7 @@ void startWebServer() {
         for (size_t i = 0; i < sizeof(settings.mycall); i++) {
             settings.mycall[i] = toupper(settings.mycall[i]);
         }
-        settings.mycall[MAX_CALLSIGN_LENGTH] = '\0';
+        settings.mycall[MAX_CALLSIGN_LENGTH + 1] = '\0';
       }
       if (json["settings"]["ntp"].is<JsonVariant>()) { strlcpy(settings.ntpServer, json["settings"]["ntp"] | "", sizeof(settings.ntpServer)); }
       if (json["settings"]["dhcpActive"].is<JsonVariant>()) { settings.dhcpActive = json["settings"]["dhcpActive"].as<bool>(); }

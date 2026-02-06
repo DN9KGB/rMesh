@@ -63,7 +63,7 @@ void sendFrame(Frame &f) {
     }
 
     //Message in Ringpuffer speichern
-    strncpy(messages[messagesHead].srcCall, f.srcCall, MAX_CALLSIGN_LENGTH);
+    strncpy(messages[messagesHead].srcCall, f.srcCall, MAX_CALLSIGN_LENGTH + 1);
     messages[messagesHead].id = f.id;
     messagesHead++;
     if (messagesHead >= MAX_STORED_MESSAGES_RAM) { messagesHead = 0; }                        

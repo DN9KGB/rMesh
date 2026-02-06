@@ -18,6 +18,7 @@
 #include "peer.h"
 #include "ack.h"
 #include "udp.h"
+#include "routing.h"
 
 
 //Uhrzeitformat
@@ -76,7 +77,8 @@ void processRxFrame(Frame &f) {
         //In Peer Liste eintragen
         case Frame::FrameTypes::ANNOUNCE_ACK_FRAME:
             if (strcmp(f.viaCall, settings.mycall) == 0) {
-                availablePeerList(f.nodeCall, true, f.port);    
+                availablePeerList(f.nodeCall, true, f.port);   
+                addRoutingList(f.nodeCall, f.nodeCall); 
             }
             break;
 
@@ -85,6 +87,7 @@ void processRxFrame(Frame &f) {
             //In Peer Liste eintragen
             if (strcmp(f.viaCall, settings.mycall) == 0) {
                 availablePeerList(f.nodeCall, true, f.port);
+                addRoutingList(f.nodeCall, f.nodeCall); 
                 //Wenn ich ein ACK direkt bekommen habe, dann extra Eintrag
                 addACK(f.srcCall, settings.mycall, f.id);    
             }
@@ -107,6 +110,7 @@ void processRxFrame(Frame &f) {
             //In Peer Liste eintragen
             if (strcmp(f.viaCall, settings.mycall) == 0) {
                 availablePeerList(f.nodeCall, true, f.port);    
+                addRoutingList(f.srcCall, f.nodeCall); 
             }
 
             //Wenn die Nachricht ein anderes Node gesendet hat und wir die Nachricht auch senden wollen: Im TX-Puffer nach MSG-ID und VIA-Call suchen und löschen
@@ -137,7 +141,7 @@ void processRxFrame(Frame &f) {
             );
 
             //ACK-Senden bei mir immer, bei anderen nur 1x
-            if ((strcmp(f.viaCall, settings.mycall) == 0) || ((strlen(f.viaCall) > 0) && (checkACK(f.srcCall, f.nodeCall, f.id) == false) && (checkACK(f.srcCall, settings.mycall, f.id) == false))) {
+            //if ((strcmp(f.viaCall, settings.mycall) == 0) || ((strlen(f.viaCall) > 0) && (checkACK(f.srcCall, f.nodeCall, f.id) == false) && (checkACK(f.srcCall, settings.mycall, f.id) == false))) {
                 addACK(f.srcCall, f.nodeCall, f.id);
                 tf.frameType = Frame::FrameTypes::MESSAGE_ACK_FRAME;
                 memcpy(tf.viaCall, f.nodeCall, sizeof(tf.viaCall));
@@ -147,7 +151,7 @@ void processRxFrame(Frame &f) {
                 tf.transmitMillis = millis() + calculateAckTime();
                 if (tf.port == 1) {tf.transmitMillis = 0;} //Bei UDP sofort ACK
                 txBuffer.push_back(tf);
-            }
+            //}
 
             //Message ID und SRC-Call in Messages Ringpuffer suchen
             for (int i = 0; i < MAX_STORED_MESSAGES_RAM; i++) {
@@ -163,7 +167,7 @@ void processRxFrame(Frame &f) {
                 //Neue Nachricht empfangen
                 
                 //Message in Ringpuffer speichern
-                strncpy(messages[messagesHead].srcCall, f.srcCall, MAX_CALLSIGN_LENGTH);
+                strncpy(messages[messagesHead].srcCall, f.srcCall,  + 1);
                 messages[messagesHead].id = f.id;
                 messagesHead++;
                 if (messagesHead >= MAX_STORED_MESSAGES_RAM) { messagesHead = 0; }                        
@@ -291,6 +295,7 @@ void setup() {
     //Puffer
     peerList.reserve(PEER_LIST_SIZE);
     txBuffer.reserve(TX_BUFFER_SIZE);     
+    routingList.reserve(ROUTING_BUFFER_SIZE);     
 
     //Einstellungen laden
     loadSettings();
@@ -310,7 +315,7 @@ void setup() {
             if (error == DeserializationError::Ok) {
                 //Serial.printf("id: %d, src: %s, head:%d\n", doc["message"]["id"].as<uint32_t>(), doc["message"]["srcCall"].as<String>(), messagesHead);
                 //In messages speichern
-                strncpy(messages[messagesHead].srcCall, doc["message"]["srcCall"], MAX_CALLSIGN_LENGTH);
+                strncpy(messages[messagesHead].srcCall, doc["message"]["srcCall"], MAX_CALLSIGN_LENGTH + 1);
                 messages[messagesHead].id = doc["message"]["id"].as<uint32_t>();
                 messagesHead++;
                 if (messagesHead >= MAX_STORED_MESSAGES_RAM) { messagesHead = 0; }                        
@@ -337,7 +342,7 @@ void setup() {
 
     //Init OK
     Serial.printf("\n\n\n%s\n%s %s\nREADY.\n", PIO_ENV_NAME, NAME, VERSION);  
-    
+   
 }
 
 

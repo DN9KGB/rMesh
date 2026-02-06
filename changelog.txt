@@ -1,5 +1,8 @@
 V1.0.5-alpha
 - Frames aus dem TX-Puffer löschen, wenn man merkt, dass ein anderes Node den Frame schon wiederholt.
+- ACKs werden jetzt immer gesendet
+- GUI: Datum in Peer Liste
+- Routing Liste wird angezeigt, aber noch nicht verwendet
 
 
 V1.0.4-alpha

@@ -72,7 +72,7 @@
                 </div>   
             </div>
             <div id="peer" class="peer" style="display: none;"></div>
-            <div id="routing" class="routing" style="display: none;">not implemented yet....</div>
+            <div id="routing" class="routing" style="display: none;"></div>
             <div id="setup" class="setup" style="display: none;">
                 <table>
                     <tr> <td>Callsign:</td> <td><input class="input-box" id="settingsMycall"></td> </tr>
@@ -226,7 +226,7 @@
             var activeChannel = 0;      
 			var timeout = 0;
             let okSound = new Audio("ok.wav");
-            var channels = new Array(10).fill(false);
+            var channels = new Array(12).fill(false);
 
 			document.addEventListener('DOMContentLoaded', async function() {
                 //Init
