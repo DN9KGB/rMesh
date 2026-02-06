@@ -107,12 +107,10 @@ void processRxFrame(Frame &f) {
 
         //Nachricht empfangen
         case Frame::FrameTypes::MESSAGE_FRAME:  
-            //Routing
-            addRoutingList(f.srcCall, f.nodeCall); 
-
-            //In Peer Liste eintragen
+            //In Peer Liste eintragen & Routing
             if (strcmp(f.viaCall, settings.mycall) == 0) {
                 availablePeerList(f.nodeCall, true, f.port);    
+                addRoutingList(f.srcCall, f.nodeCall); 
             }
 
             //Wenn die Nachricht ein anderes Node gesendet hat und wir die Nachricht auch senden wollen: Im TX-Puffer nach MSG-ID und VIA-Call suchen und löschen
