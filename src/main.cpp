@@ -107,10 +107,12 @@ void processRxFrame(Frame &f) {
 
         //Nachricht empfangen
         case Frame::FrameTypes::MESSAGE_FRAME:  
+            //Routing
+            addRoutingList(f.srcCall, f.nodeCall); 
+
             //In Peer Liste eintragen
             if (strcmp(f.viaCall, settings.mycall) == 0) {
                 availablePeerList(f.nodeCall, true, f.port);    
-                addRoutingList(f.srcCall, f.nodeCall); 
             }
 
             //Wenn die Nachricht ein anderes Node gesendet hat und wir die Nachricht auch senden wollen: Im TX-Puffer nach MSG-ID und VIA-Call suchen und löschen
@@ -167,7 +169,7 @@ void processRxFrame(Frame &f) {
                 //Neue Nachricht empfangen
                 
                 //Message in Ringpuffer speichern
-                strncpy(messages[messagesHead].srcCall, f.srcCall,  + 1);
+                strncpy(messages[messagesHead].srcCall, f.srcCall, MAX_CALLSIGN_LENGTH + 1);
                 messages[messagesHead].id = f.id;
                 messagesHead++;
                 if (messagesHead >= MAX_STORED_MESSAGES_RAM) { messagesHead = 0; }                        

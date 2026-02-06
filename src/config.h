@@ -16,5 +16,5 @@
 #define MAX_CALLSIGN_LENGTH 9                    //maximale Länge des Rufzeichens  1....16
 #define TX_BUFFER_SIZE 30
 #define PEER_LIST_SIZE 20
-#define ROUTING_BUFFER_SIZE 50                  //50 Calls in Routing Liste
+#define ROUTING_BUFFER_SIZE 100                  //50 Calls in Routing Liste
 #define UDP_PORT 3333

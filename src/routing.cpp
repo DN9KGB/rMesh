@@ -14,6 +14,7 @@ void sendRoutingList() {
         JsonObject route = doc["routingList"]["routes"].add<JsonObject>();
         route["srcCall"] = routingList[i].srcCall;
         route["viaCall"] = routingList[i].viaCall;
+        route["timestamp"] = routingList[i].timestamp;
     }
     char* jsonBuffer = (char*)malloc(2048);
     size_t len = serializeJson(doc, jsonBuffer, 2048);
@@ -22,15 +23,28 @@ void sendRoutingList() {
 }
 
 void addRoutingList(const char* srcCall, const char* viaCall) {
+    //Serial.printf("Add Route src:%s node:%s\n", srcCall, viaCall);
+
     auto it = std::find_if(routingList.begin(), routingList.end(), [&](const Route& r) {
         return (strcmp(r.srcCall, srcCall) == 0) && (strcmp(r.viaCall, viaCall) == 0);
     });
 
     if (it == routingList.end()) {
+        //Neu
         Route r;
         memcpy(r.srcCall, srcCall, MAX_CALLSIGN_LENGTH + 1);
         memcpy(r.viaCall, viaCall, MAX_CALLSIGN_LENGTH + 1);
+        r.timestamp = time(NULL);
         routingList.push_back(r);
-        sendRoutingList();
+    } else {
+        //Aktualisieren
+        it->timestamp = time(NULL);
     }
+
+    std::sort(routingList.begin(), routingList.end(), [](const Route& a, const Route& b) {
+        return a.timestamp > b.timestamp; 
+    });
+
+    sendRoutingList();
+
 }

@@ -9,6 +9,7 @@
 #include "hal.h"
 #include "helperFunctions.h"
 #include "peer.h"
+#include "routing.h"
 
 AsyncWebServer webServer(80);
 AsyncWebSocketMessageHandler wsHandler;
@@ -25,6 +26,7 @@ void startWebServer() {
     ws.cleanupClients();
     sendSettings();
     sendPeerList();
+    sendRoutingList();
   });
 
   wsHandler.onDisconnect([](AsyncWebSocket *server, uint32_t clientId) {

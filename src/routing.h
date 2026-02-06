@@ -6,6 +6,7 @@
 struct Route {
     char viaCall[MAX_CALLSIGN_LENGTH + 1] = {0};
     char srcCall[MAX_CALLSIGN_LENGTH + 1] = {0};
+    time_t timestamp = 0;
 };
 
 
