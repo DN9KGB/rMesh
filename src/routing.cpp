@@ -3,6 +3,7 @@
 
 #include "routing.h"
 #include "webFunctions.h"
+#include "peer.h"
 
 //Routing Liste
 std::vector<Route> routingList;
@@ -23,8 +24,15 @@ void sendRoutingList() {
 }
 
 void addRoutingList(const char* srcCall, const char* viaCall) {
-    //Serial.printf("Add Route src:%s node:%s\n", srcCall, viaCall);
+    Serial.printf("Seach in Peer list Route src:%s node:%s\n", srcCall, viaCall);
 
+    //Prüfen, ob viaCall in Peer Liste ist. Wenn nicht -> Abbruch
+    //auto itt = std::find_if(peerList.begin(), peerList.end(), [&](const Peer& peer) { return (strcmp(peer.nodeCall, viaCall) == 0) && (peer.available == true); });
+    //if (itt == peerList.end()) { return; }
+ 
+    Serial.printf("Add Route src:%s node:%s\n", srcCall, viaCall);
+
+    //Routing Liste duchsuchen, ob Call bereits existiert
     auto it = std::find_if(routingList.begin(), routingList.end(), [&](const Route& r) {
         return (strcmp(r.srcCall, srcCall) == 0) && (strcmp(r.viaCall, viaCall) == 0);
     });

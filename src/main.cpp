@@ -140,7 +140,7 @@ void processRxFrame(Frame &f) {
             );
 
             //ACK-Senden bei mir immer, bei anderen nur 1x
-            //if ((strcmp(f.viaCall, settings.mycall) == 0) || ((strlen(f.viaCall) > 0) && (checkACK(f.srcCall, f.nodeCall, f.id) == false) && (checkACK(f.srcCall, settings.mycall, f.id) == false))) {
+            if ((strcmp(f.viaCall, settings.mycall) == 0) || ((strlen(f.viaCall) > 0) && (checkACK(f.srcCall, f.nodeCall, f.id) == false) && (checkACK(f.srcCall, settings.mycall, f.id) == false))) {
                 addACK(f.srcCall, f.nodeCall, f.id);
                 tf.frameType = Frame::FrameTypes::MESSAGE_ACK_FRAME;
                 memcpy(tf.viaCall, f.nodeCall, sizeof(tf.viaCall));
@@ -150,7 +150,7 @@ void processRxFrame(Frame &f) {
                 tf.transmitMillis = millis() + calculateAckTime();
                 if (tf.port == 1) {tf.transmitMillis = 0;} //Bei UDP sofort ACK
                 txBuffer.push_back(tf);
-            //}
+            }
 
             //Message ID und SRC-Call in Messages Ringpuffer suchen
             for (int i = 0; i < MAX_STORED_MESSAGES_RAM; i++) {
@@ -167,6 +167,7 @@ void processRxFrame(Frame &f) {
 
                 //Routing
                 addRoutingList(f.srcCall, f.nodeCall); 
+                Serial.println("NEW MSG");
                 
                 //Message in Ringpuffer speichern
                 strncpy(messages[messagesHead].srcCall, f.srcCall, MAX_CALLSIGN_LENGTH + 1);
