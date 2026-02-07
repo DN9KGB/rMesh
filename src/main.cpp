@@ -167,7 +167,6 @@ void processRxFrame(Frame &f) {
 
                 //Routing
                 addRoutingList(f.srcCall, f.nodeCall); 
-                Serial.println("NEW MSG");
                 
                 //Message in Ringpuffer speichern
                 strncpy(messages[messagesHead].srcCall, f.srcCall, MAX_CALLSIGN_LENGTH + 1);
