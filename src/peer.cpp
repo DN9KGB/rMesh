@@ -5,6 +5,8 @@
 #include "main.h"
 #include "webFunctions.h"
 #include "peer.h"
+#include "helperFunctions.h"
+#include "config.h"
 
 //Peer-Liste
 std::vector<Peer> peerList;
@@ -48,10 +50,13 @@ void checkPeerList() {
 void sendPeerList() {
     JsonDocument doc;
     doc["peerlist"]["peers"] = JsonArray();
+    char cleanCall[MAX_CALLSIGN_LENGTH + 1];
     for (int i = 0; i < peerList.size(); i++) {
         JsonObject peer = doc["peerlist"]["peers"].add<JsonObject>();
         peer["port"] = peerList[i].port;
-        peer["call"] = peerList[i].nodeCall;
+        safeUtf8Copy(cleanCall, (const uint8_t*)peerList[i].nodeCall, sizeof(cleanCall)); 
+        peer["call"] = cleanCall;
+        //peer["call"] = peerList[i].nodeCall;
         peer["timestamp"] = peerList[i].timestamp;
         peer["rssi"] = peerList[i].rssi;
         peer["snr"] = peerList[i].snr;

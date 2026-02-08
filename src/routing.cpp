@@ -4,6 +4,8 @@
 #include "routing.h"
 #include "webFunctions.h"
 #include "peer.h"
+#include "helperFunctions.h"
+#include "config.h"
 
 //Routing Liste
 std::vector<Route> routingList;
@@ -11,10 +13,15 @@ std::vector<Route> routingList;
 void sendRoutingList() {
     JsonDocument doc;
     doc["routingList"]["routes"] = JsonArray();
+    char cleanCall[MAX_CALLSIGN_LENGTH + 1];
     for (int i = 0; i < routingList.size(); i++) {
         JsonObject route = doc["routingList"]["routes"].add<JsonObject>();
-        route["srcCall"] = routingList[i].srcCall;
-        route["viaCall"] = routingList[i].viaCall;
+        safeUtf8Copy(cleanCall, (const uint8_t*)routingList[i].srcCall, sizeof(cleanCall)); 
+        route["srcCall"] = cleanCall;
+        safeUtf8Copy(cleanCall, (const uint8_t*)routingList[i].viaCall, sizeof(cleanCall)); 
+        route["viaCall"] = cleanCall;
+        //route["srcCall"] = routingList[i].srcCall;
+        //route["viaCall"] = routingList[i].viaCall;
         route["timestamp"] = routingList[i].timestamp;
     }
     char* jsonBuffer = (char*)malloc(2048);

@@ -14,6 +14,9 @@ function onMessage(event) {
     //RAW-RX
     if (d.monitor) {
         var f = d.monitor;
+
+        console.log(d.monitor);
+        
         var msg = ""; 
         //TX-Frame gelb
         if (d.monitor.tx == true) { msg += "<span class='monitor-tx' >"; } else { msg += "<span>"; }
@@ -118,7 +121,7 @@ function onMessage(event) {
         document.getElementById("settingsWifiNetMask").value = d.settings.wifiNetMask[0] + "." + d.settings.wifiNetMask[1] + "." + d.settings.wifiNetMask[2] + "." + d.settings.wifiNetMask[3];
         document.getElementById("settingsWifiGateway").value = d.settings.wifiGateway[0] + "." + d.settings.wifiGateway[1] + "." + d.settings.wifiGateway[2] + "." + d.settings.wifiGateway[3];
         document.getElementById("settingsWifiDNS").value = d.settings.wifiDNS[0] + "." + d.settings.wifiDNS[1] + "." + d.settings.wifiDNS[2] + "." + d.settings.wifiDNS[3];
-        document.getElementById("settingsWifiBrodcast").value = d.settings.wifiBrodcast[0] + "." + d.settings.wifiBrodcast[1] + "." + d.settings.wifiBrodcast[2] + "." + d.settings.wifiBrodcast[3];
+        //document.getElementById("settingsWifiBrodcast").value = d.settings.wifiBrodcast[0] + "." + d.settings.wifiBrodcast[1] + "." + d.settings.wifiBrodcast[2] + "." + d.settings.wifiBrodcast[3];
         document.getElementById("settingsDHCP").checked = d.settings.dhcpActive; 
         document.getElementById("settingsApMode").checked = d.settings.apMode; 
         document.getElementById("settingsLoraFrequency").value = d.settings.loraFrequency; 
@@ -134,6 +137,12 @@ function onMessage(event) {
         document.getElementById("settingsLoraMaxMessageLength").innerHTML = d.settings.loraMaxMessageLength + " characters"; 
         settings.titel = settings.name + " - " + settings.mycall;
         settings.altTitel = "🚨 " + settings.name + " - " + settings.mycall + " 🚨"
+        //UDP Peers
+        if (d.settings.udpPeers) {
+            d.settings.udpPeers.forEach(function(p, index) {
+                document.getElementById("settingsUDPPeer" + index).value = p.ip[0] + "." + p.ip[1] + "." + p.ip[2] + "." + p.ip[3];                
+            });
+        }
 
         if (init == false) {
             init = true;
@@ -231,7 +240,7 @@ function saveSettings() {
     settings["wifiNetMask"] = document.getElementById("settingsWifiNetMask").value.split('.').map(Number);
     settings["wifiGateway"] = document.getElementById("settingsWifiGateway").value.split('.').map(Number);
     settings["wifiDNS"] = document.getElementById("settingsWifiDNS").value.split('.').map(Number);
-    settings["wifiBrodcast"] = document.getElementById("settingsWifiBrodcast").value.split('.').map(Number);
+    //settings["wifiBrodcast"] = document.getElementById("settingsWifiBrodcast").value.split('.').map(Number);
     settings["loraFrequency"] = parseFloat(document.getElementById("settingsLoraFrequency").value);
     settings["loraOutputPower"] = parseInt(document.getElementById("settingsLoraOutputPower").value);
     settings["loraBandwidth"] = parseFloat(document.getElementById("settingsLoraBandwidth").value);
@@ -240,6 +249,17 @@ function saveSettings() {
     settings["loraSpreadingFactor"] = parseInt(document.getElementById("settingsLoraSpreadingFactor").value);
     settings["loraPreambleLength"] = parseInt(document.getElementById("settingsLoraPreambleLength").value);
     settings["loraRepeat"] = document.getElementById("settingsLoraRepeat").checked;
+    settings["udpPeers"] = [];
+    for (var i = 0; i < 5; i++) {
+        var val = document.getElementById("settingsUDPPeer" + i).value;
+        if (!val) val = "0.0.0.0";
+        var ipParts = val.split('.').map(Number);
+        settings["udpPeers"].push({
+            "ip": ipParts
+        });
+    }
+
+
     sendWS(JSON.stringify({settings: settings}));
 }
 

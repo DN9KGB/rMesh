@@ -139,8 +139,18 @@ void processRxFrame(Frame &f) {
                 txBuffer.end()
             );
 
-            //ACK-Senden bei mir immer, bei anderen nur 1x
-            if ((strcmp(f.viaCall, settings.mycall) == 0) || ((strlen(f.viaCall) > 0) && (checkACK(f.srcCall, f.nodeCall, f.id) == false) && (checkACK(f.srcCall, settings.mycall, f.id) == false))) {
+            //ACK-Senden 
+            bool sendACK = false;
+            //ACK Senden, wenn ich direkt angesprochen wurde
+            if (strcmp(f.viaCall, settings.mycall) == 0) {sendACK = true;}
+            //ACK Senden, wenn ich nicht direkt angesprochen wurde, aber nur 1x
+            if ((strlen(f.viaCall) > 0) && (checkACK(f.srcCall, f.nodeCall, f.id) == false) && (checkACK(f.srcCall, settings.mycall, f.id) == false)) {sendACK = true;}
+            //ACK auf Port 0 nicht senden, wenn nodeCall auf Port 1 verfügbar
+            for (int i = 0; i < peerList.size(); i++) {
+                if ((strcmp(f.nodeCall, peerList[i].nodeCall) == 0) && (f.port == 0) && (peerList[i].port == 1) && (peerList[i].available == true)) {sendACK = false;}
+            } 
+
+            if (sendACK) {
                 addACK(f.srcCall, f.nodeCall, f.id);
                 tf.frameType = Frame::FrameTypes::MESSAGE_ACK_FRAME;
                 memcpy(tf.viaCall, f.nodeCall, sizeof(tf.viaCall));

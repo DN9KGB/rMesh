@@ -53,11 +53,12 @@ void startWebServer() {
     //Einstellungen speichern
     if (json["settings"].is<JsonVariant>()) {
       if (json["settings"]["mycall"].is<JsonVariant>()) { 
-        strlcpy(settings.mycall, json["settings"]["mycall"] | "", sizeof(settings.mycall));
+        const char* mycallSrc = json["settings"]["mycall"] | "";
+        safeUtf8Copy(settings.mycall, (const uint8_t*)mycallSrc, sizeof(settings.mycall));
         for (size_t i = 0; i < sizeof(settings.mycall); i++) {
             settings.mycall[i] = toupper(settings.mycall[i]);
         }
-        settings.mycall[MAX_CALLSIGN_LENGTH + 1] = '\0';
+        settings.mycall[sizeof(settings.mycall) - 1] = '\0';
       }
       if (json["settings"]["ntp"].is<JsonVariant>()) { strlcpy(settings.ntpServer, json["settings"]["ntp"] | "", sizeof(settings.ntpServer)); }
       if (json["settings"]["dhcpActive"].is<JsonVariant>()) { settings.dhcpActive = json["settings"]["dhcpActive"].as<bool>(); }
@@ -84,6 +85,27 @@ void startWebServer() {
         JsonArray ipArray = json["settings"]["wifiBrodcast"];
         for (int i = 0; i < 4; i++) {settings.wifiBrodcast[i] = ipArray[i] | 0; }
       }
+        //UDP Peers
+        if (json["settings"]["udpPeers"].is<JsonArray>()) {
+            JsonArray peers = json["settings"]["udpPeers"];
+            uint8_t count = sizeof(extSettings.udpPeer) / sizeof(extSettings.udpPeer[0]);
+            for (int i = 0; i < count; i++) {
+                if (i < peers.size()) {
+                    JsonVariant v = peers[i]["ip"];
+                    if (v.is<JsonArray>() && v.size() == 4) {
+                        JsonArray ipBytes = v.as<JsonArray>();
+                        extSettings.udpPeer[i] = IPAddress(
+                            ipBytes[0] | 0, 
+                            ipBytes[1] | 0, 
+                            ipBytes[2] | 0, 
+                            ipBytes[3] | 0
+                        );
+                    }
+                } else {
+                    extSettings.udpPeer[i] = IPAddress(0, 0, 0, 0);
+                }
+            }
+        }        
       if (json["settings"]["loraFrequency"].is<JsonVariant>()) { settings.loraFrequency = json["settings"]["loraFrequency"].as<float>(); }
       if (json["settings"]["loraOutputPower"].is<JsonVariant>()) { settings.loraOutputPower = json["settings"]["loraOutputPower"].as<int8_t>(); }
       if (json["settings"]["loraBandwidth"].is<JsonVariant>()) { settings.loraBandwidth = json["settings"]["loraBandwidth"].as<float>(); }

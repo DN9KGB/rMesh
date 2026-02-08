@@ -28,11 +28,24 @@ struct Settings {
   uint8_t loraMaxMessageLength;
 };
 
+struct ExtSettings {
+    IPAddress udpPeer[5] = {
+        IPAddress(0, 0, 0, 0),
+        IPAddress(0, 0, 0, 0),
+        IPAddress(0, 0, 0, 0),
+        IPAddress(0, 0, 0, 0),
+        IPAddress(0, 0, 0, 0)
+    };  
+
+    
+};
+
 void loadSettings();
 void saveSettings();
 void showSettings();
 void sendSettings();
 
 extern Settings settings;
+extern ExtSettings extSettings;
 extern Preferences prefs;
 

@@ -92,11 +92,17 @@ size_t Frame::monitorJSON(char* buffer, size_t length) {
         doc["monitor"]["frqError"] = frqError;
     }
     doc["monitor"]["timestamp"] = timestamp;
-    if (strlen(srcCall) > 0) {doc["monitor"]["srcCall"] = srcCall;}
-    if (strlen(dstGroup) > 0) {doc["monitor"]["dstGroup"] = dstGroup;}
-    if (strlen(dstCall) > 0) {doc["monitor"]["dstCall"] = dstCall;}
-    if (strlen(viaCall) > 0) {doc["monitor"]["viaCall"] = viaCall;}
-    if (strlen(nodeCall) > 0) {doc["monitor"]["nodeCall"] = nodeCall;}
+    // if (strlen(srcCall) > 0) {doc["monitor"]["srcCall"] = srcCall;}
+    // if (strlen(dstGroup) > 0) {doc["monitor"]["dstGroup"] = dstGroup;}
+    // if (strlen(dstCall) > 0) {doc["monitor"]["dstCall"] = dstCall;}
+    // if (strlen(viaCall) > 0) {doc["monitor"]["viaCall"] = viaCall;}
+    // if (strlen(nodeCall) > 0) {doc["monitor"]["nodeCall"] = nodeCall;}
+    char cleanCall[MAX_CALLSIGN_LENGTH + 1];
+    if (srcCall[0] != '\0') {safeUtf8Copy(cleanCall, (const uint8_t*)srcCall, sizeof(cleanCall)); doc["monitor"]["srcCall"] = cleanCall; }
+    if (dstGroup[0] != '\0') {safeUtf8Copy(cleanCall, (const uint8_t*)dstGroup, sizeof(cleanCall)); doc["monitor"]["dstGroup"] = cleanCall; }
+    if (dstCall[0] != '\0') {safeUtf8Copy(cleanCall, (const uint8_t*)dstCall, sizeof(cleanCall)); doc["monitor"]["dstCall"] = cleanCall; }
+    if (viaCall[0] != '\0') {safeUtf8Copy(cleanCall, (const uint8_t*)viaCall, sizeof(cleanCall)); doc["monitor"]["viaCall"] = cleanCall; }
+    if (nodeCall[0] != '\0') {safeUtf8Copy(cleanCall, (const uint8_t*)nodeCall, sizeof(cleanCall)); doc["monitor"]["nodeCall"] = cleanCall; }
     doc["monitor"]["frameType"] = frameType;
     doc["monitor"]["id"] = id;
     doc["monitor"]["hopCount"] = hopCount;
@@ -119,9 +125,13 @@ size_t Frame::messageJSON(char* buffer, size_t length) {
         doc["message"]["text"] = text;  
     }
     doc["message"]["messageType"] = messageType;
-    doc["message"]["dstCall"] = dstCall;
-    doc["message"]["dstGroup"] = dstGroup;
-    doc["message"]["srcCall"] = srcCall;
+    char cleanCall[MAX_CALLSIGN_LENGTH + 1];
+    if (dstCall[0] != '\0') {safeUtf8Copy(cleanCall, (const uint8_t*)dstCall, sizeof(cleanCall)); doc["message"]["dstCall"] = cleanCall; }
+    if (dstGroup[0] != '\0') {safeUtf8Copy(cleanCall, (const uint8_t*)dstGroup, sizeof(cleanCall)); doc["message"]["dstGroup"] = cleanCall; }
+    if (srcCall[0] != '\0') {safeUtf8Copy(cleanCall, (const uint8_t*)srcCall, sizeof(cleanCall)); doc["message"]["srcCall"] = cleanCall; }
+    // doc["message"]["dstCall"] = dstCall;
+    // doc["message"]["dstGroup"] = dstGroup;
+    // doc["message"]["srcCall"] = srcCall;
     doc["message"]["id"] = id;
     doc["message"]["tx"] = tx;
     doc["message"]["timestamp"] = timestamp;

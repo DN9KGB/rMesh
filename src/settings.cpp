@@ -10,6 +10,7 @@
 #include "hal.h"
 
 Settings settings;
+ExtSettings extSettings;
 
 Preferences prefs;
 
@@ -26,9 +27,14 @@ void showSettings() {
         Serial.printf("NetMask: %d.%d.%d.%d\n", settings.wifiNetMask[0], settings.wifiNetMask[1], settings.wifiNetMask[2], settings.wifiNetMask[3]);
         Serial.printf("DNS: %d.%d.%d.%d\n", settings.wifiDNS[0], settings.wifiDNS[1], settings.wifiDNS[2], settings.wifiDNS[3]);
         Serial.printf("Gateway: %d.%d.%d.%d\n", settings.wifiGateway[0], settings.wifiGateway[1], settings.wifiGateway[2], settings.wifiGateway[3]);
-        Serial.printf("Brodcast: %d.%d.%d.%d\n", settings.wifiBrodcast[0], settings.wifiBrodcast[1], settings.wifiBrodcast[2], settings.wifiBrodcast[3]);
+        //Serial.printf("Brodcast: %d.%d.%d.%d\n", settings.wifiBrodcast[0], settings.wifiBrodcast[1], settings.wifiBrodcast[2], settings.wifiBrodcast[3]);
     }
     Serial.printf("NTP-Server: %s\n", settings.ntpServer);
+    uint8_t count = sizeof(extSettings.udpPeer) / sizeof(extSettings.udpPeer[0]);
+    for (uint8_t i = 0; i < count; i++) {
+        Serial.printf("UDP Peer %i: %d.%d.%d.%d\n", i, extSettings.udpPeer[i][0], extSettings.udpPeer[i][1], extSettings.udpPeer[i][2], extSettings.udpPeer[i][3]);
+    }
+    Serial.println();
     Serial.printf("myCall: %s\n", settings.mycall);
     Serial.printf("loraFrequency: %f\n", settings.loraFrequency);
     Serial.printf("loraOutputPower: %d\n", settings.loraOutputPower);
@@ -115,8 +121,14 @@ void sendSettings() {
     doc["settings"]["name"] = NAME;
     doc["settings"]["loraRepeat"] = settings.loraRepeat;
     doc["settings"]["loraMaxMessageLength"] = settings.loraMaxMessageLength;
-
-
+    uint8_t count = sizeof(extSettings.udpPeer) / sizeof(extSettings.udpPeer[0]);
+    for (uint8_t i = 0; i < count; i++) {
+        JsonObject peer = doc["settings"]["udpPeers"].add<JsonObject>();
+        peer["ip"][0] = extSettings.udpPeer[i][0];
+        peer["ip"][1] = extSettings.udpPeer[i][1];
+        peer["ip"][2] = extSettings.udpPeer[i][2];
+        peer["ip"][3] = extSettings.udpPeer[i][3];
+    }
     char* jsonBuffer = (char*)malloc(4096);
     size_t len = serializeJson(doc, jsonBuffer, 4096);
     ws.textAll(jsonBuffer, len);  // sendet direkt den Puffer
@@ -131,7 +143,9 @@ void loadSettings() {
     Serial.println("Lade Einstellungen...");
     prefs.begin("custom_settings", false);
     prefs.getBytes("config", &settings, sizeof(settings));
+    prefs.getBytes("extSettings", &extSettings, sizeof(extSettings));
     size_t storedLen = prefs.getBytesLength("config");
+    size_t extSettingsLen = prefs.getBytesLength("extSettings");
 
     //IP-Adressen fixen 
     settings.wifiIP       = IPAddress(settings.wifiIP[0], settings.wifiIP[1], settings.wifiIP[2], settings.wifiIP[3]);
@@ -139,13 +153,21 @@ void loadSettings() {
     settings.wifiGateway  = IPAddress(settings.wifiGateway[0], settings.wifiGateway[1], settings.wifiGateway[2], settings.wifiGateway[3]);
     settings.wifiDNS      = IPAddress(settings.wifiDNS[0], settings.wifiDNS[1], settings.wifiDNS[2], settings.wifiDNS[3]);
     settings.wifiBrodcast = IPAddress(settings.wifiBrodcast[0], settings.wifiBrodcast[1], settings.wifiBrodcast[2], settings.wifiBrodcast[3]);
+    uint8_t count = sizeof(extSettings.udpPeer) / sizeof(extSettings.udpPeer[0]);
+    for (uint8_t i = 0; i < count; i++) {
+        extSettings.udpPeer[i] = IPAddress(extSettings.udpPeer[i][0], extSettings.udpPeer[i][1], extSettings.udpPeer[i][2], extSettings.udpPeer[i][3]);
+    }
 
+    //Defaults für ext. Settings
+    if (extSettingsLen != sizeof(extSettings)) {
+        for (uint8_t i = 0; i < count; i++) {
+            extSettings.udpPeer[i] = IPAddress(extSettings.udpPeer[i][0], extSettings.udpPeer[i][1], extSettings.udpPeer[i][2], extSettings.udpPeer[i][3]);
+        }
+        prefs.putBytes("extSettings", &extSettings, sizeof(extSettings));
+    }
 
-     settings.loraCodingRate = 6;
-
-     
+    //Defaults laden
     if (storedLen != sizeof(settings)) {
-        //Defaults laden
         Serial.println("Lade Default-Settings");
         strcpy(settings.wifiSSID, "");
         strcpy(settings.wifiPassword, "");
@@ -180,6 +202,7 @@ void saveSettings() {
     //Einstellungen im EEPROM speichern
     Serial.println("Speichere Einstellungen...");
     prefs.putBytes("config", &settings, sizeof(settings));
+    prefs.putBytes("extSettings", &extSettings, sizeof(extSettings));
     sendSettings();
     initHal();
 }

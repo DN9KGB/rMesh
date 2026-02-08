@@ -48,16 +48,24 @@ void sendUDP(Frame &f) {
     //Senden
     if (strlen(f.nodeCall) == 0) {return;}
     txBufferLength = f.exportBinary(txBuffer, sizeof(txBuffer));
-    udp.beginPacket(settings.wifiBrodcast, UDP_PORT);
-    udp.write(txBuffer, txBufferLength);
-    udp.endPacket();
-    udp.flush();
-
+    uint8_t count = sizeof(extSettings.udpPeer) / sizeof(extSettings.udpPeer[0]);
+    bool udpTX = false;
+    for (int i = 0; i < count; i++) {
+        if ((extSettings.udpPeer[i][0] != 0) && (extSettings.udpPeer[i][1] != 0) && (extSettings.udpPeer[i][2] != 0) && (extSettings.udpPeer[i][3] != 0)){
+            //Serial.printf("UDP TX %i: %d.%d.%d.%d\n", i, extSettings.udpPeer[i][0], extSettings.udpPeer[i][1], extSettings.udpPeer[i][2], extSettings.udpPeer[i][3]);
+            udp.beginPacket(settings.wifiBrodcast, UDP_PORT);
+            udp.write(txBuffer, txBufferLength);
+            udp.endPacket();
+            udp.flush();
+            udpTX = true;
+        }
+    }
     //Frame monitoren
-    char* jsonBuffer = (char*)malloc(2048); 
-    size_t len = f.monitorJSON(jsonBuffer, 2048);
-    ws.textAll(jsonBuffer, len);  
-    free(jsonBuffer);
-    jsonBuffer = nullptr;
-
+    if (udpTX) {
+        char* jsonBuffer = (char*)malloc(2048); 
+        size_t len = f.monitorJSON(jsonBuffer, 2048);
+        ws.textAll(jsonBuffer, len);  
+        free(jsonBuffer);
+        jsonBuffer = nullptr;
+    }
 }

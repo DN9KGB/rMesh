@@ -1,3 +1,10 @@
+V1.0.6-alpha
+- "erweiterte Einstellungen" -> WLAN Einstellungen bleiben bei FW-Update erhalten, wenn "erweiterte Einstellungen" geändert werden
+- wifiBordcast ist jetzt UDP-Peer (maximal 5 IPs)
+- Viele ACKs wieder weg (auf Stand von V1.0.4)
+- Hoffentlich alle Rufzeichen UTF-8 sicher in Websocket 
+
+
 V1.0.5-alpha
 - Frames aus dem TX-Puffer löschen, wenn man merkt, dass ein anderes Node den Frame schon wiederholt.
 - ACKs werden jetzt immer gesendet

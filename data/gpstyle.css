@@ -256,10 +256,11 @@ body, button {
             background: #808080;
             color: #000000;
             display: flex;
-            flex-direction: column;    /* Inhalt untereinander stapeln */
-            justify-content: center;   /* Vertikal zentrieren */
-            align-items: center;       /* Horizontal zentrieren */
-			overflow: auto;
+            flex-direction: column;
+            /* justify-content: center;  <-- ENTFERNEN ODER ÄNDERN */
+            align-items: center; 
+            overflow-y: auto;          /* Explizit vertikales Scrollen */
+            overflow-x: hidden;        /* Verhindert horizontales Wackeln */
         }        
 
         .network {
@@ -270,11 +271,12 @@ body, button {
             background: #808080;
             color: #000000;
             display: flex;
-            flex-direction: column;    /* Inhalt untereinander stapeln */
-            justify-content: center;   /* Vertikal zentrieren */
-            align-items: center;       /* Horizontal zentrieren */
-			overflow: auto;
-        }        
+            flex-direction: column;
+            /* justify-content: center;  <-- ENTFERNEN ODER ÄNDERN */
+            align-items: center; 
+            overflow-y: auto;          /* Explizit vertikales Scrollen */
+            overflow-x: hidden;        /* Verhindert horizontales Wackeln */
+        }    
 
         .bottom {
             position: fixed;
