@@ -122,6 +122,7 @@
                     <tr> <td> Max Message Length: </td> <td> <span id="settingsLoraMaxMessageLength"> </span> </td> </tr> 
                     <tr> <td>&nbsp;</td> <td>
                         <button class="button" id="settingsSave" onclick="saveSettings();">save</button>
+                        <button class="button" id="settingsDeleteMessages" onclick="saveSettings();">delete messages</button>
                     </td> </tr>
                 </table>
                 
@@ -258,6 +259,10 @@
 
 			document.getElementById("settingsReboot").addEventListener("click", function() {
 				sendWS(JSON.stringify({reboot: true }));
+			});
+
+            document.getElementById("settingsDeleteMessages").addEventListener("click", function() {
+				sendWS(JSON.stringify({deleteMessages: true }));
 			});
 
 			document.getElementById("settingsSSIDList").addEventListener("click", function() {

@@ -155,6 +155,11 @@ void startWebServer() {
         sendGroup(json["sendGroup"]["dst"].as<const char*>(), json["sendGroup"]["text"].as<const char*>() );
     }   
 
+    //Messages.json löschen
+    if (json["deleteMessages"].is<JsonVariant>()) {
+        LittleFS.remove("/messages.json");
+        rebootTimer = millis() + 1000;
+    }   
 
     //Trace senden
     if (json["trace"].is<JsonVariant>()) {

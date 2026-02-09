@@ -10,19 +10,30 @@
 //Routing Liste
 std::vector<Route> routingList;
 
+void getRoute(char* dstCall, char* viaCall, size_t len) {
+    viaCall[0] = '\0';
+    //Routing Liste duchsuchen
+    auto it = std::find_if(routingList.begin(), routingList.end(), [&](const Route& r) { return (strcmp(r.srcCall, dstCall) == 0); });
+
+    if (it != routingList.end()) {
+        //Prüfen, ob Call "noch" in Peer-Liste
+        auto it2 = std::find_if(peerList.begin(), peerList.end(), [&](const Peer& peer) { return (strcmp(peer.nodeCall, it->viaCall) == 0) && (peer.available == true) ; });
+        if (it2 != peerList.end()) {
+            strncpy(viaCall, it->viaCall, len - 1);
+            viaCall[len - 1] = '\0';
+        } 
+    } 
+}
+
 void sendRoutingList() {
     JsonDocument doc;
     doc["routingList"]["routes"] = JsonArray();
-    char cleanCall[MAX_CALLSIGN_LENGTH + 1];
     for (int i = 0; i < routingList.size(); i++) {
         JsonObject route = doc["routingList"]["routes"].add<JsonObject>();
-        safeUtf8Copy(cleanCall, (const uint8_t*)routingList[i].srcCall, sizeof(cleanCall)); 
-        route["srcCall"] = cleanCall;
-        safeUtf8Copy(cleanCall, (const uint8_t*)routingList[i].viaCall, sizeof(cleanCall)); 
-        route["viaCall"] = cleanCall;
-        //route["srcCall"] = routingList[i].srcCall;
-        //route["viaCall"] = routingList[i].viaCall;
+        route["srcCall"] = routingList[i].srcCall;
+        route["viaCall"] = routingList[i].viaCall;
         route["timestamp"] = routingList[i].timestamp;
+        route["snr"] = routingList[i].snr;
     }
     char* jsonBuffer = (char*)malloc(2048);
     size_t len = serializeJson(doc, jsonBuffer, 2048);
@@ -31,7 +42,9 @@ void sendRoutingList() {
 }
 
 void addRoutingList(const char* srcCall, const char* viaCall) {
-    //Serial.printf("Seach in Peer list Route src:%s node:%s\n", srcCall, viaCall);
+    //Serial.printf("src:%s via:%s\n", srcCall, viaCall);
+    if (strlen(srcCall) == 0) {return;}
+    if (strlen(viaCall) == 0) {return;}
 
     //Prüfen, ob viaCall in Peer Liste ist. Wenn nicht -> Abbruch
     auto itt = std::find_if(peerList.begin(), peerList.end(), [&](const Peer& peer) { return (strcmp(peer.nodeCall, viaCall) == 0) && (peer.available == true); });

@@ -172,11 +172,11 @@ void processRxFrame(Frame &f) {
                 }
             }
 
+            //Routing
+            addRoutingList(f.srcCall, f.nodeCall); 
+
             if ((found == false) && (f.messageLength > 0)) {
                 //Neue Nachricht empfangen
-
-                //Routing
-                addRoutingList(f.srcCall, f.nodeCall); 
                 
                 //Message in Ringpuffer speichern
                 strncpy(messages[messagesHead].srcCall, f.srcCall, MAX_CALLSIGN_LENGTH + 1);
@@ -239,6 +239,14 @@ void processRxFrame(Frame &f) {
                     tf.timestamp = time(NULL);
                     tf.syncFlag = false;
 
+                    //Prüfen, ob routing möglich
+                    bool routing = false;
+
+                    //Nach Route suchen
+                    char viaCall[MAX_CALLSIGN_LENGTH + 1];
+                    getRoute(f.dstCall, viaCall, MAX_CALLSIGN_LENGTH + 1);            
+                    if (strlen(viaCall) > 0) { routing == true; }
+
                     //Ports duchlaufen
                     for (tf.port = 0; tf.port <= 1; tf.port++) {
 
@@ -270,18 +278,18 @@ void processRxFrame(Frame &f) {
 
                             //In TX-Puffer eintragen: NICHT an nodeCall und nicht an srcCall
                             if ((found == false) && (peerList[i].available == true) && (peerList[i].port == tf.port) && (strcmp(peerList[i].nodeCall, f.nodeCall) != 0) && (strcmp(peerList[i].nodeCall, f.srcCall) != 0)) {
-                                memcpy(tf.viaCall, peerList[i].nodeCall, sizeof(tf.viaCall));
-                                tf.retry = TX_RETRY;
-                                tf.initRetry = TX_RETRY;
-                                txBuffer.push_back(tf);
-
-                                //In ACK-Liste eintagen, damit später kein ACK gesendet wird, wenn das Peer die MSG wiederholt
-                                addACK(tf.srcCall, tf.viaCall, tf.id);                                
+                                if ((routing == false) || ( strcmp(peerList[i].nodeCall, viaCall) == 0)) {
+                                    //Frame in TX-Puffer
+                                    memcpy(tf.viaCall, peerList[i].nodeCall, sizeof(tf.viaCall));
+                                    tf.retry = TX_RETRY;
+                                    tf.initRetry = TX_RETRY;
+                                    txBuffer.push_back(tf);
+                                    //In ACK-Liste eintagen, damit später kein ACK gesendet wird, wenn das Peer die MSG wiederholt
+                                    addACK(tf.srcCall, tf.viaCall, tf.id);                                
+                                }
                             }
                         } 
-
                     }
-
                 }
 
             }
@@ -318,6 +326,8 @@ void setup() {
     } 
     fsMutex = xSemaphoreCreateMutex();
 
+
+    
     //Messages JSON in messages Ringpuffer speichern
     File file = LittleFS.open("/messages.json", "r");
     if (file) {
@@ -325,9 +335,11 @@ void setup() {
         while (file.available()) {
             DeserializationError error = deserializeJson(doc, file);
             if (error == DeserializationError::Ok) {
-                //Serial.printf("id: %d, src: %s, head:%d\n", doc["message"]["id"].as<uint32_t>(), doc["message"]["srcCall"].as<String>(), messagesHead);
+                const char* tempSrc = doc["message"]["srcCall"] | "";
+                uint32_t tempId = doc["message"]["id"] | 0;
+                //Serial.printf("id: %d, src: %s, head:%d\n", tempId, tempSrc, messagesHead);
                 //In messages speichern
-                strncpy(messages[messagesHead].srcCall, doc["message"]["srcCall"], MAX_CALLSIGN_LENGTH + 1);
+                strncpy(messages[messagesHead].srcCall, tempSrc, MAX_CALLSIGN_LENGTH);
                 messages[messagesHead].id = doc["message"]["id"].as<uint32_t>();
                 messagesHead++;
                 if (messagesHead >= MAX_STORED_MESSAGES_RAM) { messagesHead = 0; }                        
@@ -337,7 +349,7 @@ void setup() {
         }
         file.close();                    
     }
-    
+
     //Init Hardware
     initHal();
 

@@ -13,6 +13,7 @@
 #include "main.h"
 #include "wifiFunctions.h"
 #include "helperFunctions.h"
+#include "routing.h"
 
 //String serialRxBuffer;
 
@@ -45,15 +46,12 @@ void checkSerialRX() {
                 //Befehle auswerten
 
                 //Testfunktionen
-                if (strncmp(serialRxBuffer, "z", 1) == 0) {
-                    // char call1[MAX_CALLSIGN_LENGTH + 1] = "1111";
-                    // char call2[MAX_CALLSIGN_LENGTH + 1] = "555";
-                    // uint32_t id = 123456789;
-                    // bool chk = checkACK(call1, call2, id);
-                    // Serial.println(chk);
-                }
+                if (strncmp(serialRxBuffer, "t", 1) == 0) {
+                    char call[12];
+                    char dstCall[15] = "DH1NFJ";
 
-                if (strncmp(serialRxBuffer, "l", 1) == 0) {
+                    getRoute(dstCall, call, sizeof(call));
+                    Serial.println(call);
 
                 }
 
