@@ -4,6 +4,7 @@ V1.0.6-alpha
 - Viele ACKs wieder weg (auf Stand von V1.0.4)
 - Hoffentlich alle Rufzeichen UTF-8 sicher in Websocket 
 - Fehler in Routing Liste beseitigt (falsche Nodes, die nicht in Peer Liste sind)
+- messages.json kann über GUI gelöscht werden
 
 
 V1.0.5-alpha

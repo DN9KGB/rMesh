@@ -92,17 +92,11 @@ size_t Frame::monitorJSON(char* buffer, size_t length) {
         doc["monitor"]["frqError"] = frqError;
     }
     doc["monitor"]["timestamp"] = timestamp;
-    // if (strlen(srcCall) > 0) {doc["monitor"]["srcCall"] = srcCall;}
-    // if (strlen(dstGroup) > 0) {doc["monitor"]["dstGroup"] = dstGroup;}
-    // if (strlen(dstCall) > 0) {doc["monitor"]["dstCall"] = dstCall;}
-    // if (strlen(viaCall) > 0) {doc["monitor"]["viaCall"] = viaCall;}
-    // if (strlen(nodeCall) > 0) {doc["monitor"]["nodeCall"] = nodeCall;}
-    char cleanCall[MAX_CALLSIGN_LENGTH + 1];
-    if (srcCall[0] != '\0') {safeUtf8Copy(cleanCall, (const uint8_t*)srcCall, sizeof(cleanCall)); doc["monitor"]["srcCall"] = cleanCall; }
-    if (dstGroup[0] != '\0') {safeUtf8Copy(cleanCall, (const uint8_t*)dstGroup, sizeof(cleanCall)); doc["monitor"]["dstGroup"] = cleanCall; }
-    if (dstCall[0] != '\0') {safeUtf8Copy(cleanCall, (const uint8_t*)dstCall, sizeof(cleanCall)); doc["monitor"]["dstCall"] = cleanCall; }
-    if (viaCall[0] != '\0') {safeUtf8Copy(cleanCall, (const uint8_t*)viaCall, sizeof(cleanCall)); doc["monitor"]["viaCall"] = cleanCall; }
-    if (nodeCall[0] != '\0') {safeUtf8Copy(cleanCall, (const uint8_t*)nodeCall, sizeof(cleanCall)); doc["monitor"]["nodeCall"] = cleanCall; }
+    if (strlen(srcCall) > 0) {doc["monitor"]["srcCall"] = srcCall;}
+    if (strlen(dstGroup) > 0) {doc["monitor"]["dstGroup"] = dstGroup;}
+    if (strlen(dstCall) > 0) {doc["monitor"]["dstCall"] = dstCall;}
+    if (strlen(viaCall) > 0) {doc["monitor"]["viaCall"] = viaCall;}
+    if (strlen(nodeCall) > 0) {doc["monitor"]["nodeCall"] = nodeCall;}
     doc["monitor"]["frameType"] = frameType;
     doc["monitor"]["id"] = id;
     doc["monitor"]["hopCount"] = hopCount;
@@ -125,13 +119,9 @@ size_t Frame::messageJSON(char* buffer, size_t length) {
         doc["message"]["text"] = text;  
     }
     doc["message"]["messageType"] = messageType;
-    char cleanCall[MAX_CALLSIGN_LENGTH + 1];
-    if (dstCall[0] != '\0') {safeUtf8Copy(cleanCall, (const uint8_t*)dstCall, sizeof(cleanCall)); doc["message"]["dstCall"] = cleanCall; }
-    if (dstGroup[0] != '\0') {safeUtf8Copy(cleanCall, (const uint8_t*)dstGroup, sizeof(cleanCall)); doc["message"]["dstGroup"] = cleanCall; }
-    if (srcCall[0] != '\0') {safeUtf8Copy(cleanCall, (const uint8_t*)srcCall, sizeof(cleanCall)); doc["message"]["srcCall"] = cleanCall; }
-    // doc["message"]["dstCall"] = dstCall;
-    // doc["message"]["dstGroup"] = dstGroup;
-    // doc["message"]["srcCall"] = srcCall;
+    doc["message"]["dstCall"] = dstCall;
+    doc["message"]["dstGroup"] = dstGroup;
+    doc["message"]["srcCall"] = srcCall;
     doc["message"]["id"] = id;
     doc["message"]["tx"] = tx;
     doc["message"]["timestamp"] = timestamp;
@@ -159,9 +149,8 @@ void Frame::importBinary(uint8_t* data, size_t length) {
         switch (header) {
             case Frame::HeaderTypes::NODE_CALL_HEADER:
                 if (i + payloadLength < length) {
-                    memcpy(nodeCall, data + i + 1, sizeof(nodeCall)); 
-                    if (payloadLength >= sizeof(nodeCall)) {payloadLength = sizeof(nodeCall) - 1;}
-                    nodeCall[payloadLength] = '\0';
+                    if (payloadLength > MAX_CALLSIGN_LENGTH) {payloadLength = MAX_CALLSIGN_LENGTH;}
+                    safeUtf8Copy(nodeCall, (const uint8_t*)(data + i + 1), payloadLength);
                     i += payloadLength + 1;
                 } else {
                     i = length; //Abbruch
@@ -169,9 +158,8 @@ void Frame::importBinary(uint8_t* data, size_t length) {
                 break;
             case Frame::HeaderTypes::VIA_CALL_HEADER:
                 if (i + payloadLength < length) {
-                    memcpy(viaCall, data + i + 1, sizeof(viaCall)); 
-                    if (payloadLength >= sizeof(viaCall)) {payloadLength = sizeof(viaCall) - 1;}
-                    viaCall[payloadLength] = '\0';
+                    if (payloadLength > MAX_CALLSIGN_LENGTH) {payloadLength = MAX_CALLSIGN_LENGTH;}
+                    safeUtf8Copy(viaCall, (const uint8_t*)(data + i + 1), payloadLength);
                     i += payloadLength + 1;
                 } else {
                     i = length; //Abbruch
@@ -179,9 +167,8 @@ void Frame::importBinary(uint8_t* data, size_t length) {
                 break;
             case Frame::HeaderTypes::SRC_CALL_HEADER:
                 if (i + payloadLength < length) {
-                    memcpy(srcCall, data + i + 1, sizeof(srcCall)); 
-                    if (payloadLength >= sizeof(srcCall)) {payloadLength = sizeof(srcCall) - 1;}
-                    srcCall[payloadLength] = '\0';
+                    if (payloadLength > MAX_CALLSIGN_LENGTH) {payloadLength = MAX_CALLSIGN_LENGTH;}
+                    safeUtf8Copy(srcCall, (const uint8_t*)(data + i + 1), payloadLength);
                     i += payloadLength + 1;
                 } else {
                     i = length; //Abbruch
@@ -189,9 +176,8 @@ void Frame::importBinary(uint8_t* data, size_t length) {
                 break;
             case Frame::HeaderTypes::DST_GROUP_HEADER:
                 if (i + payloadLength < length) {
-                    memcpy(dstGroup, data + i + 1, sizeof(dstGroup)); 
-                    if (payloadLength >= sizeof(dstGroup)) {payloadLength = sizeof(dstGroup) - 1;}
-                    dstGroup[payloadLength] = '\0';
+                    if (payloadLength > MAX_CALLSIGN_LENGTH) {payloadLength = MAX_CALLSIGN_LENGTH;}
+                    safeUtf8Copy(dstGroup, (const uint8_t*)(data + i + 1), payloadLength);
                     i += payloadLength + 1;
                 } else {
                     i = length; //Abbruch
@@ -199,9 +185,8 @@ void Frame::importBinary(uint8_t* data, size_t length) {
                 break;
             case Frame::HeaderTypes::DST_CALL_HEADER:
                 if (i + payloadLength < length) {
-                    memcpy(dstCall, data + i + 1, sizeof(dstCall)); 
-                    if (payloadLength >= sizeof(dstCall)) {payloadLength = sizeof(dstCall) - 1;}
-                    dstCall[payloadLength] = '\0';
+                    if (payloadLength > MAX_CALLSIGN_LENGTH) {payloadLength = MAX_CALLSIGN_LENGTH;}
+                    safeUtf8Copy(dstCall, (const uint8_t*)(data + i + 1), payloadLength);
                     i += payloadLength + 1;
                 } else {
                     i = length; //Abbruch

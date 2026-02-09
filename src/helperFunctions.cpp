@@ -8,7 +8,7 @@
 #include "webFunctions.h"
 #include "peer.h"
 #include "config.h"
-
+#include "routing.h"
 
 
 void printHexArray(uint8_t* data, size_t length) {
@@ -25,13 +25,17 @@ void printHexArray(uint8_t* data, size_t length) {
 
 
 void sendFrame(Frame &f) {
-    //Frame an alle Peers senden
+    //Frame senden
     f.id = millis();
     f.timestamp = time(NULL);
     f.tx = true;
 
-   // bool first = true;
-    //if (txBuffer.size() > 0) {first = false;}
+    //Nach Route suchen
+    bool routing = false;
+    char viaCall[MAX_CALLSIGN_LENGTH + 1];
+    getRoute(f.dstCall, viaCall, MAX_CALLSIGN_LENGTH + 1);            
+    if (strlen(viaCall) > 0) { routing == true; }    
+
     for (int port = 0; port <= 1; port++) {
         uint8_t availableNodeCount = 0;
         f.viaCall[0] = 0;
@@ -42,11 +46,13 @@ void sendFrame(Frame &f) {
         //An alle Peers senden
         for (int i = 0; i < peerList.size(); i++) {
             if ((peerList[i].available) && (peerList[i].port == port)) {
-                availableNodeCount ++;
-                f.port = peerList[i].port;
-                memcpy(f.viaCall, peerList[i].nodeCall, sizeof(f.viaCall));
-                if (txBuffer.size() == 0) {f.syncFlag = true;} else {f.syncFlag = false;}
-                txBuffer.push_back(f);
+                if ((routing == false) || (strcmp(peerList[i].nodeCall, viaCall) == 0)){
+                    availableNodeCount ++;
+                    f.port = peerList[i].port;
+                    memcpy(f.viaCall, peerList[i].nodeCall, sizeof(f.viaCall));
+                    if (txBuffer.size() == 0) {f.syncFlag = true;} else {f.syncFlag = false;}
+                    txBuffer.push_back(f);
+                }
             }
         } 
 
@@ -84,7 +90,7 @@ void sendMessage(const char* dst, const char* text, uint8_t messageType) {
     f.frameType = Frame::FrameTypes::MESSAGE_FRAME;
     f.messageType = messageType;
     strncpy(f.srcCall, settings.mycall, sizeof(f.srcCall));
-    safeUtf8Copy((char*)f.dstCall, (uint8_t*)dst, sizeof(f.dstCall));
+    safeUtf8Copy((char*)f.dstCall, (uint8_t*)dst, MAX_CALLSIGN_LENGTH);
     safeUtf8Copy((char*)f.message, (uint8_t*)text, sizeof(f.message));
     f.messageLength = strlen(text);
     sendFrame(f);
@@ -97,7 +103,7 @@ void sendGroup(const char* dst, const char* text, uint8_t messageType) {
     f.frameType = Frame::FrameTypes::MESSAGE_FRAME;
     f.messageType = messageType;
     strncpy(f.srcCall, settings.mycall, sizeof(f.srcCall));
-    safeUtf8Copy((char*)f.dstGroup, (uint8_t*)dst, sizeof(f.dstGroup));
+    safeUtf8Copy((char*)f.dstGroup, (uint8_t*)dst, MAX_CALLSIGN_LENGTH);
     safeUtf8Copy((char*)f.message, (uint8_t*)text, sizeof(f.message));
     f.messageLength = strlen(text);
     sendFrame(f);

@@ -50,13 +50,10 @@ void checkPeerList() {
 void sendPeerList() {
     JsonDocument doc;
     doc["peerlist"]["peers"] = JsonArray();
-    char cleanCall[MAX_CALLSIGN_LENGTH + 1];
     for (int i = 0; i < peerList.size(); i++) {
         JsonObject peer = doc["peerlist"]["peers"].add<JsonObject>();
         peer["port"] = peerList[i].port;
-        safeUtf8Copy(cleanCall, (const uint8_t*)peerList[i].nodeCall, sizeof(cleanCall)); 
-        peer["call"] = cleanCall;
-        //peer["call"] = peerList[i].nodeCall;
+        peer["call"] = peerList[i].nodeCall;
         peer["timestamp"] = peerList[i].timestamp;
         peer["rssi"] = peerList[i].rssi;
         peer["snr"] = peerList[i].snr;
@@ -88,6 +85,8 @@ void availablePeerList(const char* call, bool available, uint8_t port) {
 }
 
 void addPeerList(Frame &f) {
+    if (strlen(f.nodeCall) == 0) {return;}
+
     // Suchen, ob Peer bereits existiert
     auto it = std::find_if(peerList.begin(), peerList.end(), [&](const Peer& peer) { return (strcmp(peer.nodeCall, f.nodeCall) == 0) && (peer.port == f.port) ; });
 
