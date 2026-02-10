@@ -64,17 +64,12 @@ void sendPeerList() {
     
     size_t len = measureJson(doc);
     if (len == 0) return;
-    AsyncWebSocketMessageBuffer * wsBuffer = ws.makeBuffer(len + 1);
-    if (wsBuffer != nullptr && wsBuffer->get() != nullptr) {
-        char* startPtr = (char*)wsBuffer->get();
-        serializeJson(doc, startPtr, len + 1);
-        for (auto & client : ws.getClients()) {
-            if (client.status() == WS_CONNECTED) {
-                client.text(startPtr, len);
-            }
-        }
+    AsyncWebSocketMessageBuffer * wsBuffer = ws.makeBuffer(len);
+    if (wsBuffer != nullptr) {
+        serializeJson(doc, (char*)wsBuffer->get(), len);
+        ws.textAll(wsBuffer); 
     } else {
-        Serial.println(F("Kein Speicher für WebSocket Buffer !!!"));
+        Serial.println(F("Fehler: Kein RAM für Buffer"));
     }
 
 
