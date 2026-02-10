@@ -62,10 +62,6 @@ void sendUDP(Frame &f) {
     }
     //Frame monitoren
     if (udpTX) {
-        char* jsonBuffer = (char*)malloc(2048); 
-        size_t len = f.monitorJSON(jsonBuffer, 2048);
-        ws.textAll(jsonBuffer, len);  
-        free(jsonBuffer);
-        jsonBuffer = nullptr;
+        f.monitorJSON();
     }
 }

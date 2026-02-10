@@ -1,3 +1,7 @@
+V1.0.7-alpha
+- Große JSON Strings (PeerList und RoutungList) werden direkt in Websocket Puffer geschrieben
+- Monitor Daten auch
+
 V1.0.6-alpha
 - "erweiterte Einstellungen" -> WLAN Einstellungen bleiben bei FW-Update erhalten, wenn "erweiterte Einstellungen" geändert werden
 - wifiBordcast ist jetzt UDP-Peer (maximal 5 IPs)

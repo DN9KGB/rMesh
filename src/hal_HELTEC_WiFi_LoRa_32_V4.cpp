@@ -142,11 +142,7 @@ void transmitFrame(Frame &f) {
     radio.startTransmit(txBuffer, txBufferLength);
 
     //Frame monitoren
-    char* jsonBuffer = (char*)malloc(2048);
-    size_t len = f.monitorJSON(jsonBuffer, 2048);
-    ws.textAll(jsonBuffer, len);  
-    free(jsonBuffer);
-    jsonBuffer = nullptr;
+    f.monitorJSON();
 
 }
 

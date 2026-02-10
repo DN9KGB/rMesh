@@ -1,0 +1,247 @@
+var websocket;
+var settings;
+var messages = [];
+var baseURL = "";
+var gateway = "";
+var init = false;
+
+
+function initWebSocket() {
+
+
+    //Debug
+    if (!window.location.hostname.includes("127.0.0.1")) {
+        gateway = `ws://${window.location.hostname}/socket`;
+        baseURL = "";
+    } else {
+        gateway = "ws://192.168.33.60/socket";
+        baseURL = "http://192.168.33.60/"
+    }
+
+    //Websocket init
+    setAntennaColor("rgba(255, 255, 255, 0.17)");
+    websocket = new WebSocket(gateway);
+    websocket.onopen = onOpen;
+    websocket.onclose = onClose;
+    websocket.onmessage = onMessage;
+}
+
+function onOpen(event) {
+    //sendWS(JSON.stringify({scanWifi: true }));
+    init = false;
+    keepAlive();
+}
+
+function onClose(event) {
+    init = false;
+    setAntennaColor("rgba(255, 255, 255, 0.17)");
+    clearTimeout(timeout);
+    setTimeout(initWebSocket, 500);
+}
+
+function sendWS(text) {
+    websocket.send(text);
+    console.log("TX: " + text);
+}
+
+function keepAlive() { 
+    if (websocket.readyState == websocket.OPEN) {  
+        websocket.send(JSON.stringify({ping: new Date() }));
+    }  
+    timeout = setTimeout(keepAlive, 1000);  
+}
+
+function showMessages() {
+}
+
+function onMessage(event) {
+    var d = JSON.parse(event.data);
+    if (d.status === undefined) {console.log("RX: " + event.data);}
+
+    //RAW-RX
+    if (d.monitor) {
+        var f = d.monitor;
+        var msg = ""; 
+        //Port
+        //if (f.port == 0) {msg += "LoRa";} else {msg += "Wifi";}
+        //Zeit
+        const date = new Date(d.monitor.timestamp * 1000);
+        var titel = "";
+
+        //Lesbar anzeigen
+        if (typeof f.nodeCall !== "undefined") { titel += " " + f.nodeCall ; }
+        if (typeof f.viaCall !== "undefined") { titel += " > " + f.viaCall ; }
+        if (typeof f.hopCount !== "undefined") { 
+            if (f.hopCount > 0) { 
+                titel += " H" + f.hopCount; 
+            }
+        }
+        switch (f.frameType) {
+            case 0x00: titel += ": Announce"; break;
+            case 0x01: titel += ": Announce ACK"; break;
+            case 0x02: titel += ": Tuning"; break;
+            case 0x03: 
+            case 0x05: 
+                if (f.messageType == 0) {titel += ": TEXT Message";}
+                if (f.messageType == 1) {titel += ": TRACE Message";}
+                if (f.messageType == 15) {titel += ": COMMAND Messahe";}
+                if (f.id) { msg += "ID: " + f.id ; }
+                if (f.srcCall) { msg += " SRC: " + f.srcCall; }
+                if (f.dstCall) { msg += " DST: " + f.dstCall; }
+                if (f.dstGroup) { msg += " GRP: " + f.dstGroup ; }
+                if (f.text) { msg += "\nText: " + f.text; }
+                break;
+            case 0x04: 
+                titel += ": Message ACK"; 
+                if (f.id) { msg += "ID: " + f.id + "\n"; }
+                break;
+        }
+        addBubble("system", titel, date.toLocaleString("de-DE", {hour: "2-digit", minute: "2-digit", second: "2-digit" }).replace(",", ""), "#009eaf", msg, "cMonitor");   
+
+    }
+
+    //Message empfangen
+    if (d.message) {
+        d.message.parsed = false;
+        messages.push(d.message);
+        showMessages();
+        if (d.message.tx != true) okSound.play();
+    }
+
+    //Peers
+    if (d.peerlist) {
+        var peers = "";
+        peers += "<table class='list'>";
+        peers += "<tr> <th>Port</th> <th>Call</th> <th>Last RX</th> <th>RSSI</th> <th>SNR</th>";
+        if (d.peerlist.peers) {
+            d.peerlist.peers.forEach(function(p, index) {
+				if (p.port == 0) {port = "LoRa";} else {port = "Wifi";}
+                const lastRX = new Date(p.timestamp * 1000);
+                peers += "<tr>";
+                peers += "<td>" + port + "</td>";
+                peers += "<td";
+                if (p.available == true) { peers += " class='green' "} else { peers += " class='red' "}
+                peers += ">" + p.call + "</td>";
+                peers += "<td>" + lastRX.toLocaleString("de-DE", {day: "2-digit",  month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).replace(",", "")  + "</td>";
+                peers += "<td>" + p.rssi + "</td>";
+                peers += "<td>" + p.snr + "</td>";
+                //peers += "<td>" + parseInt(p.frqError) + "</td>";
+                peers += "</tr>";
+            });
+        }
+        peers += "</table>";
+        document.getElementById("peer").innerHTML = peers;
+    }
+
+    //Routing Liste
+    if (d.routingList) {
+        var routing = "";
+        routing += "<table class='list'>";
+        routing += "<tr> <th>Call</th> <th>Node</th> <th>Hops</th> <th>Last RX</th> </tr>";
+        if (d.routingList.routes) {
+            d.routingList.routes.forEach(function(r, index) {
+                const lastRX = new Date(r.timestamp * 1000);
+                routing += "<tr>";
+                routing += "<td>" + r.srcCall + "</td>";
+                routing += "<td>" + r.viaCall + "</td>";
+                routing += "<td>" + r.hopCount + "</td>";
+                routing += "<td>" + lastRX.toLocaleString("de-DE", {day: "2-digit",  month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).replace(",", "")  + "</td>";
+                routing += "</tr>";
+            });
+        }
+        routing += "</table>";
+        document.getElementById("routing").innerHTML = routing;
+    }    
+
+    //Einstellungen
+    if (d.settings) {
+        settings = d.settings;
+        document.getElementById("settingsMycall").value = d.settings.mycall;
+        document.getElementById("settingsNTP").value = d.settings.ntp;
+        document.getElementById("settingsSSID").value = d.settings.wifiSSID;
+        document.getElementById("settingsPassword").value = d.settings.wifiPassword;
+        document.getElementById("settingsWiFiIP").value = d.settings.wifiIP[0] + "." + d.settings.wifiIP[1] + "." + d.settings.wifiIP[2] + "." + d.settings.wifiIP[3];
+        document.getElementById("settingsWifiNetMask").value = d.settings.wifiNetMask[0] + "." + d.settings.wifiNetMask[1] + "." + d.settings.wifiNetMask[2] + "." + d.settings.wifiNetMask[3];
+        document.getElementById("settingsWifiGateway").value = d.settings.wifiGateway[0] + "." + d.settings.wifiGateway[1] + "." + d.settings.wifiGateway[2] + "." + d.settings.wifiGateway[3];
+        document.getElementById("settingsWifiDNS").value = d.settings.wifiDNS[0] + "." + d.settings.wifiDNS[1] + "." + d.settings.wifiDNS[2] + "." + d.settings.wifiDNS[3];
+        document.getElementById("settingsDHCP").checked = d.settings.dhcpActive; 
+        document.getElementById("settingsApMode").checked = d.settings.apMode; 
+        document.getElementById("settingsLoraFrequency").value = d.settings.loraFrequency; 
+        document.getElementById("settingsLoraOutputPower").value = d.settings.loraOutputPower; 
+        document.getElementById("settingsLoraBandwidth").value = d.settings.loraBandwidth; 
+        document.getElementById("settingsLoraSyncWord").value = d.settings.loraSyncWord.toString(16).padStart(2, '0').toUpperCase(); 
+        document.getElementById("settingsLoraCodingRate").value = d.settings.loraCodingRate; 
+        document.getElementById("settingsLoraSpreadingFactor").value = d.settings.loraSpreadingFactor; 
+        document.getElementById("settingsLoraPreambleLength").value = d.settings.loraPreambleLength; 
+        document.getElementById("version").innerHTML = d.settings.name + " " + d.settings.version;
+        document.getElementById("settingsLoraRepeat").checked = d.settings.loraRepeat; 
+        document.getElementById("settingsLoraMaxMessageLength").innerHTML = d.settings.loraMaxMessageLength + " characters"; 
+        settings.titel = settings.name + " - " + settings.mycall;
+        settings.altTitel = "🚨 " + settings.name + " - " + settings.mycall + " 🚨"
+        //UDP Peers
+        if (d.settings.udpPeers) {
+            d.settings.udpPeers.forEach(function(p, index) {
+                document.getElementById("settingsUDPPeer" + index).value = p.ip[0] + "." + p.ip[1] + "." + p.ip[2] + "." + p.ip[3];                
+            });
+        }
+
+        if (init == false) {
+            init = true;
+            //for (let i = 0; i <= 10; i++) {channels[i] = false;} 
+            //setUI(ui);
+            settingsVisibility();
+            messages = [];
+            //messages.json laden (geht erst jetzt, weil sonst mycall nicht bekannt)
+            fetch(baseURL + "messages.json")
+                .then(function(response) {
+                    return response.text();
+                })
+                .then(function(text) {
+                    var lines = text.split(/\r?\n/);
+                    lines.forEach(function(line) {
+                        if (line.trim().length === 0) return;
+                        var m = JSON.parse(line);
+                        m.message.parsed = false;
+                        messages.push(m.message);
+                    });
+
+                    //"Trennzeichen" zwischen gespeicherten und neuen Nachrichten
+                    const result = {"delimiter": true};
+                    messages.push(result);
+                    // showMessages(true);
+
+                    // //Alles als gelesen markieren
+                    // for (let i = 0; i <= 10; i++) {channels[i] = false;} 
+                    // setUI(ui);
+                });
+        }
+    }
+
+    //Status
+    if (d.status) {
+        if (d.status.tx) {
+            setAntennaColor("rgb(255, 0, 0)");
+        } else if (d.status.rx) {
+            setAntennaColor("rgb(0, 255, 0)");
+        } else {
+            setAntennaColor("rgb(255, 255, 0)");
+        }
+        //document.getElementById("txBuffer").innerHTML = d.status.txBufferCount; 
+        //document.getElementById("retry").innerHTML = d.status.retry; 
+
+        document.getElementById("heap").innerHTML = d.status.heap; 
+    }
+
+    //WiFi Scan
+    if (d.wifiScan) {
+        const select = document.getElementById('settingsSSIDList');
+        select.length = 0;
+        d.wifiScan.forEach(n => {
+            let opt = document.createElement('option');
+            opt.value = n.ssid;
+            opt.text = n.ssid + " (" + n.encryption + ", " + n.rssi +  "dBm)";
+            select.add(opt);
+        });
+    }
+
+}		

@@ -44,10 +44,16 @@ void sendRoutingList() {
         route["timestamp"] = routingList[i].timestamp;
         route["hopCount"] = routingList[i].hopCount;
     }
-    char* jsonBuffer = (char*)malloc(2048);
-    size_t len = serializeJson(doc, jsonBuffer, 2048);
-    ws.textAll(jsonBuffer, len);
-    free(jsonBuffer);
+    size_t len = measureJson(doc);
+    AsyncWebSocketMessageBuffer * buffer = ws.makeBuffer(len + 1); 
+    if (buffer) {
+        serializeJson(doc, (char*)buffer->get(), len + 1);
+        for (auto & client : ws.getClients()) {
+            if (client.status() == WS_CONNECTED) {
+                client.text(buffer->get(), len); 
+            }
+        }
+    }
 }
 
 void addRoutingList(const char* srcCall, const char* viaCall, uint8_t hopCount) {

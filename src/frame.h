@@ -30,7 +30,7 @@ struct Frame {
 
     size_t exportBinary(uint8_t* data, size_t length);
     void importBinary(uint8_t* data, size_t length);
-    size_t monitorJSON(char* buffer, size_t length);
+    void monitorJSON();
     size_t messageJSON(char* buffer, size_t length);
 
     enum FrameTypes {

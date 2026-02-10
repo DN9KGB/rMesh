@@ -47,11 +47,7 @@ void processRxFrame(Frame &f) {
     if (strlen(f.nodeCall) == 0) {return;}
 
     //Monitor
-    char* jsonBuffer = (char*)malloc(4096);
-    size_t len = f.monitorJSON(jsonBuffer, 4096);
-    ws.textAll(jsonBuffer, len); 
-    free(jsonBuffer);
-    jsonBuffer = nullptr;
+    f.monitorJSON();
 
     //Peer List
     addPeerList(f);
