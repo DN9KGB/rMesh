@@ -3,6 +3,7 @@
 #include "frame.h"
 #include "helperFunctions.h"
 #include "hal.h"
+#include "webFunctions.h"
 
 size_t Frame::exportBinary(uint8_t* data, size_t length) {
     //Binär-Daten erzeugen
@@ -72,7 +73,7 @@ size_t Frame::exportBinary(uint8_t* data, size_t length) {
     return position;
 }
 
-size_t Frame::monitorJSON(char* buffer, size_t length) {
+void Frame::monitorJSON() {
     //Schreibt Monitor-Daten in JSON-Buffer
     JsonDocument doc;
     for (size_t i = 0; i < messageLength; i++) {
@@ -103,8 +104,19 @@ size_t Frame::monitorJSON(char* buffer, size_t length) {
     doc["monitor"]["initRetry"] = initRetry;
     doc["monitor"]["retry"] = retry;
     doc["monitor"]["port"] = port;
-    size_t len = serializeJson(doc, buffer, length);
-    return len;
+
+    size_t len = measureJson(doc);
+    AsyncWebSocketMessageBuffer * buffer = ws.makeBuffer(len + 1); 
+    if (buffer) {
+        serializeJson(doc, (char*)buffer->get(), len + 1);
+        for (auto & client : ws.getClients()) {
+            if (client.status() == WS_CONNECTED) {
+                client.text(buffer->get(), len); 
+            }
+        }
+    }
+    // size_t len = serializeJson(doc, buffer, length);
+    // return len;'
 }
 
 size_t Frame::messageJSON(char* buffer, size_t length) {
