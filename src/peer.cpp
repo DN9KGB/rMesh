@@ -7,6 +7,7 @@
 #include "peer.h"
 #include "helperFunctions.h"
 #include "config.h"
+#include "settings.h"
 
 //Peer-Liste
 std::vector<Peer> peerList;
@@ -93,6 +94,7 @@ void availablePeerList(const char* call, bool available, uint8_t port) {
 
 void addPeerList(Frame &f) {
     if (strlen(f.nodeCall) == 0) {return;}
+    if (strcmp(f.nodeCall, settings.mycall) == 0) {return;}
 
     // Suchen, ob Peer bereits existiert
     auto it = std::find_if(peerList.begin(), peerList.end(), [&](const Peer& peer) { return (strcmp(peer.nodeCall, f.nodeCall) == 0) && (peer.port == f.port) ; });
