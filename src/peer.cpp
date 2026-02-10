@@ -63,15 +63,17 @@ void sendPeerList() {
     }
     
     size_t len = measureJson(doc);
-    AsyncWebSocketMessageBuffer * buffer = ws.makeBuffer(len + 1); 
-    if (buffer) {
-        serializeJson(doc, (char*)buffer->get(), len + 1);
-        for (auto & client : ws.getClients()) {
-            if (client.status() == WS_CONNECTED) {
-                client.text(buffer->get(), len); 
-            }
-        }
+    AsyncWebSocketMessageBuffer * wsBuffer = ws.makeBuffer(len + 1); 
+    if (wsBuffer == nullptr) {
+        Serial.println("Fehler Peerlist: Kein Speicher für WS Buffer!");
+        return; 
     }
+    char* dataPtr = (char*)wsBuffer->get();
+    if (dataPtr != nullptr) {
+        serializeJson(doc, dataPtr, len + 1);
+        ws.textAll(wsBuffer); // Nutzt das Buffer-Objekt direkt
+    }
+
 }
 
 
