@@ -106,17 +106,16 @@ void Frame::monitorJSON() {
     doc["monitor"]["port"] = port;
 
     size_t len = measureJson(doc);
-    AsyncWebSocketMessageBuffer * buffer = ws.makeBuffer(len + 1); 
-    if (buffer) {
-        serializeJson(doc, (char*)buffer->get(), len + 1);
-        for (auto & client : ws.getClients()) {
-            if (client.status() == WS_CONNECTED) {
-                client.text(buffer->get(), len); 
-            }
-        }
+    AsyncWebSocketMessageBuffer * wsBuffer = ws.makeBuffer(len + 1); 
+    if (wsBuffer == nullptr) {
+        Serial.println("Fehler Frame Monitor: Kein Speicher für WS Buffer!");
+        return; 
     }
-    // size_t len = serializeJson(doc, buffer, length);
-    // return len;'
+    char* dataPtr = (char*)wsBuffer->get();
+    if (dataPtr != nullptr) {
+        serializeJson(doc, dataPtr, len + 1);
+        ws.textAll(wsBuffer); // Nutzt das Buffer-Objekt direkt
+    }
 }
 
 size_t Frame::messageJSON(char* buffer, size_t length) {
