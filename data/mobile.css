@@ -4,6 +4,18 @@
     margin-left: auto; /* Schiebt es nach rechts */
 }
 
+.red {
+    color: #ff0000 !important;
+}
+
+.green {
+    color: #00fc00 !important;
+}
+
+.newMessages {
+    color: #afaf00 !important;
+}
+
 html, body {
     /* Verhindert, dass das gesamte Fenster "hüpft", erlaubt aber Scrollen */
     overflow-x: hidden; 
@@ -177,15 +189,17 @@ table.list th {
 /* Das seitliche Menü */
 .menu {
     position: fixed;
-    top: 30px;
-    left: -250px; /* Startet außerhalb des Bildschirms */
+    top: 50px;
+    left: -250px;
     width: 250px;
-    height: 100%;
+    height: calc(100% - 50px); /* WICHTIG: passt die Höhe korrekt an */
     background: #002e33;
     transition: 0.3s;
     z-index: 999;
-    pointer-events: none; /* Blockiert keine Klicks auf den Content, wenn zu */
+    pointer-events: none;
+    overflow-y: auto; /* <-- Scrollen aktivieren */
 }
+
 
 .menu.open {
     left: 0; /* Erscheint beim Klicken */
@@ -405,7 +419,7 @@ table.list th {
 }
 
 .right .bubble {
-    background-color: #005c66; /* Dunkles Lila wie im Bild */
+    background-color: #004850; /* Dunkles Lila wie im Bild */
     color: white;
     border-bottom-right-radius: 2px; /* Kleiner Knick */
 }

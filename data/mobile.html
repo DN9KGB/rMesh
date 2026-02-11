@@ -1,10 +1,15 @@
 <!DOCTYPE html>
 <html lang="de">
+
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>rMesh</title>
 	<link rel="stylesheet" href="mobile.css">
+    <meta charset="UTF-8">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#00d1b2">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <link rel="apple-touch-icon" href="/192.png">
 </head>
 
 <body>
@@ -15,7 +20,7 @@
             <span></span>
         </div>
         
-        <div class="logo">rMesh</div>
+        <div class="logo" id="title">rMesh</div>
 
         <svg id="antenna-icon" class="status-icon off" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
             <circle cx="12" cy="19" r="2" />
@@ -28,21 +33,8 @@
 	<nav id="side-menu" class="menu"> 
 		<ul id="menu-list"> </ul>
 	</nav>
-	
 
     <main class="content-container">
-        <div id="home" class="content-section active">
-        </div>
-
-        <div id="profil" class="content-section">
-            <h1>Dein Profil</h1>
-            <p>Hier stehen deine Benutzerdaten.</p>
-        </div>
-
-        <div id="einstellungen" class="content-section">
-            <h1>Einstellungen</h1>
-            <p>Hier kannst du alles anpassen.</p>
-        </div>
 
         <div id="cNetwork" class="content-section">
             <h1>Network</h1>
@@ -128,8 +120,14 @@
                 <tr> <td> Heap </td> <td id="heap"> </td> </tr> 
                 <tr> <td> TX Buffer </td> <td id="txBuffer"> </td> </tr> 
                 <tr> <td> Retry </td> <td id="retry"> </td> </tr> 
+                <tr> <td> System Time </td> <td id="time"> </td> </tr> 
             </table>
             <button class="button" onclick="deleteMessages();">delete messages</button>
+            <button class="button" onclick="sendAnnounce();">send announce</button>
+            <button class="button" onclick="sendTuning();">send tuning</button>
+            <button class="button" onclick="enableNotifications();">allow notifications</button>
+
+            
         </div>
 
         <div id="cPeers" class="content-section">
@@ -147,61 +145,6 @@
              <div id="routing"></div>
         </div>          
 		
-        <div id="hilfe" class="content-section">
-            <h1>hilfe</h1>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-            <p>Hier kannst du alles anpassen.</p>
-        </div>
-		
-		
 		<div id="custom-modal" class="modal-overlay">
 			<div class="modal-box">
 				<h2 id="modal-title">Titel</h2>
@@ -209,7 +152,7 @@
 				<input type="text" id="modal-input" class="modal-input-field">
                 <div id="modal-selection-list" style="display: none; margin-top: 15px;"> </div>
 				<div class="modal-buttons">
-					<button id="modal-cancel" onclick="closeModal()">Abbrechen</button>
+					<button id="modal-cancel" onclick="closeModal()">abort</button>
 					<button id="modal-submit">OK</button>
 				</div>
 			</div>

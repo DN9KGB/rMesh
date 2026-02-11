@@ -220,6 +220,10 @@ void startWebServer() {
     request->redirect("/index.html");
   }); 
 
+  webServer.on("/sw.js", HTTP_GET, [](AsyncWebServerRequest *request){
+  request->send(LittleFS, "/sw.js", "application/javascript"); // WICHTIG!
+});
+
   //Statische Webseite aus Filesystem  + Starten
   webServer.serveStatic("/", LittleFS, "/");
   webServer.begin(); 

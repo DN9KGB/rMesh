@@ -5,11 +5,9 @@ var baseURL = "";
 var gateway = "";
 var init = false;
 let heartBeatTimer;
-
+let okSound = new Audio("ok.wav");
 
 function initWebSocket() {
-
-
     //Debug
     if (!window.location.hostname.includes("127.0.0.1")) {
         gateway = `ws://${window.location.hostname}/socket`;
@@ -17,6 +15,8 @@ function initWebSocket() {
     } else {
         gateway = "ws://192.168.33.60/socket";
         baseURL = "http://192.168.33.60/"
+        //gateway = "ws://10.10.253.161/socket";
+        //baseURL = "http://10.10.253.161/"
     }
 
     //Websocket init
@@ -28,7 +28,6 @@ function initWebSocket() {
 }
 
 function onOpen(event) {
-    //sendWS(JSON.stringify({scanWifi: true }));
     init = false;
     keepAlive();
 }
@@ -51,12 +50,124 @@ function keepAlive() {
     timeout = setTimeout(keepAlive, 1000);  
 }
 
-function showMessages() {
+function showMessages(parseAll) {
+
+    //Alle Container löschen
+    if (parseAll == true) {
+        buildMenu();
+        for (key in guiSettings.groups) { 
+            const groupName = guiSettings.groups[key]; 
+            const div = document.getElementById("group_" + groupName);
+            div.innerHTML = "";
+            setupInputBar('group_' + groupName, mySendMessageFunction); 
+        }
+        document.getElementById("group_all").innerHTML = "";
+        setupInputBar('group_all', mySendMessageFunction); 
+        for (key in guiSettings.dm) { 
+            const callsign = guiSettings.dm[key]; 
+            const div = document.getElementById("dm_" + callsign);
+            div.innerHTML = "";
+            setupInputBar('dm_' + callsign, mySendMessageFunction); 
+        }
+    }
+
+    
+    
+
+    //Alle Nachrichten durchlaufen
+    messages.forEach(function(m) {
+        //Abbruch, wenn Nachricht schon angezeigt wurde
+        if ((m.parsed == true) && (parseAll == false)) {return;}
+
+        //Nachricht zusammenbauen
+        var found = false;
+        var css = "left";
+        if (m.tx) css = "right";
+        var titel = m.srcCall + " > " + m.dstCall + m.dstGroup;
+        var msg = m.text;
+        var date = new Date(m.timestamp * 1000);
+        m.parsed = true;
+
+        //Nachrichten zuordnen (Gruppen)
+        for (key in guiSettings.groups) { 
+            const groupName  = guiSettings.groups[key];
+            if ((groupName == m.dstGroup) && (m.dstCall == "")) {
+                addBubble(
+                    css, 
+                    titel, 
+                    date.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" }) + " " + date.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }),
+                    getColorForName(m.srcCall), 
+                    msg, 
+                    "group_" + groupName
+                );   
+                if ((parseAll == false) && (m.tx == false) && (document.getElementById("group_" + groupName).classList.contains("active") == false)) document.getElementById("mnu_" + groupName).classList.add('newMessages');
+                found = true;
+            }
+        }
+
+        //Direkte Nachrichten empfangen
+        if (m.dstCall == settings.mycall) {
+            var callsign = m.srcCall;
+            //Prüfen, ob bereits vorhanden
+            if (!guiSettings.dm.includes(callsign)) { 
+                guiSettings.dm.push(callsign); 
+                buildMenu();
+            }
+            //Anzeigen
+            addBubble(
+                css, 
+                titel, 
+                date.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" }) + " " + date.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }),
+                getColorForName(callsign), 
+                msg, 
+                "dm_" + callsign
+            );   
+            if ((parseAll == false) && (m.tx == false) && (document.getElementById("dm_" + callsign).classList.contains("active") == false)) document.getElementById("mnu_" + callsign).classList.add('newMessages');
+            found = true;
+        }
+
+        //Direkte Nachrichten gesendet
+        if ((m.srcCall == settings.mycall) && (m.dstCall != "")) {
+            var callsign = m.dstCall;
+            //Prüfen, ob bereits vorhanden
+            if (!guiSettings.dm.includes(callsign)) { 
+                guiSettings.dm.push(callsign); 
+                buildMenu();
+            }
+            //Anzeigen
+            addBubble(
+                css, 
+                titel, 
+                date.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" }) + " " + date.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }),
+                getColorForName(m.srcCall), 
+                msg, 
+                "dm_" + callsign
+            );   
+            if ((parseAll == false) && (m.tx == false) && (document.getElementById("dm_" + callsign).classList.contains("active") == false)) document.getElementById("mnu_" + callsign).classList.add('newMessages');
+            found = true;
+        }
+
+        //Keine Gruppe gesetzt
+        if (((m.dstCall == "") && (m.dstGroup == "")) || (found == false)) {
+            addBubble(
+                css, 
+                titel, 
+                date.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" }) + " " + date.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }),
+                getColorForName(m.srcCall), 
+                msg, 
+                "group_all"
+            );   
+
+        }
+
+        
+    });
+
 }
 
 function onMessage(event) {
     var d = JSON.parse(event.data);
-    if (d.status === undefined) {console.log("RX: " + event.data);}
+    //if (d.status === undefined) {console.log("RX: " + event.data);}
 
     //RAW-RX
     if (d.monitor) {
@@ -104,8 +215,11 @@ function onMessage(event) {
     if (d.message) {
         d.message.parsed = false;
         messages.push(d.message);
-        showMessages();
+        showMessages(false);
         if (d.message.tx != true) okSound.play();
+        if (document.visibilityState !== 'visible') {
+            sendToServiceWorker('Neue rMesh Nachricht', msg);
+        }
     }
 
     //Peers
@@ -175,10 +289,10 @@ function onMessage(event) {
         document.getElementById("settingsLoraPreambleLength").value = d.settings.loraPreambleLength; 
         document.getElementById("version").innerHTML = d.settings.name + " " + d.settings.version;
         document.getElementById("hardware").innerHTML = d.settings.hardware;
+        document.getElementById("title").innerHTML = "rMesh - " + d.settings.mycall;
         document.getElementById("settingsLoraRepeat").checked = d.settings.loraRepeat; 
         document.getElementById("settingsLoraMaxMessageLength").innerHTML = d.settings.loraMaxMessageLength + " characters"; 
-        settings.titel = settings.name + " - " + settings.mycall;
-        settings.altTitel = "🚨 " + settings.name + " - " + settings.mycall + " 🚨"
+        document.title = settings.name + " - " + settings.mycall;
         //UDP Peers
         if (d.settings.udpPeers) {
             d.settings.udpPeers.forEach(function(p, index) {
@@ -188,8 +302,6 @@ function onMessage(event) {
 
         if (init == false) {
             init = true;
-            //for (let i = 0; i <= 10; i++) {channels[i] = false;} 
-            //setUI(ui);
             settingsVisibility();
             messages = [];
             //messages.json laden (geht erst jetzt, weil sonst mycall nicht bekannt)
@@ -205,15 +317,8 @@ function onMessage(event) {
                         m.message.parsed = false;
                         messages.push(m.message);
                     });
-
-                    //"Trennzeichen" zwischen gespeicherten und neuen Nachrichten
-                    const result = {"delimiter": true};
-                    messages.push(result);
-                    // showMessages(true);
-
-                    // //Alles als gelesen markieren
-                    // for (let i = 0; i <= 10; i++) {channels[i] = false;} 
-                    // setUI(ui);
+                    showMessages(true);
+                    showContent(guiSettings.menu);
                 });
         }
     }
@@ -230,6 +335,11 @@ function onMessage(event) {
         document.getElementById("txBuffer").innerHTML = d.status.txBufferCount; 
         document.getElementById("retry").innerHTML = d.status.retry; 
         document.getElementById("heap").innerHTML = d.status.heap; 
+        const time = new Date(d.status.time * 1000);
+        
+        document.getElementById("time").innerHTML = time.toLocaleString("de-DE", {day: "2-digit",  month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" }).replace(",", "");
+
+        
         clearTimeout(heartBeatTimer);
         heartBeatTimer = setTimeout(function() { setAntennaColor("#525252"); }, 2000);
     }
@@ -248,8 +358,6 @@ function onMessage(event) {
 
 }		
 
-
-
 function saveSettings() {
     var settings = {};
     settings["mycall"] = document.getElementById("settingsMycall").value;
@@ -262,7 +370,6 @@ function saveSettings() {
     settings["wifiNetMask"] = document.getElementById("settingsWifiNetMask").value.split('.').map(Number);
     settings["wifiGateway"] = document.getElementById("settingsWifiGateway").value.split('.').map(Number);
     settings["wifiDNS"] = document.getElementById("settingsWifiDNS").value.split('.').map(Number);
-    //settings["wifiBrodcast"] = document.getElementById("settingsWifiBrodcast").value.split('.').map(Number);
     settings["loraFrequency"] = parseFloat(document.getElementById("settingsLoraFrequency").value);
     settings["loraOutputPower"] = parseInt(document.getElementById("settingsLoraOutputPower").value);
     settings["loraBandwidth"] = parseFloat(document.getElementById("settingsLoraBandwidth").value);
@@ -297,6 +404,16 @@ function syncTime() {
 function deleteMessages() {
     sendWS(JSON.stringify({deleteMessages: true }));
     showModal("Note", "Clearing buffer and rebooting...", "", false);
+}
+
+function sendAnnounce() {
+    sendWS(JSON.stringify({announce: true }));
+    okSound.play();
+}
+
+function sendTuning() {
+    sendWS(JSON.stringify({tune: true }));
+    okSound.play();
 }
 
 

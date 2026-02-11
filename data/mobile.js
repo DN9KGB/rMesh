@@ -1,107 +1,6 @@
-const menuItems = [
-    { type: 'spacer' },
-    { type: 'header', label: 'Groups' },
-    { 
-        label: 'all', 
-        action: () => showContent('home') ,
-        longPressAction: () => {
-            alert('Gruppe bearbeiten oder löschen?');
-        }     
-    },
-    { 
-        label: '-- new group --', 
-        action: async () => {
-            const name = await showModal("Neue Gruppe", "Name:", "", true);
-            if(name) console.log("neue Gruppe:", name);
-        }    
-    },    
-    { type: 'spacer' },
-    { type: 'header', label: 'Direct Messages' },
-    { 
-        label: 'all', 
-        action: () => showContent('home') ,
-        longPressAction: () => {
-            alert('Gruppe bearbeiten oder löschen?');
-        }     
-    },
-    { 
-        label: '-- new contact --', 
-        action: async () => {
-            const name = await showModal("Neue Gruppe", "Name:", "", true);
-            if(name) console.log("neue Gruppe:", name);
-        }    
-    },    
-    { type: 'spacer' },
-    { type: 'header', label: 'Info'},
-    { 
-        label: 'Monitor', 
-        action: function() { 
-            showContent('cMonitor'); 
-            window.scrollTo({ 
-                top: document.body.scrollHeight, 
-                behavior: 'smooth' 
-            });
-        }
-    },
-    { 
-        label: 'Peers', 
-        action: () => showContent('cPeers') 
-    },
-    { 
-        label: 'Routing', 
-        action: () => showContent('cRouting') 
-    },
-    { type: 'spacer' },
-    { type: 'header', label: 'Settings' },
-    { 
-        label: 'Network', 
-        action: () => showContent('cNetwork') 
-    },
-    { 
-        label: 'LoRa', 
-        action: () => showContent('cLora') 
-    },
-    { 
-        label: 'About', 
-        action: () => showContent('cAbout') 
-    },
 
-
-
-    { type: 'spacer' },
-    { type: 'spacer' },
-    { type: 'spacer' },
-    { type: 'spacer' },    
-    { 
-        label: 'Startseite', 
-        action: () => showContent('home') 
-    },
-    { type: 'header', label: 'Gruppen' },
-    { 
-        label: 'Hilfe', 
-        action: () => showContent('hilfe') 
-    },
-    { type: 'header', label: 'Direktnachrichten' },
-    { 
-        label: 'Profil bearbeiten', 
-        action: async () => {
-            const name = await showModal("Profil", "Name ändern:", "Max", true);
-            if(name) console.log("Name geändert zu:", name);
-        }
-    },
-
-    { 
-        label: 'Info Box', 
-        action: () => showModal("System", "Version 1.0.4", "", false) 
-    },
-    { 
-        label: 'Einstellungen', 
-        action: () => showContent('einstellungen') 
-    },
-    { type: 'header', label: 'Funktionen' },
-    { type: 'spacer' }
-];
-
+var guiSettings;
+let wakeLock = null;
 
 // Der Speicher im Hintergrund (während die Seite geladen ist)
 const nameColorMap = {};
@@ -123,97 +22,49 @@ const distinctColors = [
     "#0011ffff", // Magenta-Hell
     "#fbff00ff", // Tiefes Lila (hell)
 ];
-// Zähler, um die nächste Farbe aus der Liste zu wählen
 let colorIndex = 0;
 
 
+function sendToServiceWorker(title, message) {
+    if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({
+            type: 'SHOW_LORA_NOTIFICATION', // Muss mit dem 'message' Event im sw.js übereinstimmen
+            title: title,
+            message: message
+        });
+    } else {
+        console.warn("Service Worker nicht bereit oder nicht aktiv.");
+    }
+}
 
 
+async function requestWakeLock() {
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    console.log('Wake Lock ist aktiv!');
+    wakeLock.addEventListener('release', () => {
+      console.log('Wake Lock wurde aufgehoben.');
+    });
+  } catch (err) {
+    console.error(`${err.name}, ${err.message}`);
+  }
+}
 
-window.addEventListener('DOMContentLoaded', function() {
-	
-    console.log("Hallo");
+
+document.addEventListener('click', requestWakeLock);
+
+window.addEventListener('DOMContentLoaded', async function() {
+    loadGuiSettings();
     buildMenu();
 
-    addBubble(
-        "right", 
-        "Michael Multerer", 
-        "10:25", 
-        getColorForName("Ralf"), 
-        "Ein Bekannter will seinen IC-9700 verkaufen. Gepflegter Zustand...", 
-        "home"
-    );
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js').then(function(reg) {
+            console.log('SW registriert bei Scope:', reg.scope);
+        });
+    }
 
-
-    addBubble(
-        "right", 
-        "Michael Multerer", 
-        "10:25", 
-        getColorForName("Ralf"), 
-        "Ein Bekannter will seinen IC-9700 verkaufen. Gepflegter Zustand... sdfjkgh slkfjg slkfjgh slkfgh slkfjg hsldkfgj hsdlfkj gshldghk ", 
-        "home"
-    );
-
-    addBubble(
-        "left", 
-        "Michael Multerer", 
-        "10:25", 
-        getColorForName("Jochen"), 
-        "Ein Bekannter will seinen IC-9700 verkaufen. Gepflegter Zustand...", 
-        "home"
-    );
-
-    addBubble(
-        "system", 
-        "DB0LUS > DB0REN", 
-        "10:25", 
-        "#5972ffff", 
-        "sdfsd\nlksdjflskdjf", 
-        "home"
-    );    
-
-
-	// Beispiel: Namen ändern (Input-Modus)
-	async function changeName() {
-		const name = await showModal("Namensänderung", "Wie lautet dein neuer Name?", "Max Mustermann", true);
-		
-		if (name !== null) {
-			console.log("Der User hat eingegeben: " + name);
-			alert("Hallo " + name);
-		}
-	}
-
-	// Beispiel: Einfache Nachricht (Message-Modus)
-	async function infoMessage() {
-		await showModal("Hinweis", "Deine Einstellungen wurden gespeichert!", "", false);
-		console.log("User hat die Nachricht bestätigt.");
-	}
-
-
-    setupInputBar('home', mySendMessageFunction);
-
-        // // Aufruf der Auswahl-Funktion
-        // showSelectionModal("Gruppen-Optionen", "Bitte wähle eine Aktion aus:",   ["Bearbeiten", "Stummschalten", "Löschen"]).then(function(choice) {
-        //     // Diese Funktion wird erst ausgeführt, wenn der User geklickt hat
-        //     if (choice === null) {
-        //         console.log("Der User hat das Modal abgebrochen.");
-        //     } else {
-        //         console.log("Der User hat gewählt: " + choice);
-                
-        //         // Hier kannst du mit einer if-Abfrage oder switch weiterarbeiten
-        //         if (choice === "Löschen") {
-        //             // Weitere Logik hier...
-        //         }
-        //     }
-        // });
-
-        showContent('cMonitor');
-
-        initWebSocket();
-
-        //setAntennaColor("rgb(255, 217, 0)");
-
-	
+    initWebSocket();
+    
 	
 });
 
@@ -229,13 +80,177 @@ document.getElementById("settingsSSIDList").addEventListener("click", function()
 });
 
 
-
-
+function enableNotifications() {
+    Notification.requestPermission().then(function(result) {
+        if (result === 'granted') {
+            alert('Benachrichtigungen aktiviert!');
+        }
+    });
+}
 
 
 
 
 function buildMenu() {
+
+    //Menüstruktur dynamisch bauen
+    const menuItems = [
+        { type: 'spacer' },
+        { type: 'header', label: 'Groups' },
+    ];
+
+    //Gruppe alle
+    menuItems.push(
+        { 
+            label: "all" , 
+            action: () => {
+                showContent("group_all");
+                document.getElementById("group_all").scrollTo({top: document.getElementById("group_all").scrollHeight, behavior: 'smooth' });
+            }
+        }            
+    );    
+    const div = document.createElement("div"); 
+    div.id = "group_all";
+    div.classList.add("content-section"); 
+    document.querySelector(".content-container").appendChild(div); 
+    setupInputBar('group_all', mySendMessageFunction);   
+
+    //Gruppen hinzufügen
+    for (key in guiSettings.groups) { 
+        const groupName  = guiSettings.groups[key]; 
+        //DIVs hinzu
+        const container = document.querySelector(".content-container"); 
+        if (!document.getElementById("group_" + groupName)) {
+            const div = document.createElement("div"); 
+            div.id = "group_" + groupName ;
+            div.classList.add("content-section"); 
+            container.appendChild(div);
+            setupInputBar('group_' + groupName, mySendMessageFunction); 
+        }
+        //Menüeinträge hinzu
+        menuItems.push(
+            { 
+                label: groupName , 
+                action: () => {
+                    showContent("group_" + groupName );
+                    document.getElementById("group_" + groupName).scrollTo({top: document.getElementById("group_" + groupName).scrollHeight, behavior: 'smooth' });
+                },
+                longPressAction: () => {
+                    //Gruppe löschen
+                    showSelectionModal("Delete?", "Do you really want to delete " + groupName + "?",   ["yes"]).then(function(choice) {
+                        if (choice === "yes") {
+                            guiSettings.groups = guiSettings.groups.filter(g => g !== groupName);
+                            showMessages(true);
+                            showContent("group_all");
+                        } 
+                    });
+                }     
+            }            
+        );
+    }
+    menuItems.push(...[
+        { 
+            label: '-- new group --', 
+            action: async () => {
+                const name = await showModal("Add new group", "Name:", "", true);
+                if (name) {
+                    guiSettings.groups.push(name);
+                    showMessages(true);
+                    showContent("group_" + name);
+                }
+            }    
+        },    
+        { type: 'spacer' },
+        { type: 'header', label: 'Direct Messages' }]);
+
+    //DM hinzufügen
+    for (key in guiSettings.dm) { 
+        const callsign  = guiSettings.dm[key]; 
+        //DIVs hinzu
+        const container = document.querySelector(".content-container"); 
+        if (!document.getElementById("dm_" + callsign)) {
+            const div = document.createElement("div"); 
+            div.id = "dm_" + callsign ;
+            div.classList.add("content-section"); 
+            container.appendChild(div);
+            setupInputBar('dm_' + callsign, mySendMessageFunction); 
+        }
+        //Menüeinträge hinzu
+        menuItems.push(
+            { 
+                label: callsign , 
+                action: () => {
+                    showContent("dm_" + callsign );
+                    document.getElementById("dm_" + callsign).scrollTo({top: document.getElementById("dm_" + callsign).scrollHeight, behavior: 'smooth' });
+                },
+                longPressAction: () => {
+                    //DM löschen
+                    showSelectionModal("Delete?", "Do you really want to delete " + callsign + "?",   ["yes"]).then(function(choice) {
+                        if (choice === "yes") {
+                            guiSettings.dm = guiSettings.dm.filter(g => g !== callsign);
+                            showMessages(true);
+                            showContent("group_all");
+                        } 
+                    });
+                }     
+            }            
+        );
+    }
+    menuItems.push(...[
+        { 
+            label: '-- new contact --', 
+            action: async () => {
+                var name = await showModal("Add new contact", "Callsign:", "", true);
+                if (name) {
+                    name = name.toUpperCase();
+                    if (!guiSettings.dm.includes(name)) { 
+                        guiSettings.dm.push(name); 
+                        showMessages(true);
+                        showContent("dm_" + name);
+                    }                    
+                    showMessages(true);
+                }
+            }    
+        },  
+
+
+        { type: 'spacer' },
+        { type: 'header', label: 'Info'},
+        { 
+            label: 'Monitor', 
+            action: function() { 
+                showContent('cMonitor'); 
+                window.scrollTo({ 
+                    top: document.body.scrollHeight, 
+                    behavior: 'smooth' 
+                });
+            }
+        },
+        { 
+            label: 'Peers', 
+            action: () => showContent('cPeers') 
+        },
+        { 
+            label: 'Routing', 
+            action: () => showContent('cRouting') 
+        },
+        { type: 'spacer' },
+        { type: 'header', label: 'Settings' },
+        { 
+            label: 'Network', 
+            action: () => showContent('cNetwork') 
+        },
+        { 
+            label: 'LoRa', 
+            action: () => showContent('cLora') 
+        },
+        { 
+            label: 'About', 
+            action: () => showContent('cAbout') 
+        }
+    ]);
+
+
     const menuList = document.getElementById('menu-list');
     menuList.innerHTML = '';
 
@@ -251,6 +266,7 @@ function buildMenu() {
         } 
         else {
             li.textContent = item.label;
+            li.id = "mnu_" + item.label;
             
             let pressTimer;
 
@@ -285,6 +301,7 @@ function buildMenu() {
             li.onclick = () => {
                 if (typeof item.action === 'function') {
                     item.action();
+                    document.getElementById("mnu_" + item.label).classList.remove('newMessages');
                 }
                 toggleMenu();
             };
@@ -293,9 +310,32 @@ function buildMenu() {
         menuList.appendChild(li);
 
     });
+    saveGuiSettings();
+    
 }
 
 
+function saveGuiSettings() {
+    const json = JSON.stringify(guiSettings);
+    document.cookie = "guiSettings=" + encodeURIComponent(json) + "; expires=Fri, 31 Dec 9999 23:59:59 GMT; path=/";
+}
+
+
+function loadGuiSettings() {
+    const cookies = document.cookie.split("; ");
+    for (const c of cookies) {
+        const [name, value] = c.split("=");
+        if (name === "guiSettings") {
+            guiSettings =  JSON.parse(decodeURIComponent(value));
+            return;
+        }
+    }
+    guiSettings = { 
+        groups: ["Herzog", "Wetter", "Verkehr"],
+        dm: [],
+        menu: "cMonitor"
+    };
+}
 
 
 
@@ -316,6 +356,8 @@ function showContent(sectionId) {
 	// 2. Gewählte Sektion anzeigen
 	document.getElementById(sectionId).classList.add('active');
     window.scrollTo(0, 0); 
+    guiSettings.menu = sectionId;
+    saveGuiSettings();
 
 }
 
@@ -476,20 +518,14 @@ function setupInputBar(sectionId, onSendCallback) {
     section.appendChild(bar);
 }
 
-// 4. Die Funktion, die beim Senden aufgerufen wird (Beispiel)
-function mySendMessageFunction(id, text) {
-    console.log("Gesendet von " + id + ": " + text);
-    
-    // Hier rufen wir deine addBubble Funktion auf:
-    addBubble("right", "Ich", "jetzt", "#00f2ff", text, id);
-}
-
 /**
  * Gibt eine feste Farbe für einen Namen zurück.
  * @param {string} name - Der Name des Teilnehmers
  * @returns {string} - Die HEX-Farbe
  */
 function getColorForName(name) {
+    if (name == settings.mycall) return "#009eaf";
+
     // Falls der Name schon eine Farbe hat, diese zurückgeben
     if (nameColorMap[name]) {
         return nameColorMap[name];
@@ -590,7 +626,6 @@ function settingsVisibility() {
     }
 }
 
-
 /**
  * Setzt die Farbe des Antennensymbols direkt via Style
  * @param {string} color - 'gray', 'green', 'red' oder Hex-Codes
@@ -607,4 +642,30 @@ function setAntennaColor(hexColor) {
     // Falls die Bögen im SVG "fill: none" haben müssen (damit sie nicht ausgefüllt werden):
     const paths = antenna.querySelectorAll('path');
     paths.forEach(p => p.style.fill = 'none');
+}
+
+
+// 4. Die Funktion, die beim Senden aufgerufen wird (Beispiel)
+function mySendMessageFunction(id, text) {
+    if (id) {
+        //DM
+        if (id.substring(0, 3) == "dm_") {
+            var dst = id.substring(3).toUpperCase();
+            //Nachricht vorbereiten und über Websocket senden
+            var message = {};
+            message["text"] = text;
+            message["dst"] = dst;
+            sendWS(JSON.stringify({sendMessage: message}));                    
+
+        }
+        //Group
+        if (id.substring(0, 6) == "group_") {
+            var dst = id.substring(6);
+            if (dst == "all") dst = "";
+            var message = {};
+            message["text"] = text;
+            message["dst"] = dst;
+            sendWS(JSON.stringify({sendGroup: message}));                    
+        }
+    }
 }
