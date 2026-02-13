@@ -60,7 +60,6 @@ function onMessage(event) {
         d.message.parsed = false;
         messages.push(d.message);
         showMessages();
-        if (d.message.tx != true) okSound.play();
     }
 
     //Peers
@@ -266,6 +265,8 @@ function showMessages(parseAll = false) {
         //Alles löschen
         for (let i = 1; i <= 10; i++) { document.getElementById("channel" + i).innerHTML = ""; }
     }
+    
+    var sound = false;
 
     messages.forEach(function(m) {
         //Abbruch, wenn Nachricht schon angezeigt wurde
@@ -306,6 +307,7 @@ function showMessages(parseAll = false) {
             found = true;
             document.getElementById("channel2").innerHTML += msg;
             if (!parseAll) {channels[2] = true;}
+            sound = 1;
         }
 
         for (let i = 1; i <= 10; i++) {
@@ -320,6 +322,7 @@ function showMessages(parseAll = false) {
                 found = true;
                 document.getElementById("channel" + i).innerHTML += msg;
                 if (!parseAll) {channels[i] = true;}
+                sound = 1;
             }
         }        
 
@@ -341,6 +344,7 @@ function showMessages(parseAll = false) {
 
     //UI Anpassen wegen nach unten scrollen und ungelesenen Nachrichten
     setUI(ui);
+     if ((parseAll == false) && (sound == true)) {okSound.play(); console.log("SOUND!!!");}
 
 }
 

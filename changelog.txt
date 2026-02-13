@@ -1,6 +1,8 @@
 V1.0.10-alpha
 - Warten auf ACK bissel länger
-
+- Mobile GUI
+- Routing Tabelle nur noch kürzeste Route
+- Bei "ALL" keine Geräusche mehr
 
 V1.0.9-alpha
 - Nochmal große JSON Strings 

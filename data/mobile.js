@@ -366,15 +366,6 @@ function showContent(sectionId) {
 }
 
 
-
-/**
- * Zeigt ein Modal an.
- * @param {string} title - Überschrift
- * @param {string} desc - Beschreibungstext
- * @param {string} defaultValue - Startwert für den Input
- * @param {boolean} isInput - true = mit Eingabefeld, false = reine Nachricht
- * @returns {Promise<string|boolean>} - Der Text oder true/false bei Nachricht
- */
 function showModal(title, desc, defaultValue = "", isInput = true) {
     return new Promise((resolve) => {
         const modal = document.getElementById('custom-modal');
@@ -412,16 +403,6 @@ function closeModal() {
 }
 
 
-
-/**
- * Erzeugt eine Sprechblase mit flexibler CSS-Klasse
- * @param {string} bubbleClass - Die CSS-Klasse (z.B. 'right', 'left', 'system', 'admin')
- * @param {string} title - Name des Absenders
- * @param {string} subtitle - Zusatz (z.B. Uhrzeit)
- * @param {string} titleColor - Farbe des Namens
- * @param {string} text - Inhalt
- * @param {string} containerId - Ziel-Container
- */
 function addBubble(bubbleClass, title, subtitle, titleColor, text, containerId) {
     var container = document.getElementById(containerId);
     if (!container) return;
