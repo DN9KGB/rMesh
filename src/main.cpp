@@ -19,6 +19,7 @@
 #include "ack.h"
 #include "udp.h"
 #include "routing.h"
+#include "time.h"
 
 
 //Uhrzeitformat
@@ -40,6 +41,7 @@ uint32_t statusTimer = 0;
 uint32_t rebootTimer = 0xFFFFFFFF;
 uint8_t currentRetry = 0;
 uint32_t updateCheckTimer = 60 * 60 * 1000;  //Erster Check nach 1 Stunde
+bool nightlyCronJob = false;                 //Nachts messages.json schrumpfen (weil littlefs so lahm ist)
 
 
 void processRxFrame(Frame &f) {
@@ -320,8 +322,6 @@ void setup() {
         Serial.println("An error has occurred while mounting LittleFS");
     } 
     fsMutex = xSemaphoreCreateMutex();
-
-
     
     //Messages JSON in messages Ringpuffer speichern
     File file = LittleFS.open("/messages.json", "r");
@@ -469,6 +469,18 @@ void loop() {
     	//Peer-Liste checken
     	checkPeerList();
     }
+
+    //Nächtlicher Cronjob
+    time_t now = time(NULL);
+    struct tm* timeinfo = localtime(&now);
+    if (timeinfo->tm_hour == 3) {
+        if (nightlyCronJob == false) {
+            trimFile("/messages.json", MAX_STORED_MESSAGES);
+            nightlyCronJob = true; 
+        }
+    } else {
+        nightlyCronJob = false;
+    } 
 
     //Reboot
     if (millis() > rebootTimer) {ESP.restart();}

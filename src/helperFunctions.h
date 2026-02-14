@@ -4,13 +4,19 @@
 
 #include "frame.h"
 
+// struct FileWriteParams {
+//     char* content;
+//     size_t length;
+//     String fileName;
+//     uint16_t maxLines;
+// };
+
 struct FileWriteParams {
     char* content;
     size_t length;
-    String fileName;
+    char fileName[32]; // Fest reservierter Platz für den Namen
     uint16_t maxLines;
 };
-
 
 void printHexArray(uint8_t* data, size_t length);
 void addJSONtoFile(char* buffer, size_t length, const char* file, const uint16_t lines);
@@ -22,3 +28,4 @@ void getFormattedTime(const char* format, char* outBuffer, size_t outSize);
 void sendFrame(Frame &f);
 uint32_t calculateAckTime();
 uint32_t calculateRetryTime();
+void trimFile(const char* fileName, size_t maxLines);
