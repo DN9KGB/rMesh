@@ -110,12 +110,119 @@ void sendGroup(const char* dst, const char* text, uint8_t messageType) {
     sendFrame(f);
 }
 
+// void addJSONtoFileTask(void * pvParameters) {
+//     FileWriteParams* p = (FileWriteParams*) pvParameters;
+
+//     // Warten, bis das Dateisystem frei ist (max 30 Sekunden warten)
+//     if (xSemaphoreTake(fsMutex, pdMS_TO_TICKS(30000))) {
+//         //Zeilen zählen
+//         size_t lineCount = 0;
+//         File countFile = LittleFS.open(p->fileName, "r");
+//         if (countFile) {
+//             while (countFile.available()) {
+//                 if (countFile.read() == '\n') lineCount++;
+//             }
+//             countFile.close();
+//         }
+//         size_t linesToSkip = (lineCount >= p->maxLines) ? (lineCount - p->maxLines - 1) : 0;
+
+//         File srcFile = LittleFS.open(p->fileName, "r");   
+//         File dstFile = LittleFS.open("/temp.json", "w");   
+//         //char lineBuffer[2048]; // Puffer für eine Zeile
+//         char* lineBuffer = (char*)malloc(2048);
+//         size_t currentLine = 0;
+//         if (srcFile) {
+//             while (srcFile.available()) {
+//                 int len = srcFile.readBytesUntil('\n', lineBuffer, 2048);
+//                 // Nur Zeilen kopieren, die nach dem Skip-Limit liegen
+//                 if (currentLine >= linesToSkip) {
+//                     dstFile.write((const uint8_t*)lineBuffer, len);
+//                     dstFile.print("\n");
+//                 }
+//                 currentLine++;
+//             }
+//             srcFile.close();
+//         }
+//         free(lineBuffer);
+//         lineBuffer = nullptr;    
+
+//         if (p->content != nullptr && p->length > 0) {
+//             dstFile.write((const uint8_t*)p->content, p->length);
+//             dstFile.print("\n");
+//         }
+//         dstFile.close();
+
+//         LittleFS.remove(p->fileName);
+//         LittleFS.rename("/temp.json", p->fileName);
+
+//         xSemaphoreGive(fsMutex); //freigeben
+//     } 
+
+//     free(p->content);
+//     delete p;
+//     vTaskDelete(NULL);
+// }
+
+
 void addJSONtoFileTask(void * pvParameters) {
     FileWriteParams* p = (FileWriteParams*) pvParameters;
-
     // Warten, bis das Dateisystem frei ist (max 30 Sekunden warten)
     if (xSemaphoreTake(fsMutex, pdMS_TO_TICKS(30000))) {
-        //Zeilen zählen
+        // Datei im Append-Modus öffnen ("a")
+        // Falls die Datei nicht existiert, wird sie automatisch erstellt.
+        File file = LittleFS.open(p->fileName, "a"); 
+        if (file) {
+            if (p->content != nullptr && p->length > 0) {
+                // Den neuen Inhalt ans Ende schreiben
+                file.write((const uint8_t*)p->content, p->length);
+                file.print("\n"); // Neue Zeile für den nächsten Eintrag
+            }
+            file.close();
+        } else {
+            Serial.printf("Fehler: Konnte Datei %s nicht zum Anhängen öffnen!\n", p->fileName);
+        }
+        xSemaphoreGive(fsMutex); // Semaphore wieder freigeben
+    } else {
+        Serial.println("Fehler: fsMutex Timeout in addJSONtoFileTask");
+    }
+   // Speicherbereinigung
+    if (p->content != nullptr) {
+        free(p->content);
+    }
+    delete p;
+    // Task beenden
+    vTaskDelete(NULL);
+}
+
+
+void addJSONtoFile(char* buffer, size_t length, const char* file, const uint16_t lines) {
+    // Parameter für den Task vorbereiten
+    FileWriteParams* p = new FileWriteParams();
+    // 1. Inhalt kopieren
+    p->content = (char*)malloc(length);
+    if (p->content != nullptr) {
+        memcpy(p->content, buffer, length);
+    }
+    p->length = length;
+    // 2. Dateinamen kopieren (DAS FEHLTE)
+    strncpy(p->fileName, file, sizeof(p->fileName) - 1);
+    p->fileName[sizeof(p->fileName) - 1] = '\0'; // Sicherstellen der Null-Terminierung
+    p->maxLines = lines;
+    xTaskCreate(
+        addJSONtoFileTask, 
+        "FileWriteTask", 
+        8192,      
+        p,         
+        1,         
+        NULL
+    );
+}
+
+
+void trimFileTask(void * pvParameters) {
+    FileWriteParams* p = (FileWriteParams*) pvParameters;
+    if (xSemaphoreTake(fsMutex, pdMS_TO_TICKS(30000))) {
+        // 1. Zeilen zählen
         size_t lineCount = 0;
         File countFile = LittleFS.open(p->fileName, "r");
         if (countFile) {
@@ -124,66 +231,73 @@ void addJSONtoFileTask(void * pvParameters) {
             }
             countFile.close();
         }
-        size_t linesToSkip = (lineCount >= p->maxLines) ? (lineCount - p->maxLines - 1) : 0;
-
-        File srcFile = LittleFS.open(p->fileName, "r");   
-        File dstFile = LittleFS.open("/temp.json", "w");   
-        //char lineBuffer[2048]; // Puffer für eine Zeile
-        char* lineBuffer = (char*)malloc(2048);
-        size_t currentLine = 0;
-        if (srcFile) {
-            while (srcFile.available()) {
-                int len = srcFile.readBytesUntil('\n', lineBuffer, 2048);
-                // Nur Zeilen kopieren, die nach dem Skip-Limit liegen
-                if (currentLine >= linesToSkip) {
-                    dstFile.write((const uint8_t*)lineBuffer, len);
-                    dstFile.print("\n");
+        Serial.printf("Trim-Task gestartet: Datei=%s, Zeilen aktuell=%d, Behalten=%d\n", p->fileName, lineCount, p->maxLines);
+        // Berechnen, wie viele Zeilen übersprungen werden müssen
+        if (lineCount > p->maxLines) {
+            size_t linesToSkip = lineCount - p->maxLines;
+            
+            File srcFile = LittleFS.open(p->fileName, "r");
+            File dstFile = LittleFS.open("/temp_trim.json", "w");
+            
+            if (srcFile && dstFile) {
+                char* lineBuffer = (char*)malloc(4096);
+                if (lineBuffer == nullptr) {
+                    srcFile.close();
+                    dstFile.close();
+                    xSemaphoreGive(fsMutex);
+                    delete p;
+                    vTaskDelete(NULL);
+                    return; 
                 }
-                currentLine++;
+
+                size_t currentLine = 0;
+                
+                while (srcFile.available()) {
+                    // Zeile lesen
+                    int len = srcFile.readBytesUntil('\n', lineBuffer, 4096);
+                    
+                    // Nur behalten, wenn wir über dem Skip-Limit sind
+                    if (currentLine >= linesToSkip) {
+                        dstFile.write((const uint8_t*)lineBuffer, len);
+                        dstFile.print("\n");
+                    }
+                    currentLine++;
+                }
+                
+                srcFile.close();
+                dstFile.close();
+                free(lineBuffer);
+                lineBuffer = nullptr; 
+
+                // Alte Datei ersetzen
+                LittleFS.remove(p->fileName);
+                LittleFS.rename("/temp_trim.json", p->fileName);
+                
             }
-            srcFile.close();
         }
-        free(lineBuffer);
-        lineBuffer = nullptr;    
+        Serial.printf("Datei %s bereinigt. Zeilen vorher: %d, nachher: %d\n", p->fileName, lineCount, p->maxLines);
+        xSemaphoreGive(fsMutex);
+    }
 
-        if (p->content != nullptr && p->length > 0) {
-            dstFile.write((const uint8_t*)p->content, p->length);
-            dstFile.print("\n");
-        }
-        dstFile.close();
-
-        LittleFS.remove(p->fileName);
-        LittleFS.rename("/temp.json", p->fileName);
-
-        xSemaphoreGive(fsMutex); //freigeben
-    } 
-
-    free(p->content);
-    delete p;
+    delete p; // p->content ist hier nullptr, daher nur p löschen
     vTaskDelete(NULL);
 }
 
 
-
-
-void addJSONtoFile(char* buffer, size_t length, const char* file, const uint16_t lines) {
-    // Parameter für den Task vorbereiten
+void trimFile(const char* fileName, size_t maxLines) {
     FileWriteParams* p = new FileWriteParams();
-    p->content = (char*)malloc(length);
-    memcpy(p->content, buffer, length);
-    p->length = length;
-    p->fileName = String(file);
-    p->maxLines = lines;
+    strncpy(p->fileName, fileName, sizeof(p->fileName) - 1);
+    p->fileName[sizeof(p->fileName) - 1] = '\0'; // Null-Terminierung erzwingen
+    p->maxLines = (uint16_t)maxLines;
+    p->content = nullptr;
+    p->length = 0;
 
-    xTaskCreate(
-        addJSONtoFileTask, 
-        "FileWriteTask", 
-        8192,      // Genug Stack für LittleFS & JSON
-        p,         // Parameter übergeben
-        1,         // Priorität (niedrig reicht)
-        NULL
-    );
+    // Task starten (Priorität etwas niedriger, da es ein Hintergrundjob ist)
+    xTaskCreate(trimFileTask, "trimFileTask", 8192, p, 1, NULL);
 }
+
+
+
 
 uint32_t getTOA(uint8_t payloadBytes) {
     uint8_t SF  = settings.loraSpreadingFactor; 

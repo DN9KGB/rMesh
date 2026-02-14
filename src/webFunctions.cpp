@@ -215,17 +215,32 @@ void startWebServer() {
   DefaultHeaders::Instance().addHeader("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS");
   DefaultHeaders::Instance().addHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  //Redirect für Index-Seite
-  webServer.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-    request->redirect("/index.html");
-  }); 
-
-  webServer.on("/sw.js", HTTP_GET, [](AsyncWebServerRequest *request){
-  request->send(LittleFS, "/sw.js", "application/javascript"); // WICHTIG!
-});
+    //Redirect für Index-Seite
+    // webServer.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+    //     request->redirect("/index.html");
+    // }); 
 
   //Statische Webseite aus Filesystem  + Starten
-  webServer.serveStatic("/", LittleFS, "/");
+  //webServer.serveStatic("/", LittleFS, "/");
+    webServer.onNotFound([](AsyncWebServerRequest *request) {
+        String path = request->url();
+        // Falls das Stammverzeichnis aufgerufen wird
+        if (path == "/") path = "/index.html";
+        // Zugriff mit deinem existierenden Mutex schützen
+        if (xSemaphoreTake(fsMutex, pdMS_TO_TICKS(10000))) {
+            if (LittleFS.exists(path)) {
+                // Der Webserver übernimmt hier das Senden der Datei
+                request->send(LittleFS, path);
+            } else {
+                request->send(404, "text/plain", "Not Found");
+            }
+            xSemaphoreGive(fsMutex);
+        } else {
+            // Falls der Mutex blockiert ist (z.B. durch einen Schreibvorgang im Hintergrund)
+            request->send(503, "text/plain", "FS Busy");
+        }
+    });
+
   webServer.begin(); 
 }
 
