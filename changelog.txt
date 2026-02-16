@@ -1,3 +1,10 @@
+V1.0.12-alpha
+- Optimierung der messages.json durch zeitgesteuertes Trimmen. Der erste Bereinigungszyklus startet nun 30 Minuten nach Systemstart, um die Boot-Phase nicht zu belasten. Danach erfolgt die Wartung automatisch in einem 24-Stunden-Intervall.
+- Ungelesen-Markierung für den "All"-Gruppe.
+- Kein akustisches Signal bei "All"-Gruppe.
+- Automatisches Entfernen von führenden oder abschließenden Leerzeichen (Trim) bei der Eingabe von Rufzeichen und Gruppennamen.
+- Beschleunigter Nachrichten-Display: Nachrichten aus der messages.json werden nun unmittelbar während des Ladevorgangs gerendert, was die wahrgenommene Ladezeit bei großen Archiven deutlich reduziert.
+
 V1.0.11-alpha
 - LittleFS ist nicht thread-safe 🤮
 - Mutex für Webserver

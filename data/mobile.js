@@ -1,14 +1,14 @@
 const emojis = [
         // Gesichter & Smileys
-        '😊','😂','🤣','😍','😎','🤔','😅','😉','🙄','🤨','😏','🥳','😭','😤','😱','🥱','😴',
+        '😊','😂','🤣','😍','😎','🤔','😅','😉','🙄','🤨','😏','🥳', '😡', '😭','😤','😱','🥱','😴', '😜', '☠️', '🙈', '🤷‍♂️', '💩',
         // Handzeichen & Menschen
         '👍','👎','👌','✌️','🤞','🤙','👏','🙌','🙏','💪','👋','🖐️','🤳','👈','👉',
         // Herzen & Symbole
-        '❤️','✨','🔥','💥','💯','💢',
+        '❤️','✨','🔥','💥','💯','💢', '☀️', 
         // Technik & LoRa/Mesh
         '📡','📶','📻','💻','🔋','🔌','💡','📟','🛡️','🌍','🛰️','⚡','⚙️','🔧',
         // Status & Warnung
-        '✅','❌','⚠️','🚫','🔔','🔕','🆘','🛑','🟢','🟡','🔴','💬','🗨️'
+        '✅','❌','⚠️','🚫','🔔','🔕','🆘','🛑','🟢','🟡','🔴','💬','🗨️', '❤️', '✉️'
     ];
 
 var guiSettings;
@@ -145,11 +145,12 @@ function buildMenu() {
         { 
             label: '-- new group --', 
             action: async () => {
-                const name = await showModal("Add new group", "Name:", "", true);
-                const newGroup = {
-                    name: name, 
-                    read: true};
+                var name = await showModal("Add new group", "Name:", "", true);
                 if (name) {
+                    name = name.trim();
+                    const newGroup = {
+                        name: name, 
+                        read: true};
                     guiSettings.groups.push(newGroup);
                     showMessages(true);
                     showContent("group_" + name, name);
@@ -190,6 +191,7 @@ function buildMenu() {
                 var name = await showModal("Add new contact", "Callsign:", "", true);
                 if (name) {
                     name = name.toUpperCase();
+                    name = name.trim();
                     const newDM = {
                         name: name, 
                         read: true
@@ -339,7 +341,7 @@ function loadGuiSettings() {
 
 
 function toggleMenu() {
-	const menu = document.getElementById('side-menu');
+	const menu = document.getElementById('side-menu'); 
 	menu.classList.toggle('open');
 }
 

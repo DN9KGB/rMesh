@@ -6,6 +6,8 @@ var gateway = "";
 var init = false;
 let heartBeatTimer;
 let okSound = new Audio("ok.wav");
+var globalUnRead = false;
+
 
 function initWebSocket() {
     //Debug
@@ -71,6 +73,7 @@ function showMessages(parseAll) {
             setupInputBar('dm_' + callsign, mySendMessageFunction); 
             guiSettings.dm[key].read = true;
         }
+        guiSettings.readAll = true;
     }
 
     var sound = false;
@@ -177,15 +180,18 @@ function showMessages(parseAll) {
                 msg, 
                 "group_all"
             );   
+            if (document.getElementById("group_all").classList.contains("active") != false) {m.read = true;}
+            if (m.read == false) { guiSettings.readAll = false; }
         }
         
     });
 
     //Ungelesen anzeigen
-    var globalUnRead = false;
+    globalUnRead = false;
     for (key in guiSettings.groups) { 
         if (guiSettings.groups[key].read == false) {globalUnRead = true; document.getElementById("mnu_" + guiSettings.groups[key].name).classList.add('newMessages'); }
     }
+    if (guiSettings.readAll == false) {globalUnRead = true; document.getElementById("mnu_all").classList.add('newMessages'); }
     for (key in guiSettings.dm) { 
         if (guiSettings.dm[key].read == false) {globalUnRead = true; document.getElementById("mnu_" + guiSettings.dm[key].name).classList.add('newMessages'); }
     }
@@ -327,8 +333,9 @@ function onMessage(event) {
         }
 
         if (init == false) {
-            settingsVisibility();
+            settingsVisibility(); 
             messages = [];
+            showMessages(true);
             //messages.json laden (geht erst jetzt, weil sonst mycall nicht bekannt)
             fetch(baseURL + "messages.json")
                 .then(function(response) {
@@ -343,6 +350,7 @@ function onMessage(event) {
                         if (m.message.timestamp > guiSettings.update) {m.message.read = false;} else {m.message.read = true;}
                         m.message.update = guiSettings.update;
                         messages.push(m.message);
+                        showMessages(false);
                     });
                     showMessages(true);
                     showContent(guiSettings.menu, guiSettings.title);
