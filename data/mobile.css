@@ -34,6 +34,9 @@ body {
     background-color: #000000;
     color: #e0e0e0;
     /* WICHTIG: Kein overflow: hidden hier! */
+    max-width: 800px;
+    margin-left: 0;   /* Stellt sicher, dass es links klebt */
+    margin-right: auto; /* Erlaubt Platz nach rechts bei breiten Monitoren */    
 }
 
 h1 {
@@ -164,6 +167,7 @@ table.list th {
     z-index: 1000;
     box-shadow: 0 2px 10px rgba(0,0,0,0.5);
     box-sizing: border-box; 
+    max-width: 800px;
 }
 
 .status-icon {
@@ -470,6 +474,7 @@ table.list th {
     box-sizing: border-box;
     z-index: 100; /* Sicherstellen, dass sie über den Bubbles liegt */
     flex-grow: 1;
+    max-width: 800px;
 }
 
 /* Das Textfeld */
@@ -536,4 +541,30 @@ table.list th {
     border-radius: 8px;
     box-shadow: 0 4px 10px rgba(0,0,0,0.5);
     z-index: 100;
+}
+
+
+
+
+/* Hintergrund der Scrollbar-Spur */
+::-webkit-scrollbar-track {
+    background: #001214;      /* Passend zum dunklen Hintergrund der Input-Bar */
+}
+
+/* Der bewegliche Schieber (Handle) */
+::-webkit-scrollbar-thumb {
+    background: #005c66;      /* Dein primäres Dunkel-Cyan */
+    border-radius: 4px;       /* Abgerundete Ecken */
+    border: 1px solid #001214; /* Kleiner Abstand zum Rand */
+}
+
+/* Handle beim Drüberfahren (Hover) */
+::-webkit-scrollbar-thumb:hover {
+    background: #009eaf;      /* Dein helleres Cyan aus den Überschriften */
+}
+
+/* --- Scrollbar Styling für Firefox --- */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: #005c66 #001214;
 }
