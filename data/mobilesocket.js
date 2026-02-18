@@ -98,6 +98,7 @@ function showMessages(parseAll) {
             const groupName  = guiSettings.groups[key].name;
 
             if ((groupName == m.dstGroup) && (m.dstCall == "")) {
+                found = true;
                 addBubble(
                     css, 
                     titel, 
@@ -106,16 +107,19 @@ function showMessages(parseAll) {
                     msg, 
                     "group_" + groupName
                 );   
+                //Wenn Browser Focus hat und Gruppe angezeigt wird -> als gelesen merkieren
                 if ((document.getElementById("group_" + groupName).classList.contains("active")) && focus) {m.read = true;}
-                if (m.read == false) { guiSettings.groups[key].read = false; }
-                found = true;
-                if (guiSettings.groups[key].mute != true) {sound = true};
+                //Wenn Mute, dann als gelesen markieren
+                if (guiSettings.groups[key].mute == true) {m.read = true;};
+                //Wenn nicht gelesen, dann Gruppe als ungelesen kennzeichen
+                if (m.read == false) { guiSettings.groups[key].read = false; sound = true;}
             }
 
         }
 
         //Direkte Nachrichten empfangen
         if (m.dstCall == settings.mycall) {
+            found = true;
             var callsign = m.srcCall;
             //Prüfen, ob bereits vorhanden
             var exists = false; 
@@ -132,19 +136,20 @@ function showMessages(parseAll) {
                 msg, 
                 "dm_" + callsign
             );  
+            //Wenn Browser Focus hat und Gruppe angezeigt wird -> als gelesen merkieren
             if ((document.getElementById("dm_" + callsign).classList.contains("active")) && focus) {m.read = true;}
-            //if (document.getElementById("dm_" + callsign).classList.contains("active") != false) {m.read = true;} 
+            //Wenn nicht gelesen, dann Gruppe als ungelesen kennzeichen
             if (m.read == false) { 
                 for (var i = 0; i < guiSettings.dm.length; i++) { 
                     if (guiSettings.dm[i].name === callsign) { guiSettings.dm[i].read = false; break;} 
                 } 
             }
-            found = true;
             sound = true;
         }
 
         //Direkte Nachrichten gesendet
         if ((m.srcCall == settings.mycall) && (m.dstCall != "")) {
+            found = true;
             var callsign = m.dstCall;
             //Prüfen, ob bereits vorhanden
             var exists = false; 
@@ -161,14 +166,6 @@ function showMessages(parseAll) {
                 msg, 
                 "dm_" + callsign
             );   
-            if ((document.getElementById("dm_" + callsign).classList.contains("active")) && focus) {m.read = true;}
-            if (m.read == false) { 
-                for (var i = 0; i < guiSettings.dm.length; i++) { 
-                    if (guiSettings.dm[i].name === callsign) { guiSettings.dm[i].read = false; break;} 
-                } 
-            }
-            found = true;
-            sound = true;
         }
 
         //Keine Gruppe gesetzt + Rest
@@ -181,8 +178,13 @@ function showMessages(parseAll) {
                 msg, 
                 "group_all"
             );   
+            //Wenn Browser Focus hat und Gruppe angezeigt wird -> als gelesen merkieren
             if ((document.getElementById("group_all").classList.contains("active")) && focus) {m.read = true;}
-            //if (document.getElementById("group_all").classList.contains("active") != false) {m.read = true;}
+            //Wenn Mute, dann als gelesen markieren
+            if (guiSettings.muteAll == true) {m.read = true;};
+            //Wenn nicht gelesen, dann Gruppe als ungelesen kennzeichen
+            if (m.read == false) { guiSettings.groups[key].read = false; sound = true;}
+            //Wenn nicht gelesen, dann Gruppe als ungelesen kennzeichen
             if (m.read == false) { guiSettings.readAll = false; }
         }
         
@@ -190,13 +192,17 @@ function showMessages(parseAll) {
 
     //Ungelesen anzeigen
     globalUnRead = false;
+    //All
+    if (guiSettings.readAll == false) {globalUnRead = true; document.getElementById("mnu_all").classList.add('newMessages'); }
+    //Gruppen
     for (key in guiSettings.groups) { 
         if (guiSettings.groups[key].read == false) {globalUnRead = true; document.getElementById("mnu_" + guiSettings.groups[key].name).classList.add('newMessages'); }
     }
-    if (guiSettings.readAll == false) {globalUnRead = true; document.getElementById("mnu_all").classList.add('newMessages'); }
+    //DM
     for (key in guiSettings.dm) { 
         if (guiSettings.dm[key].read == false) {globalUnRead = true; document.getElementById("mnu_" + guiSettings.dm[key].name).classList.add('newMessages'); }
     }
+    //Global
     if (globalUnRead == true)  {
         document.getElementById("burger-icon").classList.add('newMessages');
         if ((parseAll == false) && (sound == true)) {okSound.play(); console.log("SOUND!!!");}
@@ -327,7 +333,7 @@ function onMessage(event) {
         document.getElementById("version").innerHTML = d.settings.name + " " + d.settings.version;
         document.getElementById("hardware").innerHTML = d.settings.hardware;
         document.getElementById("settingsLoraRepeat").checked = d.settings.loraRepeat; 
-        document.getElementById("settingsLoraMaxMessageLength").innerHTML = d.settings.loraMaxMessageLength + " characters"; 
+        document.getElementById("settingsLoraMaxMessageLength").innerHTML = d.settings.loraMaxMessageLength + " characters";  
 
         //UDP Peers
         if (d.settings.udpPeers) {

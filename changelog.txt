@@ -1,7 +1,13 @@
 V1.0.13-a
 - Nachrichtensymbol in Webseite Titel
-- Gruppen Stumm
-- 🤮 Smily
+- Gruppen können nun gemutet werden
+- 🤮 und 🤦 Emoji hinzu
+- Scrollbars passend zum Design
+- Wieder hartes scrolling
+- Announce Timing 10Min / 60Min
+- ACKs werden immer parallel auf WiFi und LoRa gesendet
+
+
 
 V1.0.12-alpha
 - Optimierung der messages.json durch zeitgesteuertes Trimmen. Der erste Bereinigungszyklus startet nun 30 Minuten nach Systemstart, um die Boot-Phase nicht zu belasten. Danach erfolgt die Wartung automatisch in einem 24-Stunden-Intervall.

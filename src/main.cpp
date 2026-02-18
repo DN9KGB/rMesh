@@ -153,9 +153,11 @@ void processRxFrame(Frame &f) {
                 memcpy(tf.viaCall, f.nodeCall, sizeof(tf.viaCall));
                 memcpy(tf.srcCall, f.nodeCall, sizeof(tf.srcCall));
                 tf.id = f.id;
-                tf.port = f.port;
+                tf.port = 0;
                 tf.transmitMillis = millis() + calculateAckTime();
-                if (tf.port == 1) {tf.transmitMillis = 0;} //Bei UDP sofort ACK
+                txBuffer.push_back(tf);
+                tf.port = 1;
+                tf.transmitMillis = 0;
                 txBuffer.push_back(tf);
             }
 

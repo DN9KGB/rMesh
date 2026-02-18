@@ -24,7 +24,7 @@ html, body {
     /* Verhindert, dass das gesamte Fenster "hüpft", erlaubt aber Scrollen */
     overflow-x: hidden; 
     height: auto;
-    -webkit-overflow-scrolling: touch; /* Sorgt für flüssiges Scrollen auf iPhones */
+     /*-webkit-overflow-scrolling: touch; Sorgt für flüssiges Scrollen auf iPhones */
 }
 
 body {

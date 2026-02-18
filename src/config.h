@@ -1,7 +1,7 @@
 
 //Timing
-#define ANNOUNCE_TIME 5 * 60 * 1000 + random(0, 2 * 60 * 1000)  //ANNOUNCE Baken
-#define PEER_TIMEOUT 30 * 60 * 1000              //Zeit, nach dem ein Call aus der Peer-Liste gelöscht wird
+#define ANNOUNCE_TIME 10 * 60 * 1000 + random(0, 2 * 60 * 1000)  //ANNOUNCE Baken
+#define PEER_TIMEOUT 60 * 60 * 1000              //Zeit, nach dem ein Call aus der Peer-Liste gelöscht wird
 #define TX_RETRY 10                              //Retrys beim Senden 
 #define MAX_STORED_MESSAGES 1000                  //max. in "messages.json" gespeicherte Nachrichten
 #define MAX_STORED_MESSAGES_RAM 100                  //max. in "messages.json" gespeicherte Nachrichten

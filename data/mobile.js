@@ -15,7 +15,7 @@ var guiSettings;
 let wakeLock = null;
 var focus = true;
 
-// Der Speicher im Hintergrund (während die Seite geladen ist)
+// Der Speicher im Hintergrund (während die Seite geladen ist) 
 const nameColorMap = {};
 const distinctColors = [
     // --- Top 10 (Maximaler Kontrast) ---
@@ -79,16 +79,6 @@ document.getElementById("settingsSSIDList").addEventListener("click", function()
 });
 
 
-function enableNotifications() {
-    Notification.requestPermission().then(function(result) {
-        if (result === 'granted') {
-            alert('Benachrichtigungen aktiviert!');
-        }
-    });
-}
-
-
-
 
 function buildMenu() {
 
@@ -101,10 +91,24 @@ function buildMenu() {
     //Gruppe alle
     menuItems.push(
         { 
-            label: "all" , 
+            label: "all",
+            mute: guiSettings.muteAll,
             action: () => {
                 showContent("group_all", "all");
-                document.getElementById("group_all").scrollTo({top: document.getElementById("group_all").scrollHeight, behavior: 'smooth' });
+                document.getElementById("group_all").scrollTo({top: document.getElementById("group_all").scrollHeight });
+            },
+            longPressAction: () => {
+                //Gruppe löschen
+                    showSelectionModal("Group Actions", "",   ["mute", "unmute"]).then(function(choice) {
+                    if (choice === "mute") {
+                        guiSettings.muteAll = true;
+                        buildMenu();                         
+                    }                       
+                    if (choice === "unmute") {
+                        guiSettings.muteAll = false;
+                        buildMenu();                         
+                    }                       
+                });
             }
         }            
     );    
@@ -133,7 +137,7 @@ function buildMenu() {
                 mute:  guiSettings.groups[key].mute,
                 action: () => {
                     showContent("group_" + groupName, groupName);
-                    document.getElementById("group_" + groupName).scrollTo({top: document.getElementById("group_" + groupName).scrollHeight, behavior: 'smooth' });
+                    document.getElementById("group_" + groupName).scrollTo({top: document.getElementById("group_" + groupName).scrollHeight });
                 },
                 longPressAction: () => {
                     //Gruppe löschen
@@ -202,7 +206,7 @@ function buildMenu() {
                 label: callsign , 
                 action: () => {
                     showContent("dm_" + callsign, callsign );
-                    document.getElementById("dm_" + callsign).scrollTo({top: document.getElementById("dm_" + callsign).scrollHeight, behavior: 'smooth' });
+                    document.getElementById("dm_" + callsign).scrollTo({top: document.getElementById("dm_" + callsign).scrollHeight });
                 }
             }            
         );
@@ -246,7 +250,7 @@ function buildMenu() {
                 showContent('cMonitor', "Monitor"); 
                 window.scrollTo({ 
                     top: document.body.scrollHeight, 
-                    behavior: 'smooth' 
+                    //behavior: 'smooth' 
                 });
             }
         },
@@ -470,7 +474,7 @@ function addBubble(bubbleClass, title, subtitle, titleColor, text, containerId) 
 
     container.scrollTo({
         top: container.scrollHeight,
-        behavior: 'smooth'
+        //behavior: 'smooth'
     });
 
 }
