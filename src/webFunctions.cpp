@@ -114,6 +114,9 @@ void startWebServer() {
       if (json["settings"]["loraSpreadingFactor"].is<JsonVariant>()) { settings.loraSpreadingFactor = json["settings"]["loraSpreadingFactor"].as<uint8_t>(); }
       if (json["settings"]["loraPreambleLength"].is<JsonVariant>()) { settings.loraPreambleLength = json["settings"]["loraPreambleLength"].as<int16_t>(); }
       if (json["settings"]["loraRepeat"].is<JsonVariant>()) { settings.loraRepeat = json["settings"]["loraRepeat"].as<bool>(); }
+      if (json["settings"]["maxHopMessage"].is<JsonVariant>()) { extSettings.maxHopMessage = json["settings"]["maxHopMessage"].as<uint8_t>(); }
+      if (json["settings"]["maxHopPosition"].is<JsonVariant>()) { extSettings.maxHopPosition = json["settings"]["maxHopPosition"].as<uint8_t>(); }
+      if (json["settings"]["maxHopTelemetry"].is<JsonVariant>()) { extSettings.maxHopTelemetry = json["settings"]["maxHopTelemetry"].as<uint8_t>(); }
       saveSettings();
     }
 
@@ -215,28 +218,29 @@ void startWebServer() {
   DefaultHeaders::Instance().addHeader("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS");
   DefaultHeaders::Instance().addHeader("Access-Control-Allow-Headers", "Content-Type");
 
-    //Redirect für Index-Seite
-    // webServer.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-    //     request->redirect("/index.html");
-    // }); 
-
-  //Statische Webseite aus Filesystem  + Starten
-  //webServer.serveStatic("/", LittleFS, "/");
     webServer.onNotFound([](AsyncWebServerRequest *request) {
         String path = request->url();
-        // Falls das Stammverzeichnis aufgerufen wird
         if (path == "/") path = "/index.html";
-        // Zugriff mit deinem existierenden Mutex schützen
+
         if (xSemaphoreTake(fsMutex, pdMS_TO_TICKS(10000))) {
             if (LittleFS.exists(path)) {
-                // Der Webserver übernimmt hier das Senden der Datei
-                request->send(LittleFS, path);
+                // Hier den MIME-Typ explizit angeben oder leer lassen für Auto-MIME
+                AsyncWebServerResponse *response = request->beginResponse(LittleFS, path, String());
+                
+                if (path.endsWith(".json")) {
+                    response->addHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+                    response->addHeader("Pragma", "no-cache");
+                    response->addHeader("Expires", "0");
+                    // Optional: Den Content-Type explizit setzen, falls er nicht erkannt wird
+                    response->setContentType("application/json");
+                }
+                
+                request->send(response);
             } else {
                 request->send(404, "text/plain", "Not Found");
             }
             xSemaphoreGive(fsMutex);
         } else {
-            // Falls der Mutex blockiert ist (z.B. durch einen Schreibvorgang im Hintergrund)
             request->send(503, "text/plain", "FS Busy");
         }
     });

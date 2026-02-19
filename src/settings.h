@@ -36,8 +36,9 @@ struct ExtSettings {
         IPAddress(0, 0, 0, 0),
         IPAddress(0, 0, 0, 0)
     };  
-
-    
+    uint8_t maxHopMessage = 15;
+    uint8_t maxHopPosition = 1;
+    uint8_t maxHopTelemetry = 3;
 };
 
 void loadSettings();

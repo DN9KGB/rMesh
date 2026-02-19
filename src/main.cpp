@@ -223,7 +223,7 @@ void processRxFrame(Frame &f) {
                 }
 
                 //Messages wiederholen
-                if (settings.loraRepeat == true) {
+                if ((settings.loraRepeat == true) && (tf.hopCount < extSettings.maxHopMessage)) {
                     //Frame vorbereiten
                     tf.frameType = f.frameType;
                     memcpy(tf.srcCall, f.srcCall, sizeof(tf.srcCall));

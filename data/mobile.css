@@ -422,7 +422,7 @@ table.list th {
     padding: 10px 15px;
     border-radius: 15px;
     position: relative;
-    font-size: 0.95rem;
+    font-size: 1rem;
     line-height: 1.4;
     box-shadow: 0 1px 3px rgba(0,0,0,0.2);
 }
@@ -462,7 +462,7 @@ table.list th {
 
 /* Container für die Eingabeleiste */
 .input-bar {
-    position: fixed; /* Geändert von sticky auf fixed */
+    position: fixed;
     bottom: 0;
     left: 0;
     width: 100%;
@@ -472,12 +472,13 @@ table.list th {
     background-color: #002529;
     border-top: 1px solid #004d55;
     box-sizing: border-box;
-    z-index: 100; /* Sicherstellen, dass sie über den Bubbles liegt */
-    flex-grow: 1;
+    z-index: 9999;
     max-width: 800px;
+    align-items: center;
 }
 
-/* Das Textfeld */
+
+/* Input-Feld Safari Fix */
 .input-bar input {
     flex: 1;
     background-color: #001214;
@@ -487,8 +488,9 @@ table.list th {
     color: #e0f7f8;
     outline: none;
     font-size: 1rem;
-    height: 8px;
+    min-height: 26px; /* Safari braucht das */
 }
+
 
 .input-bar input:focus {
     border-color: #00f2ff;
@@ -526,12 +528,9 @@ table.list th {
     transform: scale(1.2);
 }
 
-
-
-
 .emoji-picker {
-    position: absolute;
-    bottom: 60px; /* Erscheint über der Leiste */
+    position: fixed;
+    bottom: 70px; /* Erscheint über der Leiste */
     left: 10px;
     display: grid;
     grid-template-columns: repeat(6, 1fr);
@@ -542,8 +541,6 @@ table.list th {
     box-shadow: 0 4px 10px rgba(0,0,0,0.5);
     z-index: 100;
 }
-
-
 
 
 /* Hintergrund der Scrollbar-Spur */
@@ -567,4 +564,22 @@ table.list th {
 * {
     scrollbar-width: thin;
     scrollbar-color: #005c66 #001214;
+}
+
+
+/* iOS Safari Fix: Safe Area + Keyboard */
+@supports (-webkit-touch-callout: none) {
+    .input-bar {
+        padding-bottom: calc(10px + env(safe-area-inset-bottom));
+    }
+
+    body {
+        height: 100%;
+        overflow-x: hidden;
+        overflow-y: auto;
+    }
+
+    html {
+        height: 100%;
+    }
 }

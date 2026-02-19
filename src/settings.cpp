@@ -44,6 +44,9 @@ void showSettings() {
     Serial.printf("loraSpreadingFactor: %d\n", settings.loraSpreadingFactor);
     Serial.printf("loraPreambleLength: %d\n", settings.loraPreambleLength);
     Serial.printf("loraRepeat: %d\n", settings.loraRepeat);
+    Serial.printf("maxHopMessage: %d\n", extSettings.maxHopMessage);
+    Serial.printf("maxHopPosition: %d\n", extSettings.maxHopPosition);
+    Serial.printf("maxHopTelemetry: %d\n", extSettings.maxHopTelemetry);
     Serial.println();
     Serial.println("WiFi Status:");
     switch(WiFi.status()) {
@@ -130,6 +133,9 @@ void sendSettings() {
         peer["ip"][2] = extSettings.udpPeer[i][2];
         peer["ip"][3] = extSettings.udpPeer[i][3];
     }
+    doc["settings"]["maxHopMessage"] = extSettings.maxHopMessage;
+    doc["settings"]["maxHopPosition"] = extSettings.maxHopPosition;
+    doc["settings"]["maxHopTelemetry"] = extSettings.maxHopTelemetry;
     char* jsonBuffer = (char*)malloc(4096);
     size_t len = serializeJson(doc, jsonBuffer, 4096);
     ws.textAll(jsonBuffer, len);  // sendet direkt den Puffer
@@ -161,9 +167,13 @@ void loadSettings() {
 
     //Defaults für ext. Settings
     if (extSettingsLen != sizeof(extSettings)) {
+        Serial.println("Lade Default-extSettings");
         for (uint8_t i = 0; i < count; i++) {
             extSettings.udpPeer[i] = IPAddress(extSettings.udpPeer[i][0], extSettings.udpPeer[i][1], extSettings.udpPeer[i][2], extSettings.udpPeer[i][3]);
         }
+        extSettings.maxHopMessage = 15;
+        extSettings.maxHopPosition = 1;
+        extSettings.maxHopTelemetry = 3;
         prefs.putBytes("extSettings", &extSettings, sizeof(extSettings));
     }
 

@@ -148,7 +148,7 @@ function onMessage(event) {
             settingsVisibility();
             messages = [];
             //messages.json laden (geht erst jetzt, weil sonst mycall nicht bekannt)
-            fetch(baseURL + "messages.json")
+            fetch(baseURL + "messages.json?" + Math.random())
                 .then(function(response) {
                     return response.text();
                 })

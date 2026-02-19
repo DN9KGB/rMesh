@@ -14,8 +14,8 @@ function initWebSocket() {
         gateway = `ws://${window.location.hostname}/socket`;
         baseURL = "";
     } else {
-        gateway = "ws://192.168.33.68/socket";
-        baseURL = "http://192.168.33.68/"
+        gateway = "ws://192.168.33.66/socket";
+        baseURL = "http://192.168.33.66/"
         //gateway = "ws://10.10.253.161/socket";
         //baseURL = "http://10.10.253.161/"
     }
@@ -184,9 +184,7 @@ function showMessages(parseAll) {
             //Wenn Mute, dann als gelesen markieren
             if (guiSettings.muteAll == true) {m.read = true;};
             //Wenn nicht gelesen, dann Gruppe als ungelesen kennzeichen
-            if (m.read == false) { guiSettings.groups[key].read = false; sound = true;}
-            //Wenn nicht gelesen, dann Gruppe als ungelesen kennzeichen
-            if (m.read == false) { guiSettings.readAll = false; }
+            if (m.read == false) { guiSettings.readAll = false; sound = true;}
         }
         
     });
@@ -347,7 +345,7 @@ function onMessage(event) {
             messages = [];
             showMessages(true);
             //messages.json laden (geht erst jetzt, weil sonst mycall nicht bekannt)
-            fetch(baseURL + "messages.json")
+            fetch(baseURL + "messages.json?" + Math.random())
                 .then(function(response) {
                     return response.text();
                 })
