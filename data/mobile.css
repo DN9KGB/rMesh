@@ -263,10 +263,10 @@ table.list th {
     display: none;
     padding: 10px;
     /* Berechne die Mindesthöhe: 100% Display minus 60px Header */
-    height: calc(100vh - 65px);
+    min-height: calc(100vh - 65px);
+    max-height: calc(100vh - 65px);
     width: 100%;
     box-sizing: border-box;
-    
     /* Erlaubt vertikales Scrollen innerhalb der Sektion */
     overflow-y: auto; 
 }
@@ -274,7 +274,8 @@ table.list th {
 /* Nur wenn die Eingabeleiste aktiv ist, rückt der Inhalt nach oben */
 .content-section.has-input {
     padding-bottom: 45px; 
-    height: calc(100vh - 120px);
+    min-height: calc(100vh - 130px);
+    max-height: calc(100vh - 130px);
 }
 
 .content-section.active {
