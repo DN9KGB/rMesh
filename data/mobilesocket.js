@@ -53,7 +53,6 @@ function keepAlive() {
 }
 
 function showMessages(parseAll) {
-    console.log("SHOW");
     if (!guiSettings || !messages) return;
 
     // Alle Container löschen
