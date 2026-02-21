@@ -12,7 +12,7 @@ const emojis = [
     ];
 
 var guiSettings;
-let wakeLock = null;
+var wakeLock = null;
 var focus = true;
 var settings = settings || { name: "rMesh", mycall: "" };
 
@@ -120,7 +120,7 @@ function buildMenu() {
     setupInputBar('group_all', mySendMessageFunction);   
 
     //Gruppen hinzufügen
-    for (let key in guiSettings.groups) { 
+    for (var key in guiSettings.groups) { 
         const groupName  = guiSettings.groups[key].name; 
         //DIVs hinzu
         const container = document.querySelector(".content-container"); 
@@ -190,7 +190,7 @@ function buildMenu() {
         { type: 'header', label: 'Direct Messages' }]); 
 
     //DM hinzufügen
-    for (let key in guiSettings.dm) { 
+    for (var key in guiSettings.dm) { 
         const callsign  = guiSettings.dm[key].name; 
         //DIVs hinzu
         const container = document.querySelector(".content-container"); 
@@ -392,7 +392,7 @@ function showContent(sectionId, title = "") {
         const monitor = document.getElementById("cMonitor");
         if (monitor) monitor.classList.add('active');
     }
-
+    showMessages(true);
     window.scrollTo(0, 0); 
     
     // UI-Zustand speichern (Safari-sicher)

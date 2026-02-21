@@ -53,9 +53,10 @@ function keepAlive() {
 }
 
 function showMessages(parseAll) {
+    console.log("SHOW");
     if (!guiSettings || !messages) return;
 
-// Alle Container löschen
+    // Alle Container löschen
     if (parseAll === true) {
         buildMenu();
         // Gruppen aufräumen
@@ -87,8 +88,8 @@ function showMessages(parseAll) {
         guiSettings.readAll = true;
     }
 
-    let sound = false;
-    let globalUnRead = false;
+    var sound = false;
+    var globalUnRead = false;
 
 
     //Alle Nachrichten durchlaufen
@@ -103,11 +104,11 @@ function showMessages(parseAll) {
         var titel = m.srcCall + " > " + m.dstCall + m.dstGroup;
         var msg = m.text;
         var date = new Date(m.timestamp * 1000);
-        let dateString = date.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" }) + " " + date.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+        var dateString = date.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" }) + " " + date.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
         m.parsed = true;
 
         //Nachrichten zuordnen (Gruppen)
-        for (let key in guiSettings.groups) { 
+        for (var key in guiSettings.groups) { 
             const groupName  = guiSettings.groups[key].name;
             if ((groupName == m.dstGroup) && (m.dstCall == "")) {
                 found = true;
