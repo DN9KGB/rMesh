@@ -286,8 +286,6 @@ table.list th {
 }
 
 
-
-
 /* Modal Dark Theme */
 .modal-overlay {
     display: none;
@@ -476,7 +474,7 @@ table.list th {
     background-color: #002529;
     border-top: 1px solid #004d55;
     box-sizing: border-box;
-    z-index: 9999;
+    z-index: 900;
     max-width: 800px;
     align-items: center;
 }
