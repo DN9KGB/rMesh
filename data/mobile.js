@@ -551,6 +551,20 @@ function setupInputBar(sectionId, onSendCallback) {
         }
     };
 
+    const triggerSend = (e) => {
+        e.preventDefault(); // Verhindert doppeltes Auslösen
+        handleSend();
+    };    
+
+    const handleSafariSend = (e) => {
+    e.preventDefault();
+    handleSend();
+    };
+
+    button.addEventListener('pointerdown', handleSafariSend);
+    button.addEventListener('touchend', triggerSend);
+    button.addEventListener('click', handleSend);    
+
     button.onclick = handleSend;
     input.onkeydown = (e) => { if (e.key === 'Enter') handleSend(); };
 

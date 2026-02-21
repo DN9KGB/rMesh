@@ -168,6 +168,9 @@ table.list th {
     box-shadow: 0 2px 10px rgba(0,0,0,0.5);
     box-sizing: border-box; 
     max-width: 800px;
+    z-index: 9999;
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);   
 }
 
 .status-icon {
@@ -503,15 +506,17 @@ table.list th {
     color: #002529;
     border: none;
     margin: 0px;
-    width: 30px;
-    height: 30px;
+    width: 45px;
+    height: 45px;
     border-radius: 50%;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     font-weight: bold;
-    transition: transform 0.1s;
+    font-size: 1.25rem;
+    transition: transform 0.2s;
+    -webkit-tap-highlight-color: transparent;
 }
 
 .send-btn:active {
@@ -583,4 +588,30 @@ table.list th {
     html {
         height: 100%;
     }
+
+    /* Speziell für iOS Safari */
+    .input-bar {
+        /* Verhindert, dass das UI unter die Tastatur rutscht */
+        position: sticky; 
+        bottom: 0;
+        -webkit-transform: translateZ(0);
+        transform: translateZ(0);
+        bottom: 0px;
+    }
+    
+    .content-section {
+        /* Erlaubt dem Container, sich bei sticky korrekt zu verhalten */
+        display: flex;
+        flex-direction: column;
+    }    
+
+    .send-btn, .emoji-btn {
+        /* Explizit als klickbar markieren */
+        cursor: pointer;
+        /* Verhindert das "Highlight"-Grau beim Tippen */
+        -webkit-tap-highlight-color: transparent;
+    }
+
+
 }
+

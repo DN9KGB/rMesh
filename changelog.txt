@@ -1,5 +1,6 @@
 V1.0.15-a
-- Mobile GUI: content-section war bissel zu groß
+- Die content-section wurde optimiert, um das "Over-Scrolling" auf Mobilgeräten zu verhindern.
+- FIX: Safari/iOS Input-Bar Interactivity
 
 V1.0.14-a
 - Die messages.json wird jetzt mit entsprechenden HTTP-Headern (no-cache) ausgeliefert. Verhindert, dass der Browser veraltete Nachrichten-Stände aus dem Cache lädt, anstatt die aktuelle Datei vom ESP32 abzurufen.
