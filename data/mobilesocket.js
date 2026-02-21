@@ -6,6 +6,7 @@ var gateway = "";
 var init = false;
 let heartBeatTimer;
 let okSound = new Audio("ok.wav");
+var timeout;
 
 
 function initWebSocket() {
@@ -52,38 +53,48 @@ function keepAlive() {
 }
 
 function showMessages(parseAll) {
-    //Alle Container löschen
-    if (parseAll == true) {
+    if (!guiSettings || !messages) return;
+
+// Alle Container löschen
+    if (parseAll === true) {
         buildMenu();
-        for (key in guiSettings.groups) { 
+        // Gruppen aufräumen
+        for (let key in guiSettings.groups) { 
             const groupName = guiSettings.groups[key].name; 
             const div = document.getElementById("group_" + groupName);
-            div.innerHTML = "";
-            setupInputBar('group_' + groupName, mySendMessageFunction); 
-            //Alles als gelesen martieren
+            if (div) { // WICHTIG: Nur wenn das Element existiert
+                div.innerHTML = "";
+                setupInputBar('group_' + groupName, mySendMessageFunction); 
+            }
             guiSettings.groups[key].read = true;  
         }
-        document.getElementById("group_all").innerHTML = "";
-        setupInputBar('group_all', mySendMessageFunction); 
-        for (key in guiSettings.dm) { 
+        // "All" Gruppe aufräumen
+        const divAll = document.getElementById("group_all");
+        if (divAll) {
+            divAll.innerHTML = "";
+            setupInputBar('group_all', mySendMessageFunction); 
+        }
+        // DMs aufräumen
+        for (let key in guiSettings.dm) { 
             const callsign = guiSettings.dm[key].name; 
             const div = document.getElementById("dm_" + callsign);
-            div.innerHTML = "";
-            setupInputBar('dm_' + callsign, mySendMessageFunction); 
+            if (div) {
+                div.innerHTML = "";
+                setupInputBar('dm_' + callsign, mySendMessageFunction); 
+            }
             guiSettings.dm[key].read = true;
         }
         guiSettings.readAll = true;
     }
 
-    var sound = false;
-    var globalUnRead = false;
+    let sound = false;
+    let globalUnRead = false;
 
 
     //Alle Nachrichten durchlaufen
     messages.forEach(function(m) {
         //Abbruch, wenn Nachricht schon angezeigt wurde
         if ((m.parsed == true) && (parseAll == false)) {return;}
-
 
         //Nachricht zusammenbauen
         var found = false;
@@ -92,18 +103,18 @@ function showMessages(parseAll) {
         var titel = m.srcCall + " > " + m.dstCall + m.dstGroup;
         var msg = m.text;
         var date = new Date(m.timestamp * 1000);
+        let dateString = date.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" }) + " " + date.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
         m.parsed = true;
 
         //Nachrichten zuordnen (Gruppen)
-        for (key in guiSettings.groups) { 
+        for (let key in guiSettings.groups) { 
             const groupName  = guiSettings.groups[key].name;
-
             if ((groupName == m.dstGroup) && (m.dstCall == "")) {
                 found = true;
                 addBubble(
                     css, 
                     titel, 
-                    date.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" }) + " " + date.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }),
+                    dateString,
                     getColorForName(m.srcCall), 
                     msg, 
                     "group_" + groupName
@@ -132,7 +143,7 @@ function showMessages(parseAll) {
             addBubble(
                 css, 
                 titel, 
-                date.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" }) + " " + date.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }),
+                dateString,
                 getColorForName(callsign), 
                 msg, 
                 "dm_" + callsign
@@ -162,7 +173,7 @@ function showMessages(parseAll) {
             addBubble(
                 css, 
                 titel, 
-                date.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" }) + " " + date.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }),
+                dateString,
                 getColorForName(m.srcCall), 
                 msg, 
                 "dm_" + callsign
@@ -193,11 +204,11 @@ function showMessages(parseAll) {
     //All
     if (guiSettings.readAll == false) {globalUnRead = true; document.getElementById("mnu_all").classList.add('newMessages'); }
     //Gruppen
-    for (key in guiSettings.groups) { 
+    for (var key in guiSettings.groups) { 
         if (guiSettings.groups[key].read == false) {globalUnRead = true; document.getElementById("mnu_" + guiSettings.groups[key].name).classList.add('newMessages'); }
     }
     //DM
-    for (key in guiSettings.dm) { 
+    for (var key in guiSettings.dm) { 
         if (guiSettings.dm[key].read == false) {globalUnRead = true; document.getElementById("mnu_" + guiSettings.dm[key].name).classList.add('newMessages'); }
     }
     //Global

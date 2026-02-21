@@ -1,5 +1,7 @@
+V1.0.16-a
+- Safari/iOS fixes
+
 V1.0.15-a
-- Die content-section wurde optimiert, um das "Over-Scrolling" auf Mobilgeräten zu verhindern.
 - FIX: Safari/iOS Input-Bar Interactivity
 
 V1.0.14-a

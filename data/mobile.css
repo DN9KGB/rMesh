@@ -282,7 +282,7 @@ table.list th {
 }
 
 .content-section.active {
-    display: block;
+    display: block !important;
 }
 
 
@@ -598,12 +598,6 @@ table.list th {
         transform: translateZ(0);
         bottom: 0px;
     }
-    
-    .content-section {
-        /* Erlaubt dem Container, sich bei sticky korrekt zu verhalten */
-        display: flex;
-        flex-direction: column;
-    }    
 
     .send-btn, .emoji-btn {
         /* Explizit als klickbar markieren */

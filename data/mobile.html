@@ -37,7 +37,7 @@
 
         <div id="cNetwork" class="content-section">
             <table>
-                <tr> <td>Accesspoint</td> <td><input type="checkbox" id="settingsApMode"></td> </tr> 
+                <tr> <td>Accesspoint</td> <td><input type="checkbox" id="settingsApMode" onclick="settingsVisibility();"></td> </tr> 
                 <tr class="AP_MODE_ENABLED"> 
                     <td>WiFi<br>Networks</nr> </td> 
                     <td> 
@@ -47,7 +47,7 @@
                 </tr>
                 <tr class="AP_MODE_ENABLED"> <td>SSID</td> <td><input id='settingsSSID'></td> </tr>
                 <tr class="AP_MODE_ENABLED"> <td>Password</td> <td><input type="password" id='settingsPassword'></td> </tr>
-                <tr class="AP_MODE_ENABLED"> <td>DHCP</td> <td><input type="checkbox" id="settingsDHCP"></td> </tr> 
+                <tr class="AP_MODE_ENABLED"> <td>DHCP</td> <td><input type="checkbox" id="settingsDHCP" onclick="settingsVisibility();"></td> </tr> 
                 <tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td>IP-Address</td> <td> <input id='settingsWiFiIP'> </td> </tr>
                 <tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td>Subnet</td> <td> <input id='settingsWifiNetMask'> </td> </tr>
                 <tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td>Gateway</td> <td> <input id='settingsWifiGateway'> </td> </tr>
@@ -132,7 +132,6 @@
         </div>  
         
         <div id="cMonitor" class="content-section">
-             <div id="routing"></div>
         </div>          
 		
 		<div id="custom-modal" class="modal-overlay">

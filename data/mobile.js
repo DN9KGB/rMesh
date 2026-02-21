@@ -14,6 +14,7 @@ const emojis = [
 var guiSettings;
 let wakeLock = null;
 var focus = true;
+var settings = settings || { name: "rMesh", mycall: "" };
 
 // Der Speicher im Hintergrund (während die Seite geladen ist) 
 const nameColorMap = {};
@@ -119,7 +120,7 @@ function buildMenu() {
     setupInputBar('group_all', mySendMessageFunction);   
 
     //Gruppen hinzufügen
-    for (key in guiSettings.groups) { 
+    for (let key in guiSettings.groups) { 
         const groupName  = guiSettings.groups[key].name; 
         //DIVs hinzu
         const container = document.querySelector(".content-container"); 
@@ -189,7 +190,7 @@ function buildMenu() {
         { type: 'header', label: 'Direct Messages' }]); 
 
     //DM hinzufügen
-    for (key in guiSettings.dm) { 
+    for (let key in guiSettings.dm) { 
         const callsign  = guiSettings.dm[key].name; 
         //DIVs hinzu
         const container = document.querySelector(".content-container"); 
@@ -358,13 +359,7 @@ function loadGuiSettings() {
             return;
         }
     }
-    guiSettings = { 
-        groups: [],
-        dm: [],
-        menu: "cMonitor",
-        update: 0,
-        title: "rMesh"
-    };
+    guiSettings = { groups: [], dm: [], menu: "cMonitor", update: 0, title: "rMesh" };
 }
 
 
@@ -374,29 +369,38 @@ function toggleMenu() {
 }
 
 function showContent(sectionId, title = "") {
-	// 1. Alle Sektionen verstecken
-    if (title) {
-    	document.getElementById("title").innerHTML = settings.name + " - " + title;
-    } else {
-        document.getElementById("title").innerHTML = settings.name;        
-    }    
-    const sections = document.querySelectorAll('.content-section');
-	sections.forEach(section => {
-		section.classList.remove('active');
-	});
-
-	// 2. Gewählte Sektion anzeigen
-    if (document.getElementById(sectionId)) {
-    	document.getElementById(sectionId).classList.add('active');
-    } else {
-        document.getElementById("cMonitor").classList.add('active');           
+    // Sicherer Zugriff auf settings
+    const currentName = (settings && settings.name) ? settings.name : "rMesh";
+    
+    const titleElem = document.getElementById("title");
+    if (titleElem) {
+        titleElem.innerHTML = title ? currentName + " - " + title : currentName;
     }
-    showMessages(true);
-    window.scrollTo(0, 0); 
-    guiSettings.menu = sectionId;
-    guiSettings.title = title;
-    saveGuiSettings();
 
+    // Alle Sektionen verstecken
+    const sections = document.querySelectorAll('.content-section');
+    sections.forEach(section => {
+        section.classList.remove('active');
+    });
+
+    // Gewählte Sektion aktivieren
+    const target = document.getElementById(sectionId);
+    if (target) {
+        target.classList.add('active');
+    } else {
+        // Fallback zu Monitor, falls ID nicht gefunden
+        const monitor = document.getElementById("cMonitor");
+        if (monitor) monitor.classList.add('active');
+    }
+
+    window.scrollTo(0, 0); 
+    
+    // UI-Zustand speichern (Safari-sicher)
+    if (guiSettings) {
+        guiSettings.menu = sectionId;
+        guiSettings.title = title;
+        saveGuiSettings();
+    }
 }
 
 
@@ -503,7 +507,7 @@ function setupInputBar(sectionId, onSendCallback) {
     picker.style.display = 'none';
     
     // Maximale Länge aus den Einstellungen holen (mit Fallback auf 200, falls d.settings fehlt)
-    const maxLength = (window.d && d.settings && d.settings.loraMaxMessageLength) ? d.settings.loraMaxMessageLength : 200;
+    const maxLength = (settings && settings.loraMaxMessageLength) ? settings.loraMaxMessageLength : 200;
 
     emojis.forEach(emoji => {
         const span = document.createElement('span');
@@ -650,26 +654,16 @@ function showSelectionModal(title, desc, options = []) {
 
 
 function settingsVisibility() {
-    if (document.getElementById("settingsApMode").checked) {
-        for (e of document.getElementsByClassName('DHCP_ENABLED')) {
-            e.style.display = "none";
-        }
-        for (e of document.getElementsByClassName('AP_MODE_ENABLED')) {
-            e.style.display = "none";
-        }				
-    } else {
-        for (e of document.getElementsByClassName('AP_MODE_ENABLED')) {
-            e.style.display = "";
-        }				
-        if (document.getElementById("settingsDHCP").checked) {
-            for (e of document.getElementsByClassName('DHCP_ENABLED')) {
-                e.style.display = "none";
-            }
-        } else {
-            for (e of document.getElementsByClassName('DHCP_ENABLED')) {
-                e.style.display = "";
-            }
-        }
+    // WICHTIG: Nutze "let", um Safari-Crashes zu vermeiden!
+    const isApMode = document.getElementById("settingsApMode")?.checked;
+    const isDhcp = document.getElementById("settingsDHCP")?.checked;
+
+    for (let e of document.getElementsByClassName('AP_MODE_ENABLED')) {
+        e.style.display = isApMode ? "none" : "";
+    }
+    
+    for (let e of document.getElementsByClassName('DHCP_ENABLED')) {
+        e.style.display = (isApMode || isDhcp) ? "none" : "";
     }
 }
 
