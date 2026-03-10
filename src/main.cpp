@@ -184,8 +184,8 @@ void processRxFrame(Frame &f) {
                 if (messagesHead >= MAX_STORED_MESSAGES_RAM) { messagesHead = 0; }                        
 
                 //Message an Websocket senden & speichern
-                char* jsonBuffer = (char*)malloc(2048);
-                size_t len = f.messageJSON(jsonBuffer, 2048);
+                char* jsonBuffer = (char*)malloc(4096);
+                size_t len = f.messageJSON(jsonBuffer, 4096);
                 ws.textAll(jsonBuffer, len);
                 addJSONtoFile(jsonBuffer, len, "/messages.json", MAX_STORED_MESSAGES);
                 free(jsonBuffer);
