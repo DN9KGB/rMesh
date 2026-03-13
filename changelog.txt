@@ -1,4 +1,6 @@
-- max. Message json länge 4096 bytes
+V1.0.20a
+- Max. Message json länge 4096 bytes
+- Keine Binärdaten mehr in messages und monitor
 
 
 V1.0.19a

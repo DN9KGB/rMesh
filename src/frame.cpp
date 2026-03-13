@@ -76,9 +76,9 @@ size_t Frame::exportBinary(uint8_t* data, size_t length) {
 void Frame::monitorJSON() {
     //Schreibt Monitor-Daten in JSON-Buffer
     JsonDocument doc;
-    for (size_t i = 0; i < messageLength; i++) {
-        doc["monitor"]["message"][i] = message[i];
-    }    
+    // for (size_t i = 0; i < messageLength; i++) {
+    //     doc["monitor"]["message"][i] = message[i];
+    // }    
     if ((messageLength > 0) && ((messageType == Frame::MessageTypes::TEXT_MESSAGE) || (messageType == Frame::MessageTypes::TRACE_MESSAGE))) {
         char text[messageLength + 1];
         safeUtf8Copy(text, (uint8_t*)message, messageLength);
@@ -121,9 +121,9 @@ void Frame::monitorJSON() {
 size_t Frame::messageJSON(char* buffer, size_t length) {
     //Schreibt Message-Daten in JSON-Buffer
     JsonDocument doc;
-    for (size_t i = 0; i < messageLength; i++) {
-        doc["message"]["message"][i] = message[i];
-    }    
+    // for (size_t i = 0; i < messageLength; i++) {
+    //     doc["message"]["message"][i] = message[i];
+    // }    
     if ((messageLength > 0) && ((messageType == Frame::MessageTypes::TEXT_MESSAGE) || (messageType == Frame::MessageTypes::TRACE_MESSAGE))) {
         char text[messageLength + 1];
         safeUtf8Copy(text, (uint8_t*)message, messageLength);
