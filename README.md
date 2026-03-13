@@ -21,6 +21,10 @@ Wer bunte Karten, Tracking und Telemetrie-Dashboards sucht, ist bei anderen Proj
 * ESP32 / ESP8266
 * LoRa-Modul (oder vergleichbare HF-Hardware)
 
+## Installation / Webflasher
+Mach es dir einfach: Über den offiziellen Webflasher kannst du die aktuelle rMesh-Firmware direkt aus einem unterstützten Browser (Chrome/Edge) heraus auf deine Hardware flashen – ganz ohne lästiges Einrichten einer Entwicklungsumgebung.
+
+**[Hier geht es zum rMesh Webflasher](https://dh1nfj.de/rMesh/)**
+
 ## Lizenz: GNU GPLv3
 **rMesh** ist unter der **GNU General Public License v3.0 (GPLv3)** lizenziert.
-
