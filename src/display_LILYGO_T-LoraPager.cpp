@@ -326,9 +326,13 @@ static int       editDropIdx    = 0;
 #ifndef ROTARY_C
   #define ROTARY_C 7
 #endif
-static bool      prevBtn     = false;
-static uint32_t  btnDownMs   = 0;
-static bool      longHandled = false;
+static bool      prevBtn       = false;
+static uint32_t  btnDownMs     = 0;
+static bool      longHandled   = false;
+
+// Chat sub-modes: group switching (default) or message scrolling
+static bool      chatScrollMode = false;
+static int       chatScrollOff  = 0;  // messages hidden at bottom (0 = newest visible)
 
 // ─── Group helper functions ────────────────────────────────────────────
 static int buildTabList(int* tabList) {
@@ -435,41 +439,54 @@ static void drawGroupTabs() {
     int tabCount = buildTabList(tabList);
     int tabW = DISP_W / tabCount;
 
+    // Reserve right side for scroll-mode indicator ("SCR" = 3 chars * 6px + 2px margin)
+    const int INDICATOR_W = 3 * 6 + 4;
+    int usableW = chatScrollMode ? (DISP_W - INDICATOR_W) : DISP_W;
+    int adjTabW = usableW / tabCount;
+
     lcd.fillRect(0, 0, DISP_W, GROUP_TAB_H, COL_MENU_HDR);
     lcd.setTextSize(1);
 
     for (int i = 0; i < tabCount; i++) {
-        int x = i * tabW;
+        int x = i * adjTabW;
         int g = tabList[i];
         bool active    = (g == activeGroup);
         bool hasUnread = (g >= 0 && groupUnread[g] > 0);
 
         uint16_t bg = active ? COL_MENU_SEL : (hasUnread ? COL_UNREAD_BG : COL_MENU_HDR);
-        lcd.fillRect(x, 0, tabW, GROUP_TAB_H, bg);
+        lcd.fillRect(x, 0, adjTabW, GROUP_TAB_H, bg);
 
         const char* name = (g == -1) ? "Alle" : groupNames[g];
         lcd.setTextColor(active ? COL_MENU_SEL_FG : (hasUnread ? COL_UNREAD_FG : COL_MENU_FG));
 
         char tabLabel[16];
         if (hasUnread) snprintf(tabLabel, sizeof(tabLabel), "%s*", name);
-        else           snprintf(tabLabel, sizeof(tabLabel), "%s", name);
+        else           snprintf(tabLabel, sizeof(tabLabel), "%s",  name);
 
         int tw = (int)strlen(tabLabel) * 6;
-        int tx = x + (tabW - tw) / 2;
+        int tx = x + (adjTabW - tw) / 2;
         if (tx < x + 1) tx = x + 1;
         drawStr(tabLabel, tx, 2);
 
         if (i < tabCount - 1)
-            lcd.drawFastVLine(x + tabW - 1, 0, GROUP_TAB_H, COL_SEPARATOR);
+            lcd.drawFastVLine(x + adjTabW - 1, 0, GROUP_TAB_H, COL_SEPARATOR);
+    }
+
+    // Scroll-mode indicator: right-aligned yellow "SCR" badge
+    if (chatScrollMode) {
+        lcd.setTextColor(0xFFE0u); // yellow
+        drawStr("SCR", DISP_W - INDICATOR_W + 2, 2);
     }
 }
 
 // ─── Chat drawing functions ───────────────────────────────────────────
+#define MSG_GAP 3   // pixels of spacing between messages
+
 static void drawMessages() {
-    float ts   = dispTextSize;
-    int lineH  = max(1, (int)(10.0f * ts + 0.5f));
-    int charW  = max(1, (int)(6.0f  * ts + 0.5f));
-    int charsPerLine = DISP_W / charW;
+    float ts         = dispTextSize;
+    int lineH        = max(1, (int)(10.0f * ts + 0.5f));
+    int charW        = max(1, (int)(6.0f  * ts + 0.5f));
+    int charsPerLine = max(1, DISP_W / charW);
 
     instance.lockSPI();
     lcd.startWrite();
@@ -502,20 +519,47 @@ static void drawMessages() {
         if (show && nMatches < MAX_HISTORY) matches[nMatches++] = i;
     }
 
-    int maxVis    = MSG_AREA_H / lineH;
-    int startMatch = (nMatches > maxVis) ? nMatches - maxVis : 0;
-    int y = MSG_AREA_Y;
-
-    for (int mi = startMatch; mi < nMatches && y < MSG_AREA_Y + MSG_AREA_H; mi++) {
+    // Pre-calculate wrapped line count per message to enable bottom-alignment
+    char buf[290];
+    int lineCounts[MAX_HISTORY] = {};
+    for (int mi = 0; mi < nMatches; mi++) {
         ChatLine* l = getLine(matches[mi]);
-        if (!l) continue;
-        lcd.setTextColor(l->own ? COL_OWN : COL_RX);
-        char buf[290];
+        if (!l) { lineCounts[mi] = 1; continue; }
         if (activeGroup == -1 && strlen(l->dst) > 0)
             snprintf(buf, sizeof(buf), "<%s\xBB%s> %s", l->call, l->dst, l->text);
         else
             snprintf(buf, sizeof(buf), "<%s> %s", l->call, l->text);
-        int len = strlen(buf), pos = 0;
+        int len = (int)strlen(buf);
+        lineCounts[mi] = max(1, (len + charsPerLine - 1) / charsPerLine);
+    }
+
+    // Clamp scroll offset and compute the visible end index
+    if (chatScrollOff < 0) chatScrollOff = 0;
+    if (chatScrollOff >= nMatches) chatScrollOff = (nMatches > 0) ? nMatches - 1 : 0;
+    int visEnd = nMatches - chatScrollOff;  // newest visible message (exclusive)
+
+    // Walk backwards from visEnd to find the first message that still fits
+    int totalH     = 0;
+    int startMatch = visEnd;
+    for (int mi = visEnd - 1; mi >= 0; mi--) {
+        int h = lineCounts[mi] * lineH + MSG_GAP;
+        if (totalH + h > MSG_AREA_H) break;
+        totalH     += h;
+        startMatch  = mi;
+    }
+
+    // Pin content to the bottom of the message area
+    int y = MSG_AREA_Y + MSG_AREA_H - totalH;
+
+    for (int mi = startMatch; mi < visEnd; mi++) {
+        ChatLine* l = getLine(matches[mi]);
+        if (!l) continue;
+        lcd.setTextColor(l->own ? COL_OWN : COL_RX);
+        if (activeGroup == -1 && strlen(l->dst) > 0)
+            snprintf(buf, sizeof(buf), "<%s\xBB%s> %s", l->call, l->dst, l->text);
+        else
+            snprintf(buf, sizeof(buf), "<%s> %s", l->call, l->text);
+        int len = (int)strlen(buf), pos = 0;
         while (pos < len && y < MSG_AREA_Y + MSG_AREA_H) {
             int take = min(len - pos, charsPerLine);
             char tmp[82];
@@ -525,6 +569,7 @@ static void drawMessages() {
             pos += take;
             y   += lineH;
         }
+        y += MSG_GAP;
     }
     lcd.endWrite();
     instance.unlockSPI();
@@ -1003,22 +1048,32 @@ void displayUpdateLoop() {
     bool keyAvail = (instance.getKeyChar(&c) == 1 && c != 0);
 
     if (uiMode == UI_CHAT) {
-        // Encoder rotate → switch group
         if (rot.dir == ROTARY_DIR_UP || rot.dir == ROTARY_DIR_DOWN) {
-            int tabList[MAX_GROUPS + 1];
-            int tabCount = buildTabList(tabList);
-            if (tabCount > 1) {
-                int cur = currentTabIndex();
-                cur = (rot.dir == ROTARY_DIR_UP)
-                    ? (cur + 1) % tabCount
-                    : (cur - 1 + tabCount) % tabCount;
-                activeGroup = tabList[cur];
-                if (activeGroup >= 0) groupUnread[activeGroup] = 0;
+            if (chatScrollMode) {
+                // Scroll mode: UP = older messages, DOWN = newer
+                if (rot.dir == ROTARY_DIR_UP) chatScrollOff++;
+                else if (chatScrollOff > 0)   chatScrollOff--;
                 needRedraw = true;
+            } else {
+                // Group mode: rotate switches active group
+                int tabList[MAX_GROUPS + 1];
+                int tabCount = buildTabList(tabList);
+                if (tabCount > 1) {
+                    int cur = currentTabIndex();
+                    cur = (rot.dir == ROTARY_DIR_UP)
+                        ? (cur + 1) % tabCount
+                        : (cur - 1 + tabCount) % tabCount;
+                    activeGroup = tabList[cur];
+                    if (activeGroup >= 0) groupUnread[activeGroup] = 0;
+                    chatScrollOff = 0;
+                    needRedraw = true;
+                }
             }
         }
-        // Encoder press → open menu
-        if (shortPress) openMenu();
+        // Single click: toggle between group-switch and scroll mode
+        if (shortPress) { chatScrollMode = !chatScrollMode; needRedraw = true; }
+        // Long press: open settings menu
+        if (longPress)  openMenu();
 
         // Keyboard → chat input
         if (keyAvail) {
