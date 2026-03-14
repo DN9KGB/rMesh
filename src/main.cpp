@@ -21,6 +21,10 @@
 #include "routing.h"
 #include "time.h"
 
+#ifdef LILYGO_T_LORA_PAGER
+#include "display_LILYGO_T-LoraPager.h"
+#endif
+
 
 //Uhrzeitformat
 const char* TZ_INFO = "CET-1CEST,M3.5.0,M10.5.0/3";
@@ -191,6 +195,15 @@ void processRxFrame(Frame &f) {
                 free(jsonBuffer);
                 jsonBuffer = nullptr;
 
+                // Display on T-LoraPager screen (TEXT_MESSAGE only)
+                #ifdef LILYGO_T_LORA_PAGER
+                if (f.messageType == Frame::MessageTypes::TEXT_MESSAGE) {
+                    char textBuf[261] = {0};
+                    memcpy(textBuf, f.message, f.messageLength);
+                    displayOnNewMessage(f.srcCall, textBuf, f.dstGroup, f.dstCall);
+                }
+                #endif
+
                 //ECHO für Tracking-Message
                 if ((strcmp(f.dstCall, settings.mycall) == 0) && (f.messageType == Frame::MessageTypes::TRACE_MESSAGE) && (strstr((char*)f.message, "ECHO") == NULL)) {
                         char message[512];
@@ -300,8 +313,18 @@ void processRxFrame(Frame &f) {
 void setup() {
     //UART
     Serial.begin(115200);
-    Serial.setDebugOutput(true);  
+    Serial.setDebugOutput(true);
+
+    #ifdef LILYGO_T_LORA_PAGER
+    // USB-CDC needs ~1s to enumerate; early output would be lost
+    delay(2000);
+    Serial.println("=== rMesh T-LoraPager boot ===");
+    Serial.printf("PSRAM: %s (%u bytes)\n", psramFound() ? "OK" : "NOT FOUND", ESP.getPsramSize());
+    Serial.printf("Free heap: %u\n", ESP.getFreeHeap());
+    Serial.flush();
+    #else
     while (!Serial) {}
+    #endif
 
     //CPU Frqg fest (soll wegen SPI sinnvoll sein)
     setCpuFrequencyMhz(240);
@@ -372,6 +395,11 @@ void loop() {
 
     //Wifi
     showWiFiStatus();
+
+    // Display + keyboard polling (T-LoraPager only)
+    #ifdef LILYGO_T_LORA_PAGER
+    displayUpdateLoop();
+    #endif
 
 	//Announce Senden
 	if (millis() > announceTimer) {
