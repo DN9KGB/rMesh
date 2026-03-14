@@ -10,6 +10,9 @@
 #include "settings.h"
 #include "helperFunctions.h"
 #include "config.h"
+#include "frame.h"
+#include "routing.h"
+#include "peer.h"
 
 #include <LilyGoLib.h>
 
@@ -152,6 +155,7 @@ public:
 enum UiMode {
     UI_CHAT, UI_MENU_TOP, UI_MENU_LIST,
     UI_EDIT_STR, UI_EDIT_NUM, UI_EDIT_DROP,
+    UI_ROUTING, UI_PEERS, UI_MONITOR,
 };
 
 enum FieldType {
@@ -339,6 +343,16 @@ static bool      longHandled   = false;
 static bool      chatScrollMode = false;
 static int       chatScrollOff  = 0;  // messages hidden at bottom (0 = newest visible)
 
+static int       infoScroll    = 0;    // scroll offset for info views
+
+// Monitor ring buffer
+#define MON_HISTORY   80
+#define MON_LINE_W    72
+static char      monLines[MON_HISTORY][MON_LINE_W];
+static int       monHead     = 0;
+static int       monCount    = 0;
+static bool      monNewData  = false;
+
 // ─── Group helper functions ────────────────────────────────────────────
 static int buildTabList(int* tabList) {
     int count = 0;
@@ -438,6 +452,15 @@ static ChatLine* getLine(int i) {
     return &history[offset];
 }
 
+static void fmtAge(time_t t, char* buf, size_t bufLen) {
+    time_t age = time(NULL) - t;
+    if (age < 0) age = 0;
+    if      (age < 60)    snprintf(buf, bufLen, "%llds",  (long long)age);
+    else if (age < 3600)  snprintf(buf, bufLen, "%lldm",  (long long)(age / 60));
+    else if (age < 86400) snprintf(buf, bufLen, "%lldh",  (long long)(age / 3600));
+    else                  snprintf(buf, bufLen, "%lldd",  (long long)(age / 86400));
+}
+
 // ─── Group tab strip ──────────────────────────────────────────────────
 static void drawGroupTabs() {
     int tabList[MAX_GROUPS + 1];
@@ -482,6 +505,133 @@ static void drawGroupTabs() {
         lcd.setTextColor(0xFFE0u); // yellow
         drawStr("SCR", DISP_W - INDICATOR_W + 2, 2);
     }
+}
+
+// ─── Info view helper ─────────────────────────────────────────────────
+// Draws header + footer + scrollbar. Content area starts at MENU_HDR_H+colHdrH.
+static void infoHeader(const char* title) {
+    spr.fillScreen(COL_BG);
+    spr.fillRect(0, 0, DISP_W, MENU_HDR_H, COL_MENU_HDR);
+    spr.setTextSize(1);
+    spr.setTextColor(COL_MENU_HDR_FG);
+    char hdr[48];
+    snprintf(hdr, sizeof(hdr), "rMesh > %s", title);
+    drawStrS(hdr, 4, 5);
+}
+static void infoFooter(int total, int vis, int scroll) {
+    int fy = DISP_H - MENU_FOT_H;
+    spr.fillRect(0, fy, DISP_W, MENU_FOT_H, COL_MENU_FOT);
+    spr.setTextSize(1);
+    spr.setTextColor(COL_MENU_FOT_FG);
+    drawStrS("Drehen=Scr  Druecken=Zurueck", 4, fy + 1);
+    if (total > vis) {
+        int sbH = max(4, MENU_AREA_H_ * vis / total);
+        int sbY = MENU_HDR_H + MENU_AREA_H_ * scroll / total;
+        spr.fillRect(DISP_W - 3, sbY, 3, sbH, COL_MENU_HDR_FG);
+    }
+}
+
+// ─── Routing view ─────────────────────────────────────────────────────
+static void drawRouting() {
+    infoHeader("Routing");
+    const int colHdrH = 14;
+    const int areaY   = MENU_HDR_H + colHdrH;
+    const int areaH   = DISP_H - MENU_FOT_H - areaY;
+    const int lineH   = MENU_ITEM_H;
+    const int vis     = areaH / lineH;
+
+    // Column header
+    spr.setTextColor(0x7BEFu);  // dim gray
+    spr.setTextSize(1);
+    drawStrS("Rufzeichen  Via          H  Alter", 4, MENU_HDR_H + 2);
+    spr.drawFastHLine(0, MENU_HDR_H + colHdrH - 1, DISP_W, COL_SEPARATOR);
+
+    int n = (int)routingList.size();
+    int start = max(0, min(infoScroll, n > vis ? n - vis : 0));
+    if (n == 0) {
+        spr.setTextColor(COL_MENU_FG);
+        drawStrS("(keine Eintraege)", 4, areaY + areaH / 2 - 5);
+    }
+    for (int i = start; i < n && (i - start) < vis; i++) {
+        const Route& r = routingList[i];
+        char age[10];
+        fmtAge(r.timestamp, age, sizeof(age));
+        char line[MON_LINE_W];
+        snprintf(line, sizeof(line), "%-11s %-12s %2d  %s",
+                 r.srcCall, r.viaCall, r.hopCount, age);
+        spr.setTextColor(COL_MENU_FG);
+        spr.setTextSize(1);
+        drawStrS(line, 4, areaY + (i - start) * lineH + 3);
+    }
+    infoFooter(max(1, n), vis, start);
+    sprPush();
+}
+
+// ─── Peers view ───────────────────────────────────────────────────────
+static void drawPeers() {
+    infoHeader("Peers");
+    const int colHdrH = 14;
+    const int areaY   = MENU_HDR_H + colHdrH;
+    const int areaH   = DISP_H - MENU_FOT_H - areaY;
+    const int lineH   = MENU_ITEM_H;
+    const int vis     = areaH / lineH;
+
+    // Column header
+    spr.setTextColor(0x7BEFu);
+    spr.setTextSize(1);
+    drawStrS("Rufzeichen  Typ    RSSI    SNR   Status  Alter", 4, MENU_HDR_H + 2);
+    spr.drawFastHLine(0, MENU_HDR_H + colHdrH - 1, DISP_W, COL_SEPARATOR);
+
+    int n = (int)peerList.size();
+    int start = max(0, min(infoScroll, n > vis ? n - vis : 0));
+    if (n == 0) {
+        spr.setTextColor(COL_MENU_FG);
+        drawStrS("(keine Eintraege)", 4, areaY + areaH / 2 - 5);
+    }
+    for (int i = start; i < n && (i - start) < vis; i++) {
+        const Peer& p = peerList[i];
+        char age[10];
+        fmtAge(p.timestamp, age, sizeof(age));
+        char line[MON_LINE_W];
+        snprintf(line, sizeof(line), "%-11s %-6s  %6.1f  %5.1f  %-4s  %s",
+                 p.nodeCall,
+                 p.port == 0 ? "LoRa" : "WiFi",
+                 p.rssi, p.snr,
+                 p.available ? "OK" : "-",
+                 age);
+        spr.setTextColor(p.available ? 0x07E0u : 0xAD55u);  // green or gray
+        spr.setTextSize(1);
+        drawStrS(line, 4, areaY + (i - start) * lineH + 3);
+    }
+    infoFooter(max(1, n), vis, start);
+    sprPush();
+}
+
+// ─── Monitor view ─────────────────────────────────────────────────────
+static void drawMonitor() {
+    infoHeader("Monitor");
+    const int areaY = MENU_HDR_H;
+    const int areaH = DISP_H - MENU_FOT_H - areaY;
+    const int lineH = MENU_ITEM_H;
+    const int vis   = areaH / lineH;
+
+    // infoScroll=0 → newest at bottom; positive → scrolled up
+    int clampedScroll = max(0, min(infoScroll, monCount > vis ? monCount - vis : 0));
+    int visEnd  = monCount - clampedScroll;
+    int start   = max(0, visEnd - vis);
+
+    for (int i = start; i < visEnd; i++) {
+        int ri = (monHead - monCount + i + MON_HISTORY) % MON_HISTORY;
+        spr.setTextColor(COL_MENU_FG);
+        spr.setTextSize(1);
+        drawStrS(monLines[ri], 4, areaY + (i - start) * lineH + 3);
+    }
+    if (monCount == 0) {
+        spr.setTextColor(COL_MENU_FG);
+        drawStrS("(kein Traffic)", 4, areaY + areaH / 2 - 5);
+    }
+    infoFooter(max(1, monCount), vis, clampedScroll);
+    sprPush();
 }
 
 // ─── Chat drawing functions ───────────────────────────────────────────
@@ -680,15 +830,22 @@ static void drawMenuTop() {
     spr.setTextSize(1);
     drawStrS("rMesh  Einstellungen", 4, 5);
 
-    const char* labels[4] = {"Network", "Setup", "Display", "Gruppen"};
-    int itemH = 40, startY = 23, gap = 4;
-    for (int i = 0; i < 4; i++) {
-        int y = startY + i * (itemH + gap);
+    const char* labels[7] = {"Network", "Setup", "Display", "Gruppen",
+                              "Routing", "Peers", "Monitor"};
+    const int colW  = DISP_W / 2;   // 240 px per column
+    const int itemW = colW - 30;    // 210 px
+    const int itemH = 40, gap = 4, startY = MENU_HDR_H + 2;
+    for (int i = 0; i < 7; i++) {
+        int col = i / 4;            // col 0: items 0-3, col 1: items 4-6
+        int row = i % 4;
+        int x   = col * colW + 15;
+        int y   = startY + row * (itemH + gap);
         bool sel = (i == topSel);
-        spr.fillRect(20, y, DISP_W - 40, itemH, sel ? COL_MENU_SEL : COL_MENU_EDIT_BG);
+        spr.fillRect(x, y, itemW, itemH, sel ? COL_MENU_SEL : COL_MENU_EDIT_BG);
         spr.setTextSize(2);
         spr.setTextColor(sel ? COL_MENU_SEL_FG : COL_MENU_FG);
-        drawStrS(labels[i], 34, y + 10);
+        int tw = (int)strlen(labels[i]) * 12;  // textSize 2: 12px/char
+        drawStrS(labels[i], x + (itemW - tw) / 2, y + 12);
     }
     int fy = DISP_H - MENU_FOT_H;
     spr.fillRect(0, fy, DISP_W, MENU_FOT_H, COL_MENU_FOT);
@@ -878,6 +1035,9 @@ static void enterSubmenu(int idx) {
             curMenu = groupItemsBuf;
             curMenuLen = groupItemsLen;
             break;
+        case 4: infoScroll = 0; uiMode = UI_ROUTING; needRedraw = true; return;
+        case 5: infoScroll = 0; uiMode = UI_PEERS;   needRedraw = true; return;
+        case 6: infoScroll = 0; uiMode = UI_MONITOR; needRedraw = true; return;
         default: return;
     }
     listSel = 0; listScroll = 0; uiMode = UI_MENU_LIST; needRedraw = true;
@@ -1055,6 +1215,45 @@ void displayTxFrame(const char* dstCall, const char* text) {
     if (uiMode == UI_CHAT) needRedraw = true;
 }
 
+void displayMonitorFrame(const Frame& f) {
+    // Format a compact log line for the monitor view
+    char ts[8] = {0};
+    time_t t = f.timestamp ? f.timestamp : time(NULL);
+    struct tm* tm_ = localtime(&t);
+    if (tm_) strftime(ts, sizeof(ts), "%H:%M", tm_);
+
+    const char* dir = f.tx ? "TX" : "RX";
+    char line[MON_LINE_W];
+
+    // Decide frame-type label
+    const char* ftype;
+    switch (f.frameType) {
+        case 0x00: ftype = "ANN"; break;
+        case 0x01: ftype = "ACK"; break;
+        case 0x02: ftype = "TUN"; break;
+        case 0x04: ftype = "MAC"; break;
+        default:   ftype = "MSG"; break;
+    }
+
+    bool isMsg = (f.frameType == 0x03 || f.frameType == 0x05 || f.frameType == 0x00);
+    if (isMsg && (strlen(f.srcCall) > 0)) {
+        snprintf(line, MON_LINE_W, "%s %s %s %-8s>%-8s H%d %.0fdB",
+                 ts, dir, ftype,
+                 f.srcCall, strlen(f.dstCall) ? f.dstCall : "*",
+                 f.hopCount, f.rssi);
+    } else {
+        snprintf(line, MON_LINE_W, "%s %s %s %-9s H%d %.0fdB",
+                 ts, dir, ftype, f.nodeCall, f.hopCount, f.rssi);
+    }
+
+    // Store in ring buffer
+    strncpy(monLines[monHead % MON_HISTORY], line, MON_LINE_W - 1);
+    monLines[monHead % MON_HISTORY][MON_LINE_W - 1] = '\0';
+    monHead++;
+    if (monCount < MON_HISTORY) monCount++;
+    monNewData = true;
+}
+
 // ─── Main loop ────────────────────────────────────────────────────────
 void displayUpdateLoop() {
     RotaryMsg_t rot = instance.getRotary();
@@ -1120,8 +1319,8 @@ void displayUpdateLoop() {
         }
     }
     else if (uiMode == UI_MENU_TOP) {
-        if (rot.dir == ROTARY_DIR_UP)   { topSel = (topSel + 1) % 4; needRedraw = true; }
-        if (rot.dir == ROTARY_DIR_DOWN) { topSel = (topSel + 3) % 4; needRedraw = true; }
+        if (rot.dir == ROTARY_DIR_UP)   { topSel = (topSel + 1) % 7; needRedraw = true; }
+        if (rot.dir == ROTARY_DIR_DOWN) { topSel = (topSel + 6) % 7; needRedraw = true; }
         if (shortPress) enterSubmenu(topSel);
         if (longPress)  { uiMode = UI_CHAT; needRedraw = true; }
     }
@@ -1176,6 +1375,12 @@ void displayUpdateLoop() {
         if (shortPress) confirmEditDrop();
         if (longPress)  { uiMode = UI_MENU_LIST; needRedraw = true; }
     }
+    else if (uiMode == UI_ROUTING || uiMode == UI_PEERS || uiMode == UI_MONITOR) {
+        if (rot.dir == ROTARY_DIR_UP)   { infoScroll++; needRedraw = true; }
+        if (rot.dir == ROTARY_DIR_DOWN && infoScroll > 0) { infoScroll--; needRedraw = true; }
+        if (monNewData && uiMode == UI_MONITOR) { needRedraw = true; monNewData = false; }
+        if (shortPress) { uiMode = UI_MENU_TOP; needRedraw = true; }
+    }
 
     instance.loop();
 
@@ -1201,6 +1406,9 @@ void displayUpdateLoop() {
             case UI_EDIT_STR:   drawEditStr();   break;
             case UI_EDIT_NUM:   drawEditNum();   break;
             case UI_EDIT_DROP:  drawEditDrop();  break;
+            case UI_ROUTING:    drawRouting();   break;
+            case UI_PEERS:      drawPeers();     break;
+            case UI_MONITOR:    drawMonitor();   break;
         }
         needRedraw = false;
     }

@@ -196,6 +196,7 @@ void transmitFrame(Frame &f) {
     instance.unlockSPI();
 
     f.monitorJSON();
+    displayMonitorFrame(f);
 }
 
 #endif // LILYGO_T_LORA_PAGER
