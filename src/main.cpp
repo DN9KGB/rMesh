@@ -23,6 +23,7 @@
 
 #ifdef LILYGO_T_LORA_PAGER
 #include "display_LILYGO_T-LoraPager.h"
+#include "hal_LILYGO_T-LoraPager.h"
 #endif
 
 
@@ -192,6 +193,10 @@ void processRxFrame(Frame &f) {
                 size_t len = f.messageJSON(jsonBuffer, 4096);
                 ws.textAll(jsonBuffer, len);
                 addJSONtoFile(jsonBuffer, len, "/messages.json", MAX_STORED_MESSAGES);
+                #ifdef LILYGO_T_LORA_PAGER
+                // Archive to SD card without size limit when a card is inserted
+                pagerAddMessageToSD(jsonBuffer, len);
+                #endif
                 free(jsonBuffer);
                 jsonBuffer = nullptr;
 

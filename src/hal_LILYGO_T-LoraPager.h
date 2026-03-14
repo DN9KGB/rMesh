@@ -30,5 +30,9 @@ bool checkReceive(Frame &f);
 void transmitFrame(Frame &f);
 bool getKeyApMode();
 
+// SD card helpers (no-ops when no card is inserted)
+bool pagerSdAvailable();
+void pagerAddMessageToSD(const char* json, size_t len);
+
 extern bool txFlag;
 extern bool rxFlag;

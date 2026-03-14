@@ -23,11 +23,51 @@
 
 // LilyGoLib-Instanz (definiert in LilyGo_LoRa_Pager.cpp)
 #include <LilyGoLib.h>
+#include <SD.h>
 
 // radio wird von LilyGoLib definiert (via ARDUINO_LILYGO_LORA_SX1262 in LilyGo_LoRa_Pager.cpp)
 
 bool txFlag = false;
 bool rxFlag = false;
+
+// ─── SD card ──────────────────────────────────────────────────────────────
+
+static bool               sdMounted = false;
+static SemaphoreHandle_t  sdMutex   = nullptr;
+
+bool pagerSdAvailable() { return sdMounted; }
+
+struct SdWriteParams { char* content; size_t length; };
+
+static void sdWriteTask(void* pvParameters) {
+    SdWriteParams* p = (SdWriteParams*)pvParameters;
+    if (xSemaphoreTake(sdMutex, pdMS_TO_TICKS(30000))) {
+        instance.lockSPI();
+        File f = SD.open("/messages.json", FILE_APPEND);
+        if (f) {
+            f.write((const uint8_t*)p->content, p->length);
+            f.print('\n');
+            f.close();
+        } else {
+            Serial.println("[SD] Failed to open /messages.json");
+        }
+        instance.unlockSPI();
+        xSemaphoreGive(sdMutex);
+    }
+    free(p->content);
+    delete p;
+    vTaskDelete(NULL);
+}
+
+void pagerAddMessageToSD(const char* json, size_t len) {
+    if (!sdMounted) return;
+    SdWriteParams* p = new SdWriteParams();
+    p->content = (char*)malloc(len);
+    if (!p->content) { delete p; return; }
+    memcpy(p->content, json, len);
+    p->length = len;
+    xTaskCreate(sdWriteTask, "SdWrite", 4096, p, 1, NULL);
+}
 
 // ─── Hilfsfunktionen ─────────────────────────────────────────────────────
 
@@ -50,14 +90,19 @@ bool getKeyApMode() {
 // ─── Hardware-Init ────────────────────────────────────────────────────────
 
 void initHal() {
-    txFlag = false;
-    rxFlag = false;
+    txFlag   = false;
+    rxFlag   = false;
+    sdMutex  = xSemaphoreCreateMutex();
 
     pinMode(PIN_AP_MODE_SWITCH, INPUT);
 
-    // Display + Keyboard init (ruft intern instance.begin() auf,
-    // welches SPI-Bus, XL9555, TCA8418-Keyboard-Power etc. initialisiert).
+    // Display + Keyboard init (calls instance.begin() internally,
+    // which sets up SPI bus, XL9555, TCA8418 keyboard, and also tries installSD()).
     initDisplay();
+
+    // SD state is determined by instance.begin() inside initDisplay()
+    sdMounted = (SD.cardType() != CARD_NONE);
+    Serial.printf("[SD] %s\n", sdMounted ? "Card mounted" : "No card detected");
 
     // LoRa-Init auf bereits konfiguriertem SPI-Bus, mit SPI-Lock
     instance.lockSPI();
