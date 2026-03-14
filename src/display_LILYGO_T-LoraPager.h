@@ -21,9 +21,12 @@
  *   └─────────────────────────────────────┘  y=222
  */
 
+#include "frame.h"
+
 void initDisplay();
 void displayUpdateLoop();
 void displayOnNewMessage(const char* srcCall, const char* text, const char* dstGroup = "", const char* dstCall = "");
 void displayTxFrame(const char* dstCall, const char* text);
+void displayMonitorFrame(const Frame& f);
 
 #endif // LILYGO_T_LORA_PAGER

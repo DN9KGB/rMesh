@@ -200,13 +200,14 @@ void processRxFrame(Frame &f) {
                 free(jsonBuffer);
                 jsonBuffer = nullptr;
 
-                // Display on T-LoraPager screen (TEXT_MESSAGE only)
+                // Display on T-LoraPager screen
                 #ifdef LILYGO_T_LORA_PAGER
                 if (f.messageType == Frame::MessageTypes::TEXT_MESSAGE) {
                     char textBuf[261] = {0};
                     memcpy(textBuf, f.message, f.messageLength);
                     displayOnNewMessage(f.srcCall, textBuf, f.dstGroup, f.dstCall);
                 }
+                displayMonitorFrame(f);
                 #endif
 
                 //ECHO für Tracking-Message
