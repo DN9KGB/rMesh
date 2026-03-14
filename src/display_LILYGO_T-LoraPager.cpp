@@ -310,6 +310,11 @@ static char     inputBuf[INPUT_MAX_LEN + 1] = {0};
 static int      inputLen = 0;
 static bool     needRedraw = true;
 
+// Battery state (refreshed every 10 s to avoid I2C overhead each frame)
+static int      battPct    = -1;   // -1 = not yet read
+static bool     battCharging = false;
+static uint32_t lastBattMs = 0;
+
 // ─── Menu state ───────────────────────────────────────────────────────
 static UiMode    uiMode      = UI_CHAT;
 static int       topSel      = 0;
@@ -580,18 +585,35 @@ static void drawInputBar() {
     lcd.startWrite();
     lcd.fillRect(0, INPUT_BAR_Y, DISP_W, INPUT_BAR_H, COL_INPUT_BG);
     lcd.drawFastHLine(0, INPUT_BAR_Y, DISP_W, COL_SEPARATOR);
-    lcd.setTextColor(COL_INPUT_FG);
     lcd.setTextSize(1);
+
+    // Battery indicator — right-aligned, same row as input text
+    char battStr[8] = {0};
+    int battW = 0;
+    if (battPct >= 0) {
+        snprintf(battStr, sizeof(battStr), battCharging ? "%d%%+" : "%d%%", battPct);
+        battW = (int)strlen(battStr) * 6 + 2;  // +2 margin from right edge
+        uint16_t col = (battPct <= 15) ? 0xF800u  // red
+                     : (battPct <= 40) ? 0xFD20u  // orange
+                     : 0x07E0u;                   // green
+        lcd.setTextColor(col);
+        drawStr(battStr, DISP_W - battW, INPUT_BAR_Y + 9);
+    }
+
+    // Input line — clipped so it never overlaps the battery indicator
+    lcd.setTextColor(COL_INPUT_FG);
     char prompt[16];
     if (activeGroup >= 0 && strlen(groupNames[activeGroup]) > 0)
         snprintf(prompt, sizeof(prompt), "[%s]>", groupNames[activeGroup]);
     else
         snprintf(prompt, sizeof(prompt), ">");
-    char disp[INPUT_MAX_LEN + 20];
-    snprintf(disp, sizeof(disp), "%s%s", prompt, inputBuf);
-    drawStr(disp, 2, INPUT_BAR_Y + 9);
+    char dispLine[INPUT_MAX_LEN + 20];
+    snprintf(dispLine, sizeof(dispLine), "%s%s", prompt, inputBuf);
+    drawStr(dispLine, 2, INPUT_BAR_Y + 9);
     int cx = 2 + ((int)strlen(prompt) + inputLen) * 6;
-    if (cx < DISP_W - 6) lcd.drawFastVLine(cx, INPUT_BAR_Y + 8, 9, COL_CURSOR);
+    int cursorLimit = DISP_W - battW - 6;
+    if (cx < cursorLimit) lcd.drawFastVLine(cx, INPUT_BAR_Y + 8, 9, COL_CURSOR);
+
     lcd.endWrite();
     instance.unlockSPI();
 }
@@ -1156,6 +1178,20 @@ void displayUpdateLoop() {
     }
 
     instance.loop();
+
+    // Refresh battery state every 10 s
+    if (uiMode == UI_CHAT && (battPct < 0 || millis() - lastBattMs >= 10000)) {
+        if (instance.gauge.refresh()) {
+            int pct = (int)instance.gauge.getStateOfCharge();
+            bool chg = !instance.gauge.getBatteryStatus().isInDischargeMode();
+            if (pct != battPct || chg != battCharging) {
+                battPct      = pct;
+                battCharging = chg;
+                needRedraw   = true;
+            }
+        }
+        lastBattMs = millis();
+    }
 
     if (needRedraw) {
         switch (uiMode) {
