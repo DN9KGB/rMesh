@@ -65,11 +65,11 @@ static void utf8ToCP437(const char* src, char* dst, size_t dstLen) {
 #define LORA_MOSI_PIN 34
 
 // Layout
-#define GROUP_TAB_H   14          // group tab strip at top
-#define INPUT_BAR_Y   196
-#define INPUT_BAR_H   26
+#define GROUP_TAB_H   18          // header bar: callsign | group tabs | time + battery
+#define INPUT_BAR_Y   200         // 18 header + 182 msg = 200
+#define INPUT_BAR_H   22          // 222 - 200 = 22
 #define MSG_AREA_Y    GROUP_TAB_H
-#define MSG_AREA_H    (INPUT_BAR_Y - MSG_AREA_Y)  // 182 px
+#define MSG_AREA_H    (INPUT_BAR_Y - MSG_AREA_Y)  // 182 px (unchanged)
 
 #define MAX_HISTORY    60
 #define INPUT_MAX_LEN 200
@@ -78,7 +78,7 @@ static void utf8ToCP437(const char* src, char* dst, size_t dstLen) {
 // Menu layout
 #define MENU_HDR_H     20
 #define MENU_FOT_H     12
-#define MENU_ITEM_H    17
+#define MENU_ITEM_H    22   // textSize 2 (16px) + 3px padding each side
 #define MENU_AREA_H_   (DISP_H - MENU_HDR_H - MENU_FOT_H)
 #define MENU_ITEMS_VIS (MENU_AREA_H_ / MENU_ITEM_H)
 
@@ -320,10 +320,12 @@ static bool     needRedraw = true;
 static int      battPct    = -1;   // -1 = not yet read
 static bool     battCharging = false;
 static uint32_t lastBattMs = 0;
+static int      lastMinute = -1;   // triggers header redraw when minute changes
 
 // ─── Menu state ───────────────────────────────────────────────────────
 static UiMode    uiMode      = UI_CHAT;
 static int       topSel      = 0;
+static int       topScroll   = 0;
 static int       listSel     = 0;
 static int       listScroll  = 0;
 static MenuItem* curMenu     = nullptr;
@@ -463,28 +465,54 @@ static void fmtAge(time_t t, char* buf, size_t bufLen) {
     else                  snprintf(buf, bufLen, "%lldd",  (long long)(age / 86400));
 }
 
-// ─── Group tab strip ──────────────────────────────────────────────────
+// ─── Group tab strip (combined header: callsign | tabs | time + battery) ──
 static void drawGroupTabs() {
+    // ── Left zone: callsign ─────────────────────────────────────────────
+    int callLen = min((int)strlen(settings.mycall), 8);
+    int CALL_W  = (callLen > 0) ? callLen * 6 + 8 : 0;
+
+    // ── Right zone: time + battery ──────────────────────────────────────
+    char timeStr[6] = {0};
+    char battStr[8] = {0};
+    time_t now = time(NULL);
+    struct tm* tm_ = localtime(&now);
+    if (tm_) strftime(timeStr, sizeof(timeStr), "%H:%M", tm_);
+    if (battPct >= 0)
+        snprintf(battStr, sizeof(battStr), battCharging ? "%d%%+" : "%d%%", battPct);
+    // Compute actual right-zone pixel width
+    int timeW = timeStr[0] ? (int)strlen(timeStr) * 6 + 4 : 0;
+    int battW = battStr[0] ? (int)strlen(battStr) * 6 + 4 : 0;
+    int RIGHT_W = timeW + battW + 2;  // +2 right margin
+
+    // ── Tab area (middle) ───────────────────────────────────────────────
+    int tabAreaX = CALL_W;
+    int tabAreaW      = DISP_W - CALL_W - RIGHT_W;
     int tabList[MAX_GROUPS + 1];
     int tabCount = buildTabList(tabList);
-    int tabW = DISP_W / tabCount;
+    int tabW = (tabCount > 0) ? tabAreaW / tabCount : tabAreaW;
 
-    // Reserve right side for scroll-mode indicator ("SCR" = 3 chars * 6px + 2px margin)
-    const int INDICATOR_W = 3 * 6 + 4;
-    int usableW = chatScrollMode ? (DISP_W - INDICATOR_W) : DISP_W;
-    int adjTabW = usableW / tabCount;
-
+    // ── Background ──────────────────────────────────────────────────────
     lcd.fillRect(0, 0, DISP_W, GROUP_TAB_H, COL_MENU_HDR);
     lcd.setTextSize(1);
 
+    // ── Callsign (left) ─────────────────────────────────────────────────
+    if (CALL_W > 0) {
+        char callBuf[10];
+        strncpy(callBuf, settings.mycall, 8); callBuf[8] = '\0';
+        lcd.setTextColor(0x07FFu);  // cyan
+        drawStr(callBuf, 4, 5);
+        lcd.drawFastVLine(CALL_W - 1, 0, GROUP_TAB_H, COL_SEPARATOR);
+    }
+
+    // ── Group tabs (center) ─────────────────────────────────────────────
     for (int i = 0; i < tabCount; i++) {
-        int x = i * adjTabW;
+        int x = tabAreaX + i * tabW;
         int g = tabList[i];
         bool active    = (g == activeGroup);
         bool hasUnread = (g >= 0 && groupUnread[g] > 0);
 
         uint16_t bg = active ? COL_MENU_SEL : (hasUnread ? COL_UNREAD_BG : COL_MENU_HDR);
-        lcd.fillRect(x, 0, adjTabW, GROUP_TAB_H, bg);
+        lcd.fillRect(x, 0, tabW, GROUP_TAB_H, bg);
 
         const char* name = (g == -1) ? "Alle" : groupNames[g];
         lcd.setTextColor(active ? COL_MENU_SEL_FG : (hasUnread ? COL_UNREAD_FG : COL_MENU_FG));
@@ -494,19 +522,35 @@ static void drawGroupTabs() {
         else           snprintf(tabLabel, sizeof(tabLabel), "%s",  name);
 
         int tw = (int)strlen(tabLabel) * 6;
-        int tx = x + (adjTabW - tw) / 2;
+        int tx = x + (tabW - tw) / 2;
         if (tx < x + 1) tx = x + 1;
-        drawStr(tabLabel, tx, 2);
+        drawStr(tabLabel, tx, 5);
 
         if (i < tabCount - 1)
-            lcd.drawFastVLine(x + adjTabW - 1, 0, GROUP_TAB_H, COL_SEPARATOR);
+            lcd.drawFastVLine(x + tabW - 1, 0, GROUP_TAB_H, COL_SEPARATOR);
     }
 
-    // Scroll-mode indicator: right-aligned yellow "SCR" badge
-    if (chatScrollMode) {
-        lcd.setTextColor(0xFFE0u); // yellow
-        drawStr("SCR", DISP_W - INDICATOR_W + 2, 2);
+    // ── Right zone: time + battery ──────────────────────────────────────
+    if (RIGHT_W > 2) {
+        lcd.drawFastVLine(DISP_W - RIGHT_W - 1, 0, GROUP_TAB_H, COL_SEPARATOR);
+        int rx = DISP_W - RIGHT_W + 2;
+        if (timeStr[0]) {
+            lcd.setTextColor(COL_MENU_FG);
+            drawStr(timeStr, rx, 5);
+            rx += timeW;
+        }
+        if (battStr[0]) {
+            uint16_t col = (battPct <= 15) ? 0xF800u
+                         : (battPct <= 40) ? 0xFD20u
+                         : 0x07E0u;
+            lcd.setTextColor(col);
+            drawStr(battStr, rx, 5);
+        }
     }
+
+    // ── Scroll-mode border: green frame around active scroll target ──────
+    if (!chatScrollMode)
+        lcd.drawRect(0, 0, DISP_W, GROUP_TAB_H, COL_MENU_SEL);  // group tabs active
 }
 
 // ─── Info view helper ─────────────────────────────────────────────────
@@ -514,11 +558,11 @@ static void drawGroupTabs() {
 static void infoHeader(const char* title) {
     spr.fillScreen(COL_BG);
     spr.fillRect(0, 0, DISP_W, MENU_HDR_H, COL_MENU_HDR);
-    spr.setTextSize(1);
+    spr.setTextSize(2);
     spr.setTextColor(COL_MENU_HDR_FG);
     char hdr[48];
     snprintf(hdr, sizeof(hdr), "rMesh > %s", title);
-    drawStrS(hdr, 4, 5);
+    drawStrS(hdr, 4, 2);
 }
 static void infoFooter(int total, int vis, int scroll) {
     int fy = DISP_H - MENU_FOT_H;
@@ -536,7 +580,7 @@ static void infoFooter(int total, int vis, int scroll) {
 // ─── Routing view ─────────────────────────────────────────────────────
 static void drawRouting() {
     infoHeader("Routing");
-    const int colHdrH = 14;
+    const int colHdrH = 20;
     const int areaY   = MENU_HDR_H + colHdrH;
     const int areaH   = DISP_H - MENU_FOT_H - areaY;
     const int lineH   = MENU_ITEM_H;
@@ -544,7 +588,7 @@ static void drawRouting() {
 
     // Column header
     spr.setTextColor(0x7BEFu);  // dim gray
-    spr.setTextSize(1);
+    spr.setTextSize(2);
     drawStrS("Rufzeichen  Via          H  Alter", 4, MENU_HDR_H + 2);
     spr.drawFastHLine(0, MENU_HDR_H + colHdrH - 1, DISP_W, COL_SEPARATOR);
 
@@ -552,7 +596,8 @@ static void drawRouting() {
     int start = max(0, min(infoScroll, n > vis ? n - vis : 0));
     if (n == 0) {
         spr.setTextColor(COL_MENU_FG);
-        drawStrS("(keine Eintraege)", 4, areaY + areaH / 2 - 5);
+        spr.setTextSize(2);
+        drawStrS("(keine Eintraege)", 4, areaY + areaH / 2 - 8);
     }
     for (int i = start; i < n && (i - start) < vis; i++) {
         const Route& r = routingList[i];
@@ -562,7 +607,7 @@ static void drawRouting() {
         snprintf(line, sizeof(line), "%-11s %-12s %2d  %s",
                  r.srcCall, r.viaCall, r.hopCount, age);
         spr.setTextColor(COL_MENU_FG);
-        spr.setTextSize(1);
+        spr.setTextSize(2);
         drawStrS(line, 4, areaY + (i - start) * lineH + 3);
     }
     infoFooter(max(1, n), vis, start);
@@ -572,7 +617,7 @@ static void drawRouting() {
 // ─── Peers view ───────────────────────────────────────────────────────
 static void drawPeers() {
     infoHeader("Peers");
-    const int colHdrH = 14;
+    const int colHdrH = 20;
     const int areaY   = MENU_HDR_H + colHdrH;
     const int areaH   = DISP_H - MENU_FOT_H - areaY;
     const int lineH   = MENU_ITEM_H;
@@ -580,29 +625,29 @@ static void drawPeers() {
 
     // Column header
     spr.setTextColor(0x7BEFu);
-    spr.setTextSize(1);
-    drawStrS("Rufzeichen  Typ    RSSI    SNR   Status  Alter", 4, MENU_HDR_H + 2);
+    spr.setTextSize(2);
+    drawStrS("Rufzeichen  Typ  RSSI   SNR  Alter", 4, MENU_HDR_H + 2);
     spr.drawFastHLine(0, MENU_HDR_H + colHdrH - 1, DISP_W, COL_SEPARATOR);
 
     int n = (int)peerList.size();
     int start = max(0, min(infoScroll, n > vis ? n - vis : 0));
     if (n == 0) {
         spr.setTextColor(COL_MENU_FG);
-        drawStrS("(keine Eintraege)", 4, areaY + areaH / 2 - 5);
+        spr.setTextSize(2);
+        drawStrS("(keine Eintraege)", 4, areaY + areaH / 2 - 8);
     }
     for (int i = start; i < n && (i - start) < vis; i++) {
         const Peer& p = peerList[i];
         char age[10];
         fmtAge(p.timestamp, age, sizeof(age));
         char line[MON_LINE_W];
-        snprintf(line, sizeof(line), "%-11s %-6s  %6.1f  %5.1f  %-4s  %s",
+        snprintf(line, sizeof(line), "%-10s %-4s %6.1f %5.1f %s",
                  p.nodeCall,
                  p.port == 0 ? "LoRa" : "WiFi",
                  p.rssi, p.snr,
-                 p.available ? "OK" : "-",
                  age);
         spr.setTextColor(p.available ? 0x07E0u : 0xAD55u);  // green or gray
-        spr.setTextSize(1);
+        spr.setTextSize(2);
         drawStrS(line, 4, areaY + (i - start) * lineH + 3);
     }
     infoFooter(max(1, n), vis, start);
@@ -625,12 +670,13 @@ static void drawMonitor() {
     for (int i = start; i < visEnd; i++) {
         int ri = (monHead - monCount + i + MON_HISTORY) % MON_HISTORY;
         spr.setTextColor(COL_MENU_FG);
-        spr.setTextSize(1);
+        spr.setTextSize(2);
         drawStrS(monLines[ri], 4, areaY + (i - start) * lineH + 3);
     }
     if (monCount == 0) {
         spr.setTextColor(COL_MENU_FG);
-        drawStrS("(kein Traffic)", 4, areaY + areaH / 2 - 5);
+        spr.setTextSize(2);
+        drawStrS("(kein Traffic)", 4, areaY + areaH / 2 - 8);
     }
     infoFooter(max(1, monCount), vis, clampedScroll);
     sprPush();
@@ -728,6 +774,11 @@ static void drawMessages() {
         }
         y += MSG_GAP;
     }
+
+    // Green border around the area that the encoder currently scrolls
+    if (chatScrollMode)
+        lcd.drawRect(0, MSG_AREA_Y, DISP_W, MSG_AREA_H, COL_MENU_SEL);  // message area active
+
     lcd.endWrite();
     instance.unlockSPI();
 }
@@ -739,20 +790,7 @@ static void drawInputBar() {
     lcd.drawFastHLine(0, INPUT_BAR_Y, DISP_W, COL_SEPARATOR);
     lcd.setTextSize(1);
 
-    // Battery indicator — right-aligned, same row as input text
-    char battStr[8] = {0};
-    int battW = 0;
-    if (battPct >= 0) {
-        snprintf(battStr, sizeof(battStr), battCharging ? "%d%%+" : "%d%%", battPct);
-        battW = (int)strlen(battStr) * 6 + 2;  // +2 margin from right edge
-        uint16_t col = (battPct <= 15) ? 0xF800u  // red
-                     : (battPct <= 40) ? 0xFD20u  // orange
-                     : 0x07E0u;                   // green
-        lcd.setTextColor(col);
-        drawStr(battStr, DISP_W - battW, INPUT_BAR_Y + 9);
-    }
-
-    // Input line — clipped so it never overlaps the battery indicator
+    // Input line (battery is now shown in the header bar)
     lcd.setTextColor(COL_INPUT_FG);
     char prompt[16];
     if (activeGroup >= 0 && strlen(groupNames[activeGroup]) > 0)
@@ -761,10 +799,9 @@ static void drawInputBar() {
         snprintf(prompt, sizeof(prompt), ">");
     char dispLine[INPUT_MAX_LEN + 20];
     snprintf(dispLine, sizeof(dispLine), "%s%s", prompt, inputBuf);
-    drawStr(dispLine, 2, INPUT_BAR_Y + 9);
+    drawStr(dispLine, 2, INPUT_BAR_Y + 7);
     int cx = 2 + ((int)strlen(prompt) + inputLen) * 6;
-    int cursorLimit = DISP_W - battW - 6;
-    if (cx < cursorLimit) lcd.drawFastVLine(cx, INPUT_BAR_Y + 8, 9, COL_CURSOR);
+    if (cx < DISP_W - 6) lcd.drawFastVLine(cx, INPUT_BAR_Y + 6, 9, COL_CURSOR);
 
     lcd.endWrite();
     instance.unlockSPI();
@@ -824,31 +861,118 @@ static void fmtValue(char* buf, int buflen, MenuItem& item) {
     }
 }
 
-// ─── Menu: top level ──────────────────────────────────────────────────
+// ─── Menu: top level (scrollable list, textSize 2) ────────────────────
+#define TOP_ITEM_H  26   // px per row — textSize-2 glyph is 16px high
+#define TOP_MENU_N   9
+#define TOP_MENU_VIS ((DISP_H - MENU_HDR_H - MENU_FOT_H) / TOP_ITEM_H)  // 7
+
+// Draw a 14×14 pixel icon at (ix, iy) for the given top-menu entry index
+static void drawMenuIcon(int idx, int ix, int iy, uint16_t col, uint16_t bg) {
+    switch (idx) {
+        case 0: // Network – signal bars
+            spr.fillRect(ix+1,  iy+10, 3,  4, col);
+            spr.fillRect(ix+5,  iy+7,  3,  7, col);
+            spr.fillRect(ix+9,  iy+4,  3, 10, col);
+            break;
+        case 1: // Setup – gear (circle with 4 teeth)
+            spr.fillCircle(ix+7, iy+7, 5, col);
+            spr.fillCircle(ix+7, iy+7, 2, bg);
+            spr.fillRect(ix+6, iy+0,  2, 3, col);
+            spr.fillRect(ix+6, iy+11, 2, 3, col);
+            spr.fillRect(ix+11, iy+6, 3, 2, col);
+            spr.fillRect(ix+0,  iy+6, 3, 2, col);
+            break;
+        case 2: // Display – monitor frame with stand
+            spr.drawRect(ix+1, iy+1, 12, 9, col);
+            spr.fillRect(ix+5, iy+10, 4,  2, col);
+            spr.fillRect(ix+3, iy+12, 8,  2, col);
+            break;
+        case 3: // Gruppen – two people
+            spr.fillCircle(ix+4,  iy+3, 2, col);
+            spr.fillRect(ix+2,   iy+6, 4, 6, col);
+            spr.fillCircle(ix+10, iy+3, 2, col);
+            spr.fillRect(ix+8,   iy+6, 4, 6, col);
+            break;
+        case 4: // Routing – branching tree
+            spr.fillCircle(ix+2,  iy+7,  2, col);
+            spr.drawLine(ix+2, iy+7, ix+11, iy+3,  col);
+            spr.fillCircle(ix+11, iy+3,  2, col);
+            spr.drawLine(ix+2, iy+7, ix+11, iy+11, col);
+            spr.fillCircle(ix+11, iy+11, 2, col);
+            break;
+        case 5: // Peers – mesh triangle
+            spr.fillCircle(ix+7,  iy+2,  2, col);
+            spr.fillCircle(ix+2,  iy+11, 2, col);
+            spr.fillCircle(ix+12, iy+11, 2, col);
+            spr.drawLine(ix+7,  iy+2,  ix+2,  iy+11, col);
+            spr.drawLine(ix+7,  iy+2,  ix+12, iy+11, col);
+            spr.drawLine(ix+2,  iy+11, ix+12, iy+11, col);
+            break;
+        case 6: // Monitor – screen with waveform
+            spr.drawRect(ix+1, iy+2, 12, 8, col);
+            spr.fillRect(ix+5, iy+10, 4,  2, col);
+            spr.fillRect(ix+3, iy+12, 8,  2, col);
+            spr.drawLine(ix+3,  iy+6, ix+5, iy+6, col);
+            spr.drawLine(ix+5,  iy+4, ix+7, iy+8, col);
+            spr.drawLine(ix+7,  iy+8, ix+9, iy+4, col);
+            spr.drawLine(ix+9,  iy+6, ix+11, iy+6, col);
+            break;
+        case 7: // Send Announce – antenna with beams
+            spr.drawFastVLine(ix+7, iy+5, 7, col);
+            spr.fillRect(ix+5, iy+12, 5,  2, col);
+            spr.drawLine(ix+7, iy+5, ix+3, iy+1,  col);
+            spr.drawLine(ix+7, iy+5, ix+5, iy+2,  col);
+            spr.drawLine(ix+7, iy+5, ix+9, iy+2,  col);
+            spr.drawLine(ix+7, iy+5, ix+11, iy+1, col);
+            break;
+        case 8: // Ausschalten – power symbol (arc + vertical line)
+            spr.drawArc(ix+7, iy+8, 5, 4, 40, 320, col);
+            spr.drawFastVLine(ix+7, iy+3, 6, col);
+            break;
+    }
+}
+
 static void drawMenuTop() {
+    static const char* labels[TOP_MENU_N] = {
+        "Network",
+        "Setup",
+        "Display",
+        "Gruppen",
+        "Routing",
+        "Peers",
+        "Monitor",
+        "Send Announce",
+        "Ausschalten"
+    };
+    const int areaH = DISP_H - MENU_HDR_H - MENU_FOT_H;
+
     spr.fillScreen(COL_BG);
     spr.fillRect(0, 0, DISP_W, MENU_HDR_H, COL_MENU_HDR);
     spr.setTextColor(COL_MENU_HDR_FG);
-    spr.setTextSize(1);
-    drawStrS("rMesh  Einstellungen", 4, 5);
+    spr.setTextSize(2);
+    drawStrS("rMesh  Einstellungen", 4, 2);
 
-    const char* labels[8] = {"Network", "Setup", "Display", "Gruppen",
-                              "Routing", "Peers", "Monitor", "Announce"};
-    const int colW  = DISP_W / 2;   // 240 px per column
-    const int itemW = colW - 30;    // 210 px
-    const int itemH = 40, gap = 4, startY = MENU_HDR_H + 2;
-    for (int i = 0; i < 8; i++) {
-        int col = i / 4;            // col 0: items 0-3, col 1: items 4-6
-        int row = i % 4;
-        int x   = col * colW + 15;
-        int y   = startY + row * (itemH + gap);
+    int end = min(topScroll + TOP_MENU_VIS, TOP_MENU_N);
+    for (int i = topScroll; i < end; i++) {
+        int y   = MENU_HDR_H + (i - topScroll) * TOP_ITEM_H;
         bool sel = (i == topSel);
-        spr.fillRect(x, y, itemW, itemH, sel ? COL_MENU_SEL : COL_MENU_EDIT_BG);
+        if (sel) spr.fillRect(0, y, DISP_W, TOP_ITEM_H, COL_MENU_SEL);
+        uint16_t icol = sel ? COL_MENU_SEL_FG : COL_MENU_FG;
+        uint16_t ibg  = sel ? COL_MENU_SEL : COL_BG;
+        drawMenuIcon(i, 6, y + 6, icol, ibg);
         spr.setTextSize(2);
-        spr.setTextColor(sel ? COL_MENU_SEL_FG : COL_MENU_FG);
-        int tw = (int)strlen(labels[i]) * 12;  // textSize 2: 12px/char
-        drawStrS(labels[i], x + (itemW - tw) / 2, y + 12);
+        spr.setTextColor(icol);
+        drawStrS(labels[i], 26, y + (TOP_ITEM_H - 16) / 2);
+        if (sel) drawStrS(">", DISP_W - 20, y + (TOP_ITEM_H - 16) / 2);
     }
+
+    // Scrollbar (only when list overflows)
+    if (TOP_MENU_N > TOP_MENU_VIS) {
+        int sbH = max(4, areaH * TOP_MENU_VIS / TOP_MENU_N);
+        int sbY = MENU_HDR_H + areaH * topScroll / TOP_MENU_N;
+        spr.fillRect(DISP_W - 3, sbY, 3, sbH, COL_MENU_SEL);
+    }
+
     int fy = DISP_H - MENU_FOT_H;
     spr.fillRect(0, fy, DISP_W, MENU_FOT_H, COL_MENU_FOT);
     spr.setTextSize(1);
@@ -861,12 +985,13 @@ static void drawMenuTop() {
 static void drawMenuList() {
     const char* catNames[4] = {"Network", "Setup", "Display", "Gruppen"};
     spr.fillRect(0, 0, DISP_W, MENU_HDR_H, COL_MENU_HDR);
-    spr.setTextSize(1);
+    spr.setTextSize(2);
     spr.setTextColor(COL_MENU_HDR_FG);
     char title[48];
     snprintf(title, sizeof(title), "rMesh > %s", catNames[topSel]);
-    drawStrS(title, 4, 5);
+    drawStrS(title, 4, 2);
     spr.fillRect(0, MENU_HDR_H, DISP_W, MENU_AREA_H_, COL_BG);
+    spr.setTextSize(2);
     int end = min(listScroll + MENU_ITEMS_VIS, curMenuLen);
     for (int i = listScroll; i < end; i++) {
         int y   = MENU_HDR_H + (i - listScroll) * MENU_ITEM_H;
@@ -875,27 +1000,27 @@ static void drawMenuList() {
         MenuItem& item = curMenu[i];
 
         if (item.type == FTYPE_ACTION) {
-            int lw = (int)strlen(item.label) * 6;
+            int lw = (int)strlen(item.label) * 12;
             spr.fillRect(DISP_W/2 - lw/2 - 8, y+1, lw+16, MENU_ITEM_H-2,
                          sel ? COL_MENU_SEL : COL_MENU_EDIT_BG);
             spr.setTextColor(sel ? COL_MENU_SEL_FG : COL_MENU_HDR_FG);
-            drawStrS(item.label, DISP_W/2 - lw/2, y+4);
+            drawStrS(item.label, DISP_W/2 - lw/2, y+3);
         } else if (item.type == FTYPE_DELETE_GROUP) {
-            int lw = (int)strlen(item.label) * 6;
+            int lw = (int)strlen(item.label) * 12;
             int bx = DISP_W - lw - 16;
             spr.fillRect(bx - 4, y+1, lw + 12, MENU_ITEM_H-2,
                          sel ? 0xF800u : COL_DELETE_BG);
             spr.setTextColor(sel ? 0xFFFFu : COL_DELETE_FG);
-            drawStrS(item.label, bx, y+4);
+            drawStrS(item.label, bx, y+3);
         } else {
             spr.setTextColor(sel ? COL_MENU_SEL_FG : COL_MENU_FG);
-            drawStrS(item.label, 6, y+4);
+            drawStrS(item.label, 6, y+3);
             char val[80]; fmtValue(val, sizeof(val), item);
             if (strlen(val) > 0) {
-                int vx = DISP_W - (int)strlen(val)*6 - 6;
+                int vx = DISP_W - (int)strlen(val)*12 - 6;
                 if (vx < DISP_W/2) vx = DISP_W/2;
                 spr.setTextColor(sel ? COL_MENU_SEL_FG : COL_MENU_VAL);
-                drawStrS(val, vx, y+4);
+                drawStrS(val, vx, y+3);
             }
         }
     }
@@ -923,13 +1048,15 @@ static void drawEditStr() {
     else
         snprintf(title, sizeof(title), "Bearb.: %s", curMenu[editItemIdx].label);
     drawStrS(title, 4, 5);
+    spr.setTextSize(2);
     spr.setTextColor(COL_MENU_FG);
-    drawStrS("Wert:", 6, 40);
-    spr.drawRect(6, 58, DISP_W-12, 22, COL_MENU_SEL);
+    drawStrS("Wert:", 6, 36);
+    spr.drawRect(6, 58, DISP_W-12, 26, COL_MENU_SEL);
     spr.setTextColor(COL_MENU_VAL);
     drawStrS(editStrBuf, 10, 63);
-    int cx = 10 + (int)strlen(editStrBuf)*6;
-    if (cx < DISP_W-18) spr.drawFastVLine(cx, 62, 12, COL_CURSOR);
+    int cx = 10 + (int)strlen(editStrBuf)*12;
+    if (cx < DISP_W-18) spr.drawFastVLine(cx, 62, 16, COL_CURSOR);
+    spr.setTextSize(1);
     spr.setTextColor(COL_MENU_FOT_FG);
     drawStrS("Tastatur=Eingabe  Enter/Drucken=OK  Halten=Abbr.", 6, 100);
     sprPush();
@@ -940,7 +1067,7 @@ static void drawEditNum() {
     spr.fillRect(0, 0, DISP_W, DISP_H, COL_BG);
     spr.fillRoundRect(bx, by, bw, bh, 6, COL_MENU_EDIT_BG);
     spr.drawRoundRect(bx, by, bw, bh, 6, COL_MENU_SEL);
-    spr.setTextSize(1);
+    spr.setTextSize(2);
     spr.setTextColor(COL_MENU_HDR_FG);
     drawStrS(curMenu[editItemIdx].label, bx+10, by+8);
     char val[48];
@@ -962,15 +1089,16 @@ static void drawEditNum() {
 static void drawEditDrop() {
     MenuItem& item = curMenu[editItemIdx];
     int numOpts = item.aux;
-    int visible = min(numOpts, 9);
-    int bx=20, by=20, bw=DISP_W-40;
+    int bx=20, by=10, bw=DISP_W-40;
+    int maxVis = (DISP_H - by - MENU_HDR_H - MENU_FOT_H - 4) / MENU_ITEM_H;
+    int visible = min(numOpts, maxVis);
     int bh = MENU_HDR_H + visible * MENU_ITEM_H + MENU_FOT_H + 4;
     spr.fillRect(0, 0, DISP_W, DISP_H, COL_BG);
     spr.fillRect(bx, by, bw, bh, COL_MENU_EDIT_BG);
     spr.drawRect(bx, by, bw, bh, COL_MENU_SEL);
-    spr.setTextSize(1);
+    spr.setTextSize(2);
     spr.setTextColor(COL_MENU_HDR_FG);
-    drawStrS(item.label, bx+6, by+5);
+    drawStrS(item.label, bx+6, by+3);
     int scroll = editDropIdx - visible/2;
     if (scroll < 0) scroll = 0;
     if (scroll > numOpts - visible) scroll = max(0, numOpts - visible);
@@ -982,9 +1110,10 @@ static void drawEditDrop() {
             ? ((const DropF*)item.opts)[i].label
             : ((const DropI*)item.opts)[i].label;
         spr.setTextColor(sel ? COL_MENU_SEL_FG : COL_MENU_FG);
-        drawStrS(lbl, bx+8, y+4);
+        drawStrS(lbl, bx+8, y+3);
     }
     int fy = by + bh - MENU_FOT_H;
+    spr.setTextSize(1);
     spr.setTextColor(COL_MENU_FOT_FG);
     drawStrS("Drehen=Wahl  Drucken=OK  Halten=Abbr.", bx+6, fy+1);
     sprPush();
@@ -994,6 +1123,14 @@ static void drawEditDrop() {
 static void doDeleteMessages() {
     historyCount = 0; historyHead = 0;
     uiMode = UI_CHAT; needRedraw = true;
+}
+static void doPowerOff() {
+    spr.fillSprite(COL_BG);
+    spr.setTextColor(COL_MENU_HDR_FG); spr.setTextSize(2);
+    drawStrS("Ausschalten...", 4, DISP_H / 2 - 8);
+    sprPush();
+    delay(800);
+    instance.sleep();  // deep sleep; wake via boot button (GPIO0)
 }
 static void doAnnounce() {
     Frame f;
@@ -1032,7 +1169,7 @@ static void doSaveGroups() {
 // ─── Menu navigation ──────────────────────────────────────────────────
 static void openMenu() {
     for (int i = 0; i < 5; i++) ipToStr(extSettings.udpPeer[i], tmpPeerIP[i], sizeof(tmpPeerIP[i]));
-    topSel = 0; uiMode = UI_MENU_TOP; needRedraw = true;
+    topSel = 0; topScroll = 0; uiMode = UI_MENU_TOP; needRedraw = true;
 }
 
 static void enterSubmenu(int idx) {
@@ -1049,7 +1186,8 @@ static void enterSubmenu(int idx) {
         case 4: infoScroll = 0; uiMode = UI_ROUTING; needRedraw = true; return;
         case 5: infoScroll = 0; uiMode = UI_PEERS;   needRedraw = true; return;
         case 6: infoScroll = 0; uiMode = UI_MONITOR; needRedraw = true; return;
-        case 7: doAnnounce(); return;
+        case 7: doAnnounce();  return;
+        case 8: doPowerOff();  return;
         default: return;
     }
     listSel = 0; listScroll = 0; uiMode = UI_MENU_LIST; needRedraw = true;
@@ -1331,8 +1469,16 @@ void displayUpdateLoop() {
         }
     }
     else if (uiMode == UI_MENU_TOP) {
-        if (rot.dir == ROTARY_DIR_UP)   { topSel = (topSel + 1) % 8; needRedraw = true; }
-        if (rot.dir == ROTARY_DIR_DOWN) { topSel = (topSel + 7) % 8; needRedraw = true; }
+        auto clampTopScroll = [&]() {
+            if (topSel < topScroll) topScroll = topSel;
+            if (topSel >= topScroll + TOP_MENU_VIS) topScroll = topSel - TOP_MENU_VIS + 1;
+        };
+        if (rot.dir == ROTARY_DIR_UP) {
+            topSel = (topSel + 1) % TOP_MENU_N; clampTopScroll(); needRedraw = true;
+        }
+        if (rot.dir == ROTARY_DIR_DOWN) {
+            topSel = (topSel + TOP_MENU_N - 1) % TOP_MENU_N; clampTopScroll(); needRedraw = true;
+        }
         if (shortPress) enterSubmenu(topSel);
         if (longPress)  { uiMode = UI_CHAT; needRedraw = true; }
     }
@@ -1395,6 +1541,16 @@ void displayUpdateLoop() {
     }
 
     instance.loop();
+
+    // Refresh header time every minute
+    if (uiMode == UI_CHAT) {
+        time_t nowT = time(NULL);
+        struct tm* tmNow = localtime(&nowT);
+        if (tmNow && tmNow->tm_min != lastMinute) {
+            lastMinute = tmNow->tm_min;
+            needRedraw = true;
+        }
+    }
 
     // Refresh battery state every 10 s
     if (uiMode == UI_CHAT && (battPct < 0 || millis() - lastBattMs >= 10000)) {

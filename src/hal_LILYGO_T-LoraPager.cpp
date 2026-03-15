@@ -32,41 +32,24 @@ bool rxFlag = false;
 
 // ─── SD card ──────────────────────────────────────────────────────────────
 
-static bool               sdMounted = false;
-static SemaphoreHandle_t  sdMutex   = nullptr;
+static bool sdMounted = false;
 
 bool pagerSdAvailable() { return sdMounted; }
 
-struct SdWriteParams { char* content; size_t length; };
-
-static void sdWriteTask(void* pvParameters) {
-    SdWriteParams* p = (SdWriteParams*)pvParameters;
-    if (xSemaphoreTake(sdMutex, pdMS_TO_TICKS(30000))) {
-        instance.lockSPI();
-        File f = SD.open("/messages.json", FILE_APPEND);
-        if (f) {
-            f.write((const uint8_t*)p->content, p->length);
-            f.print('\n');
-            f.close();
-        } else {
-            Serial.println("[SD] Failed to open /messages.json");
-        }
-        instance.unlockSPI();
-        xSemaphoreGive(sdMutex);
-    }
-    free(p->content);
-    delete p;
-    vTaskDelete(NULL);
-}
-
+// Called from the main Arduino loop — synchronous write is safe here.
+// A FreeRTOS task was tried previously but it held instance.lockSPI() across
+// the full FAT32 open/write/close, which blocked display and input for hundreds
+// of milliseconds and made the device appear to hang.
 void pagerAddMessageToSD(const char* json, size_t len) {
     if (!sdMounted) return;
-    SdWriteParams* p = new SdWriteParams();
-    p->content = (char*)malloc(len);
-    if (!p->content) { delete p; return; }
-    memcpy(p->content, json, len);
-    p->length = len;
-    xTaskCreate(sdWriteTask, "SdWrite", 4096, p, 1, NULL);
+    instance.lockSPI();
+    File f = SD.open("/messages.json", FILE_APPEND);
+    if (f) {
+        f.write((const uint8_t*)json, len);
+        f.print('\n');
+        f.close();
+    }
+    instance.unlockSPI();
 }
 
 // ─── Hilfsfunktionen ─────────────────────────────────────────────────────
@@ -90,9 +73,8 @@ bool getKeyApMode() {
 // ─── Hardware-Init ────────────────────────────────────────────────────────
 
 void initHal() {
-    txFlag   = false;
-    rxFlag   = false;
-    sdMutex  = xSemaphoreCreateMutex();
+    txFlag  = false;
+    rxFlag  = false;
 
     pinMode(PIN_AP_MODE_SWITCH, INPUT);
 
