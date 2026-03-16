@@ -1,6 +1,7 @@
 .pio
 .vscode
 .vs
+src/version.h
 
 # Zugangsdaten – niemals ins Git
 website/.env
