@@ -188,6 +188,17 @@ function onMessage(event) {
         document.getElementById("heap").innerHTML = d.status.heap; 
     }
 
+    //Update verfügbar
+    if (d.update) {
+        var el = document.getElementById("updateInfo");
+        if (el) {
+            el.innerHTML = 'Update ' + d.update.version + ' verfügbar! <a href="' + d.update.url + '" target="_blank">www.rMesh.de</a>';
+            el.style.display = '';
+        }
+        var row = document.getElementById("updateRow");
+        if (row) { row.style.display = ''; }
+    }
+
     //WiFi Scan
     if (d.wifiScan) {
         const select = document.getElementById('settingsSSIDList');

@@ -3,6 +3,7 @@
 #include <ArduinoJson.h>
 #include <HTTPClient.h>
 #include <HTTPUpdate.h>
+#include <WiFiClientSecure.h>
 
 #include "wifiFunctions.h"
 #include "settings.h"
@@ -21,11 +22,25 @@ bool wiFiLED = false;
 bool apModeKey = false;
 
 void checkForUpdates() {
-    WiFiClient client;
-    // LittleFS Update prüfen
-    httpUpdate.updateSpiffs(client, "http://www.rMesh.de/update.php?file=" PIO_ENV_NAME "/" VERSION "/littlefs.bin");
-    //Firmware prüfen
-    httpUpdate.update(client, "http://www.rMesh.de/update.php?file=" PIO_ENV_NAME "/" VERSION "/firmware.bin");
+    if (strcmp(VERSION, "unknown") == 0) { return; }
+
+    // Version prüfen
+    WiFiClientSecure client;
+    client.setInsecure();
+    HTTPClient http;
+    http.begin(client, "https://www.rMesh.de/latest.php");
+    if (http.GET() != 200) { http.end(); return; }
+    JsonDocument doc;
+    if (deserializeJson(doc, http.getStream()) != DeserializationError::Ok) { http.end(); return; }
+    const char* latestTag = doc["version"];
+    if (!latestTag || strcmp(latestTag, VERSION) == 0) { http.end(); return; }
+    http.end();
+
+    // Neues Update gefunden
+    Serial.printf("Update verfügbar: %s -> %s\n", VERSION, latestTag);
+    httpUpdate.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
+    httpUpdate.updateSpiffs(client, "https://www.rMesh.de/update.php?file=" PIO_ENV_NAME "_littlefs.bin");
+    httpUpdate.update(client, "https://www.rMesh.de/update.php?file=" PIO_ENV_NAME "_firmware.bin");
 }
 
 void showWiFiStatus() {
