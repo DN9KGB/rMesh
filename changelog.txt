@@ -1,7 +1,12 @@
+V1.0.22
+- Neue URL für den Autoupdater
+
+V1.0.21
+- Neues Device: T-LoRa Pager
+
 V1.0.20a
 - Max. Message json länge 4096 bytes
 - Keine Binärdaten mehr in messages und monitor
-
 
 V1.0.19a
 - 3-Block-Layout integriert. Das komplette Interface basiert jetzt auf einem strikten CSS-Flexbox-System (100dvh). Es gibt einen festen Header, einen scrollbaren Mittelteil und einen festen Footer.

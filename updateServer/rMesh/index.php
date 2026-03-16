@@ -7,10 +7,10 @@
     <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
 
     <style>
-	
+
 .global-changelog {
     max-width: 1000px;
-    margin: 40px auto; /* Zentriert mit Abstand nach oben */
+    margin: 40px auto;
     background: white;
     padding: 25px;
     border-radius: 12px;
@@ -41,8 +41,8 @@
     font-size: 14px;
     color: #444;
     line-height: 1.5;
-}	
-	
+}
+
         body {
             font-family: Arial, sans-serif;
             background: #f4f6f8;
@@ -57,8 +57,7 @@
 
 		.device-grid {
 			display: grid;
-			/* Erzeugt genau 3 Spalten mit gleicher Breite */
-			grid-template-columns: repeat(3, 1fr); 
+			grid-template-columns: repeat(3, 1fr);
 			gap: 20px;
 			padding: 10px;
 		}
@@ -87,17 +86,87 @@
             margin-bottom: 12px;
         }
 
-        button[slot="activate"] {
+        /* Split-Button */
+        .btn-group {
+            display: inline-flex;
+            position: relative;
+        }
+
+        .btn-group button[slot="activate"] {
+            border-radius: 6px 0 0 6px;
             background: #0078ff;
             color: white;
             border: none;
             padding: 10px 18px;
-            border-radius: 6px;
             cursor: pointer;
             font-size: 15px;
         }
 
-        button[slot="activate"]:hover {
+        .btn-group button[slot="activate"]:hover {
+            background: #005fcc;
+        }
+
+        .btn-arrow {
+            background: #005fcc;
+            color: white;
+            border: none;
+            border-left: 1px solid rgba(255,255,255,0.3);
+            padding: 10px 12px;
+            border-radius: 0 6px 6px 0;
+            cursor: pointer;
+            font-size: 13px;
+            line-height: 1;
+        }
+
+        .btn-arrow:hover {
+            background: #004baa;
+        }
+
+        .dropdown-menu {
+            display: none;
+            position: absolute;
+            top: calc(100% + 4px);
+            right: 0;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 100;
+            min-width: 190px;
+            text-align: left;
+        }
+
+        .dropdown-menu a {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 15px;
+            text-decoration: none;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .dropdown-menu a:hover {
+            background: #f4f6f8;
+            border-radius: 6px;
+        }
+
+        .btn-group.open .dropdown-menu {
+            display: block;
+        }
+
+        /* Kein Split-Button wenn kein ZIP */
+        button[slot="activate"].standalone {
+            border-radius: 6px;
+            background: #0078ff;
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            cursor: pointer;
+            font-size: 15px;
+        }
+
+        button[slot="activate"].standalone:hover {
             background: #005fcc;
         }
     </style>
@@ -119,24 +188,38 @@ foreach ($devices as $devicePath) {
         continue;
     }
 
-    $imagePath = "$devicePath/image.jpg";
-    $imageUrl = file_exists($imagePath) ? "$device/image.jpg" : "https://via.placeholder.com/250x180?text=No+Image";
+    $imagePath = "$devicePath/image.webp";
+    $imageUrl = file_exists($imagePath) ? "$device/image.webp" : "https://via.placeholder.com/250x180?text=No+Image";
+
+    $hasZip = file_exists("$devicePath/$device.zip");
 
     echo "<div class='device-card'>";
     echo "<img src='$imageUrl' alt='Board Image'>";
     echo "<div class='device-name'>$device</div>";
 
-    echo "
+    if ($hasZip) {
+        echo "
+        <div class='btn-group'>
+            <esp-web-install-button manifest=\"$device/manifest.php\">
+                <button slot='activate'>Firmware installieren</button>
+                <span slot='unsupported'>Browser nicht unterstützt.</span>
+            </esp-web-install-button>
+            <button class='btn-arrow' onclick='toggleDropdown(this)'>&#9660;</button>
+            <div class='dropdown-menu'>
+                <a href='$device/$device.zip' download>Download Firmware</a>
+            </div>
+        </div>
+        ";
+    } else {
+        echo "
         <esp-web-install-button manifest=\"$device/manifest.php\">
-            <button slot='activate'>Firmware installieren</button>
+            <button slot='activate' class='standalone'>Firmware installieren</button>
             <span slot='unsupported'>Browser nicht unterstützt.</span>
         </esp-web-install-button>
-    ";
+        ";
+    }
 
     echo "</div>";
-	
-	
-	
 }
 ?>
 
@@ -145,7 +228,7 @@ foreach ($devices as $devicePath) {
 
 </div> <?php
 $globalChangelog = $baseDir . '/changelog.txt';
-if (file_exists($globalChangelog)): 
+if (file_exists($globalChangelog)):
     $content = htmlspecialchars(file_get_contents($globalChangelog));
 ?>
     <div class="global-changelog">
@@ -156,6 +239,18 @@ if (file_exists($globalChangelog)):
     </div>
 <?php endif; ?>
 
+<script>
+function toggleDropdown(btn) {
+    const group = btn.closest('.btn-group');
+    group.classList.toggle('open');
+}
+
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.btn-group')) {
+        document.querySelectorAll('.btn-group.open').forEach(g => g.classList.remove('open'));
+    }
+});
+</script>
 
 </body>
 </html>
