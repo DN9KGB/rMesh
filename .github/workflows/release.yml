@@ -1,0 +1,65 @@
+name: Release Firmware
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # required for git describe to find the tag
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-${{ hashFiles('platformio.ini') }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install PlatformIO
+        run: pip install platformio
+
+      - name: Build all environments
+        run: pio run
+
+      - name: Build all filesystems
+        run: pio run --target buildfs
+
+      - name: Collect and package firmware
+        run: |
+          mkdir -p release
+          for env_dir in .pio/build/*/; do
+            env_name=$(basename "$env_dir")
+            [ "$env_name" = "project.checksum" ] && continue
+            [ ! -f "$env_dir/firmware.bin" ] && continue
+
+            # Rename and copy individual files with env prefix (referenced by manifests)
+            for f in firmware.bin littlefs.bin bootloader.bin partitions.bin; do
+              [ -f "$env_dir/$f" ] && cp "$env_dir/$f" "release/${env_name}_${f}"
+            done
+
+            # ZIP with original filenames for manual flashing with esptool
+            zip -j "release/${env_name}.zip" "$env_dir"/*.bin
+          done
+
+      - name: Generate esp-web-tools manifests
+        run: python extra_scripts/gen_manifests.py "${{ github.ref_name }}" release
+
+      - name: Extract release notes from CHANGELOG.md
+        run: python extra_scripts/extract_changelog.py "${{ github.ref_name }}" > release_notes.md
+
+      - name: List release assets
+        run: ls -lh release/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          body_path: release_notes.md
