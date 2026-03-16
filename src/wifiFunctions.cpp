@@ -15,6 +15,7 @@
 
 
 uint64_t ledTimer = 0;
+uint64_t reconnectTimer = 0;
 byte wifiStatus = 0xff;
 bool wiFiLED = false;
 bool apModeKey = false;
@@ -75,8 +76,12 @@ void showWiFiStatus() {
                 setWiFiLED(wiFiLED);
             }
         } else {
-            //Nicht Verbunden -> LED aus
+            //Nicht Verbunden -> LED aus + Reconnect versuchen
             setWiFiLED(false);
+            if (millis() > reconnectTimer) {
+                reconnectTimer = millis() + 30000;
+                WiFi.reconnect();
+            }
         }
     }
 }
@@ -180,6 +185,7 @@ void wifiInit() {
             WiFi.config(settings.wifiIP, settings.wifiGateway, settings.wifiNetMask, settings.wifiDNS);
         }
         WiFi.begin(settings.wifiSSID, settings.wifiPassword);
+        WiFi.setAutoReconnect(true);
     }
     WiFi.setSleep(false);
     WiFi.setHostname(settings.mycall);
