@@ -28,7 +28,11 @@ void checkForUpdates() {
     WiFiClientSecure client;
     client.setInsecure();
     HTTPClient http;
-    http.begin(client, "https://www.rMesh.de/latest.php");
+    String latestUrl = "https://www.rMesh.de/latest.php?call=";
+    latestUrl += settings.mycall;
+    latestUrl += "&version=";
+    latestUrl += VERSION;
+    http.begin(client, latestUrl);
     if (http.GET() != 200) { http.end(); return; }
     JsonDocument doc;
     if (deserializeJson(doc, http.getStream()) != DeserializationError::Ok) { http.end(); return; }
@@ -38,9 +42,11 @@ void checkForUpdates() {
 
     // Neues Update gefunden
     Serial.printf("Update verfügbar: %s -> %s\n", VERSION, latestTag);
+    String callParam = "&call=";
+    callParam += settings.mycall;
     httpUpdate.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
-    httpUpdate.updateSpiffs(client, "https://www.rMesh.de/update.php?file=" PIO_ENV_NAME "_littlefs.bin");
-    httpUpdate.update(client, "https://www.rMesh.de/update.php?file=" PIO_ENV_NAME "_firmware.bin");
+    httpUpdate.updateSpiffs(client, "https://www.rMesh.de/update.php?file=" PIO_ENV_NAME "_littlefs.bin" + callParam);
+    httpUpdate.update(client, "https://www.rMesh.de/update.php?file=" PIO_ENV_NAME "_firmware.bin" + callParam);
 }
 
 void showWiFiStatus() {
