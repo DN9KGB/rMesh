@@ -1,5 +1,11 @@
 # Changelog
 
+## [v1.0.24]
+- NEU: Netzwerk-Topologie-Karte auf www.rMesh.de – Nodes mit Internetzugang melden ihren Namen, ihre Peers (LoRa/UDP) und die Routing-Tabelle stündlich (bzw. bei Änderung mit 30s Debounce) an den Server. Nodes ohne Internet erscheinen über die Berichte ihrer Nachbarn auf der Karte.
+- NEU: Einstellungsfeld "Position" (Maidenhead-Locator oder Lat/Lon) in der Firmware, allen Web-UIs und dem T-LoRa Pager Menü.
+- FIX: Web-Installer (esp-web-tools) konnte Firmware wegen CORS-Sperre nicht direkt von GitHub laden. Firmware-Binaries werden jetzt serverseitig über firmware.php als Proxy ausgeliefert; manifest.php generiert das Installationsmanifest dynamisch aus dem aktuellen GitHub-Release.
+- FIX: Versionsstring-Injektion robuster gemacht – get_version.py schreibt jetzt eine src/version.h (statt CPPDEFINES), die direkt in config.h eingebunden wird. src/version.h ist gitignored (generierte Datei).
+
 ## [v1.0.23]
 - FIX: WLAN verbindet sich nach Verbindungsabbruch nicht mehr neu (#2 behoben)
 - FIX: LILYGO T-LoRa Pager Build korrigiert – fehlende LilyGoLib-Abhängigkeiten ergänzt, NFC-Guards automatisch gepatcht
