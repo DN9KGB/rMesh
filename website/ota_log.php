@@ -6,6 +6,7 @@
  * POST Body (JSON):
  * {
  *   "call":         "DN9KGB",
+ *   "device":       "LILYGO_T-LoraPager",
  *   "event":        "update_success|update_failed|...",
  *   "version_from": "v1.0.23",
  *   "version_to":   "v1.0.24",
@@ -44,6 +45,7 @@ $allowed_events = array(
 );
 
 $call         = strtoupper(substr(preg_replace('/[^A-Z0-9\/\-]/', '', strtoupper($data['call'])), 0, 16));
+$device       = isset($data['device'])       ? substr($data['device'],       0, 64)  : '';
 $event        = substr(preg_replace('/[^a-z_]/', '', strtolower($data['event'])), 0, 32);
 $version_from = isset($data['version_from']) ? substr($data['version_from'], 0, 32)  : '';
 $version_to   = isset($data['version_to'])   ? substr($data['version_to'],   0, 32)  : '';
@@ -56,5 +58,5 @@ if (empty($call) || !in_array($event, $allowed_events)) {
 }
 
 require_once __DIR__ . '/ota_log_helper.php';
-logOtaEvent($call, $event, $version_from, $version_to, $error);
+logOtaEvent($call, $device, $event, $version_from, $version_to, $error);
 echo json_encode(array('ok' => true));

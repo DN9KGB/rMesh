@@ -1,5 +1,8 @@
 # Changelog
 
+## [v1.0.25]
+- NEU: OTA-Debugging – jeder Update-Vorgang wird in der Datenbank protokolliert. Erfasst werden Versions-Anfragen, gefundene Updates, gestartete Downloads sowie Erfolg oder Misserfolg des Flashens mit Fehlermeldung und Gerätetyp.
+
 ## [v1.0.24]
 - NEU: Netzwerk-Topologie-Karte auf www.rMesh.de – Nodes mit Internetzugang melden ihren Namen, ihre Peers (LoRa/UDP) und die Routing-Tabelle stündlich (bzw. bei Änderung mit 30s Debounce) an den Server. Nodes ohne Internet erscheinen über die Berichte ihrer Nachbarn auf der Karte.
 - NEU: Einstellungsfeld "Position" (Maidenhead-Locator oder Lat/Lon) in der Firmware, allen Web-UIs und dem T-LoRa Pager Menü.

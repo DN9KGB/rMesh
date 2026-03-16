@@ -21,6 +21,25 @@ byte wifiStatus = 0xff;
 bool wiFiLED = false;
 bool apModeKey = false;
 
+static void sendOtaLog(const char* event, const char* versionFrom, const char* versionTo, const char* errorMsg) {
+    WiFiClientSecure logClient;
+    logClient.setInsecure();
+    HTTPClient logHttp;
+    if (!logHttp.begin(logClient, "https://www.rMesh.de/ota_log.php")) return;
+    logHttp.addHeader("Content-Type", "application/json");
+    JsonDocument doc;
+    doc["call"]         = settings.mycall;
+    doc["device"]       = PIO_ENV_NAME;
+    doc["event"]        = event;
+    doc["version_from"] = versionFrom;
+    doc["version_to"]   = versionTo;
+    doc["error"]        = errorMsg;
+    String body;
+    serializeJson(doc, body);
+    logHttp.POST(body);
+    logHttp.end();
+}
+
 void checkForUpdates() {
     if (strcmp(VERSION, "unknown") == 0) { return; }
 
@@ -30,6 +49,8 @@ void checkForUpdates() {
     HTTPClient http;
     String latestUrl = "https://www.rMesh.de/latest.php?call=";
     latestUrl += settings.mycall;
+    latestUrl += "&device=";
+    latestUrl += PIO_ENV_NAME;
     latestUrl += "&version=";
     latestUrl += VERSION;
     http.begin(client, latestUrl);
@@ -41,12 +62,35 @@ void checkForUpdates() {
     http.end();
 
     // Neues Update gefunden
-    Serial.printf("Update verfügbar: %s -> %s\n", VERSION, latestTag);
+    String newVersion = latestTag;
+    Serial.printf("Update verfügbar: %s -> %s\n", VERSION, newVersion.c_str());
     String callParam = "&call=";
     callParam += settings.mycall;
+    callParam += "&device=";
+    callParam += PIO_ENV_NAME;
     httpUpdate.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
-    httpUpdate.updateSpiffs(client, "https://www.rMesh.de/update.php?file=" PIO_ENV_NAME "_littlefs.bin" + callParam);
-    httpUpdate.update(client, "https://www.rMesh.de/update.php?file=" PIO_ENV_NAME "_firmware.bin" + callParam);
+
+    // LittleFS
+    t_httpUpdate_return spiffsResult = httpUpdate.updateSpiffs(client,
+        "https://www.rMesh.de/update.php?file=" PIO_ENV_NAME "_littlefs.bin" + callParam);
+    if (spiffsResult == HTTP_UPDATE_FAILED) {
+        sendOtaLog("update_failed", VERSION, newVersion.c_str(),
+            ("LittleFS: " + httpUpdate.getLastErrorString()).c_str());
+        return;
+    }
+
+    // Firmware – bei Erfolg startet der Node neu, onEnd feuert kurz davor
+    httpUpdate.onEnd([newVersion]() {
+        sendOtaLog("update_success", VERSION, newVersion.c_str(), "");
+    });
+
+    t_httpUpdate_return fwResult = httpUpdate.update(client,
+        "https://www.rMesh.de/update.php?file=" PIO_ENV_NAME "_firmware.bin" + callParam);
+    // Nur erreicht wenn fehlgeschlagen (Erfolg = Neustart)
+    if (fwResult == HTTP_UPDATE_FAILED) {
+        sendOtaLog("update_failed", VERSION, newVersion.c_str(),
+            ("Firmware: " + httpUpdate.getLastErrorString()).c_str());
+    }
 }
 
 void showWiFiStatus() {
