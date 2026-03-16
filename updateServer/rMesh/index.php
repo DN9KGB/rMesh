@@ -445,7 +445,7 @@
             if ($hasZip) {
                 echo "
                 <div class='btn-group'>
-                    <esp-web-install-button manifest=\"$device/manifest.php\">
+                    <esp-web-install-button manifest=\"manifest.php?device=$device\">
                         <button slot='activate'>Firmware installieren</button>
                         <span slot='unsupported'>Browser nicht unterstützt.</span>
                     </esp-web-install-button>
@@ -457,7 +457,7 @@
                 ";
             } else {
                 echo "
-                <esp-web-install-button manifest=\"$device/manifest.php\">
+                <esp-web-install-button manifest=\"manifest.php?device=$device\">
                     <button slot='activate' class='standalone'>Firmware installieren</button>
                     <span slot='unsupported'>Browser nicht unterstützt.</span>
                 </esp-web-install-button>
