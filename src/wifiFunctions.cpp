@@ -22,9 +22,9 @@ bool apModeKey = false;
 void checkForUpdates() {
     WiFiClient client;
     // LittleFS Update prüfen
-    httpUpdate.updateSpiffs(client, "http://dh1nfj.de/rMesh/update.php?file=" PIO_ENV_NAME "/" VERSION "/littlefs.bin");
+    httpUpdate.updateSpiffs(client, "http://www.rMesh.de/update.php?file=" PIO_ENV_NAME "/" VERSION "/littlefs.bin");
     //Firmware prüfen
-    httpUpdate.update(client, "http://dh1nfj.de/rMesh/update.php?file=" PIO_ENV_NAME "/" VERSION "/firmware.bin");
+    httpUpdate.update(client, "http://www.rMesh.de/update.php?file=" PIO_ENV_NAME "/" VERSION "/firmware.bin");
 }
 
 void showWiFiStatus() {
