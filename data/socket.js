@@ -111,6 +111,7 @@ function onMessage(event) {
     if (d.settings) {
         settings = d.settings;
         document.getElementById("settingsMycall").value = d.settings.mycall;
+        document.getElementById("settingsPosition").value = d.settings.position || "";
         document.getElementById("settingsNTP").value = d.settings.ntp;
         document.getElementById("settingsSSID").value = d.settings.wifiSSID;
         document.getElementById("settingsPassword").value = d.settings.wifiPassword;
@@ -239,6 +240,7 @@ async function sendMessage(text, channel) {
 function saveSettings() {
     var settings = {};
     settings["mycall"] = document.getElementById("settingsMycall").value;
+    settings["position"] = document.getElementById("settingsPosition").value;
     settings["ntp"] = document.getElementById("settingsNTP").value;
     settings["dhcpActive"] = document.getElementById("settingsDHCP").checked;
     settings["wifiSSID"] = document.getElementById("settingsSSID").value;

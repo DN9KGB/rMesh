@@ -19,6 +19,7 @@
 #include "ack.h"
 #include "udp.h"
 #include "routing.h"
+#include "reporting.h"
 #include "time.h"
 
 #ifdef LILYGO_T_LORA_PAGER
@@ -47,6 +48,7 @@ uint32_t rebootTimer = 0xFFFFFFFF;
 uint8_t currentRetry = 0;
 uint32_t updateCheckTimer = 60 * 60 * 1000;  //Erster Check nach 1 Stunde
 uint32_t messagesDeleteTimer = 30 * 60 * 1000;  //Erster Check nach 30 Min
+uint32_t reportingTimer = 5 * 60 * 1000;         //Erster Report nach 5 Minuten
 
 void processRxFrame(Frame &f) {
     //Abbruch, wenn kein nodeCall
@@ -519,6 +521,14 @@ void loop() {
         messagesDeleteTimer = millis() + 24 * 60 * 60 * 1000; //24 Stunden
         trimFile("/messages.json", MAX_STORED_MESSAGES);
     }
+
+    //Topology-Reporting: einmal pro Stunde
+    if (millis() > reportingTimer) {
+        reportingTimer = millis() + 60 * 60 * 1000; //1 Stunde
+        reportTopology();
+    }
+    //Topology-Reporting: bei Änderungen (30s Debounce)
+    reportTopologyIfChanged();
 
 
     

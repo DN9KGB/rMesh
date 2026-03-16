@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>rMesh – Netzwerkkarte</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #1a1a2e; color: #e0e0e0; display: flex; flex-direction: column; height: 100vh; }
+
+        #header {
+            background: #16213e;
+            border-bottom: 1px solid #0f3460;
+            padding: 8px 16px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-shrink: 0;
+            z-index: 1000;
+        }
+        #header h1 { font-size: 1.2rem; color: #e94560; letter-spacing: 2px; }
+        #header .info { font-size: 0.8rem; color: #888; margin-left: auto; }
+        #header .info span { color: #4ecca3; }
+
+        #layout { display: flex; flex: 1; overflow: hidden; }
+
+        #map { flex: 1; }
+
+        #sidebar {
+            width: 260px;
+            background: #16213e;
+            border-left: 1px solid #0f3460;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+        #sidebar h2 {
+            font-size: 0.85rem;
+            color: #4ecca3;
+            padding: 10px 12px 6px;
+            border-bottom: 1px solid #0f3460;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+        #sidebar-scroll { overflow-y: auto; flex: 1; }
+
+        .node-card {
+            padding: 8px 12px;
+            border-bottom: 1px solid #0f3460;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .node-card:hover { background: #0f3460; }
+        .node-call { font-weight: bold; font-size: 0.95rem; color: #e0e0e0; }
+        .node-meta { font-size: 0.75rem; color: #888; margin-top: 2px; }
+        .node-pos-inferred { color: #f0a500; }
+        .node-pos-none { color: #e94560; }
+        .node-pos-known { color: #4ecca3; }
+
+        #legend {
+            padding: 10px 12px;
+            border-top: 1px solid #0f3460;
+            font-size: 0.75rem;
+        }
+        #legend .legend-title { color: #4ecca3; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 1px; }
+        .legend-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; color: #aaa; }
+        .legend-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+        .legend-line { width: 24px; height: 3px; flex-shrink: 0; }
+
+        /* Leaflet popup overrides */
+        .leaflet-popup-content-wrapper { background: #16213e; color: #e0e0e0; border: 1px solid #0f3460; border-radius: 6px; }
+        .leaflet-popup-tip { background: #16213e; }
+        .popup-call { font-size: 1.1rem; font-weight: bold; color: #4ecca3; margin-bottom: 6px; }
+        .popup-row { font-size: 0.8rem; margin: 2px 0; }
+        .popup-label { color: #888; }
+        .popup-peers { margin-top: 6px; }
+        .popup-peer { font-size: 0.78rem; color: #aaa; padding: 1px 0; }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(22,33,62,0.95);
+            padding: 20px 32px;
+            border-radius: 8px;
+            border: 1px solid #0f3460;
+            color: #4ecca3;
+            font-size: 1rem;
+            z-index: 9999;
+        }
+    </style>
+</head>
+<body>
+
+<div id="header">
+    <h1>rMesh</h1>
+    <span style="color:#888;font-size:0.85rem;">Netzwerkkarte</span>
+    <div class="info">
+        Nodes: <span id="hdr-nodes">–</span> &nbsp;|&nbsp;
+        Verbindungen: <span id="hdr-edges">–</span> &nbsp;|&nbsp;
+        Stand: <span id="hdr-time">–</span>
+        &nbsp;&nbsp;
+        <button onclick="loadData()" style="background:#0f3460;color:#4ecca3;border:1px solid #4ecca3;padding:3px 10px;border-radius:4px;cursor:pointer;font-size:0.8rem;">Aktualisieren</button>
+    </div>
+</div>
+
+<div id="layout">
+    <div id="map"></div>
+
+    <div id="sidebar">
+        <h2>Alle Nodes</h2>
+        <div id="sidebar-scroll">
+            <div id="node-list"></div>
+        </div>
+        <div id="legend">
+            <div class="legend-title">Legende</div>
+            <div class="legend-row"><div class="legend-dot" style="background:#4ecca3;"></div> Position bekannt</div>
+            <div class="legend-row"><div class="legend-dot" style="background:#f0a500;"></div> Position geschätzt</div>
+            <div class="legend-row"><div class="legend-dot" style="background:#e94560;"></div> Keine Position</div>
+            <div class="legend-row"><div class="legend-line" style="background:#4ecca3;"></div> Direkte Verbindung (LoRa)</div>
+            <div class="legend-row"><div class="legend-line" style="background:#a78bfa;"></div> Verbindung (WiFi/UDP)</div>
+            <div class="legend-row"><div class="legend-line" style="background:#555;border-top:2px dashed #888;height:0;"></div> Route (indirekt)</div>
+        </div>
+    </div>
+</div>
+
+<div id="loading">Lade Topologie…</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ── Karte initialisieren ──────────────────────────────────────────────────────
+const map = L.map('map', {
+    center: [51, 10],
+    zoom: 6,
+    zoomControl: true
+});
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom: 19
+}).addTo(map);
+
+// ── Layer-Gruppen ─────────────────────────────────────────────────────────────
+const edgeLayer   = L.layerGroup().addTo(map);
+const routeLayer  = L.layerGroup().addTo(map);
+const markerLayer = L.layerGroup().addTo(map);
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let allNodes    = {};   // call -> node object (mit lat/lon ggf. berechnet)
+let allEdges    = [];
+let allRoutes   = [];
+let markers     = {};   // call -> L.marker
+
+// ── Hilfsfunktionen ───────────────────────────────────────────────────────────
+
+function timeAgo(ts) {
+    const diff = Math.floor(Date.now() / 1000) - ts;
+    if (diff < 60)   return diff + 's';
+    if (diff < 3600) return Math.floor(diff/60) + 'min';
+    return Math.floor(diff/3600) + 'h ' + Math.floor((diff%3600)/60) + 'min';
+}
+
+function fmtTime(ts) {
+    return new Date(ts * 1000).toLocaleString('de-DE', {
+        day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'
+    });
+}
+
+// SNR → Farbe (grün = gut, rot = schlecht)
+function snrColor(snr) {
+    if (snr >= 5)  return '#4ecca3';
+    if (snr >= 0)  return '#f0a500';
+    return '#e94560';
+}
+
+// Kleines zufälliges Offset um Überlappungen zu vermeiden (deterministisch per Hash)
+function callHash(call) {
+    let h = 0;
+    for (let i = 0; i < call.length; i++) h = (h * 31 + call.charCodeAt(i)) & 0xffffffff;
+    return h;
+}
+function deterministicOffset(call, range = 0.08) {
+    const h = callHash(call);
+    const dlat = ((h & 0xffff) / 0xffff - 0.5) * range;
+    const dlon = (((h >> 16) & 0xffff) / 0xffff - 0.5) * range;
+    return [dlat, dlon];
+}
+
+// Marker-Icon erzeugen
+function makeIcon(color, symbol = '') {
+    return L.divIcon({
+        className: '',
+        html: `<div style="
+            background:${color};
+            border:2px solid #fff;
+            border-radius:50%;
+            width:14px;height:14px;
+            box-shadow:0 0 6px ${color}88;
+        "></div>`,
+        iconSize: [14, 14],
+        iconAnchor: [7, 7],
+        popupAnchor: [0, -10]
+    });
+}
+
+// ── Virtuelle Positionen berechnen ────────────────────────────────────────────
+// Nodes ohne Position bekommen den Schwerpunkt ihrer bekannten Nachbarn + Offset.
+function inferPositions(nodes, edges, routeHints) {
+    const nodeMap = {};
+    nodes.forEach(n => { nodeMap[n.call] = n; });
+
+    const MAX_ITER = 5;
+    for (let iter = 0; iter < MAX_ITER; iter++) {
+        let anyInferred = false;
+        nodes.forEach(n => {
+            if (n.lat !== undefined) return;  // schon bekannt oder schon berechnet
+
+            // Sammle Positionen der Nachbarn (aus Edges)
+            const neighborPositions = [];
+            edges.forEach(e => {
+                let neighbor = null;
+                if (e.from === n.call && nodeMap[e.to]  && nodeMap[e.to].lat  !== undefined) neighbor = nodeMap[e.to];
+                if (e.to   === n.call && nodeMap[e.from] && nodeMap[e.from].lat !== undefined) neighbor = nodeMap[e.from];
+                if (neighbor) neighborPositions.push([neighbor.lat, neighbor.lon]);
+            });
+
+            // Alternativ: Route-Hints (via-Node hat vielleicht eine Position)
+            if (neighborPositions.length === 0) {
+                routeHints.forEach(r => {
+                    if (r.src === n.call && nodeMap[r.via] && nodeMap[r.via].lat !== undefined) {
+                        neighborPositions.push([nodeMap[r.via].lat, nodeMap[r.via].lon]);
+                    }
+                    if (r.reporter === n.call && nodeMap[r.via] && nodeMap[r.via].lat !== undefined) {
+                        neighborPositions.push([nodeMap[r.via].lat, nodeMap[r.via].lon]);
+                    }
+                });
+            }
+
+            if (neighborPositions.length > 0) {
+                const avgLat = neighborPositions.reduce((s,p) => s + p[0], 0) / neighborPositions.length;
+                const avgLon = neighborPositions.reduce((s,p) => s + p[1], 0) / neighborPositions.length;
+                const [dlat, dlon] = deterministicOffset(n.call, 0.15);
+                n.lat = avgLat + dlat;
+                n.lon = avgLon + dlon;
+                n.posInferred = true;
+                anyInferred = true;
+            }
+        });
+        if (!anyInferred) break;
+    }
+}
+
+// ── Karte rendern ─────────────────────────────────────────────────────────────
+function renderMap(data) {
+    const nodes      = data.nodes      || [];
+    const edges      = data.edges      || [];
+    const routeHints = data.route_hints|| [];
+
+    // Virtuelle Positionen berechnen
+    inferPositions(nodes, edges, routeHints);
+
+    // State speichern
+    allNodes = {};
+    nodes.forEach(n => { allNodes[n.call] = n; });
+    allEdges  = edges;
+    allRoutes = routeHints;
+
+    // Layer leeren
+    edgeLayer.clearLayers();
+    routeLayer.clearLayers();
+    markerLayer.clearLayers();
+    markers = {};
+
+    // ── Routen (gestrichelt, grau) ────────────────────────────────────────────
+    const drawnRouteEdges = new Set();
+    routeHints.forEach(r => {
+        const from = allNodes[r.reporter];
+        const to   = allNodes[r.src];
+        if (!from || !to) return;
+        if (from.lat === undefined || to.lat === undefined) return;
+        const key = [r.reporter, r.src].sort().join('|');
+        if (drawnRouteEdges.has(key)) return;
+        drawnRouteEdges.add(key);
+        L.polyline([[from.lat, from.lon], [to.lat, to.lon]], {
+            color: '#555',
+            weight: 1.5,
+            dashArray: '5,6',
+            opacity: 0.6
+        }).addTo(routeLayer)
+         .bindTooltip(`Route: ${r.reporter} → ${r.src} via ${r.via} (${r.hops} Hops)`, {sticky: true});
+    });
+
+    // ── Direkte Verbindungen (Edges) ──────────────────────────────────────────
+    edges.forEach(e => {
+        const from = allNodes[e.from];
+        const to   = allNodes[e.to];
+        if (!from || !to) return;
+        if (from.lat === undefined || to.lat === undefined) return;
+
+        const color  = e.port === 0 ? snrColor(e.snr) : '#a78bfa';
+        const weight = e.port === 0 ? 2 : 1.5;
+
+        L.polyline([[from.lat, from.lon], [to.lat, to.lon]], {
+            color, weight, opacity: 0.85
+        }).addTo(edgeLayer)
+         .bindTooltip(
+            `${e.from} ↔ ${e.to}<br>` +
+            `RSSI: ${e.rssi.toFixed(1)} dBm &nbsp;|&nbsp; SNR: ${e.snr.toFixed(1)} dB<br>` +
+            `${e.port === 0 ? 'LoRa' : 'WiFi/UDP'}`,
+            {sticky: true}
+         );
+    });
+
+    // ── Marker ────────────────────────────────────────────────────────────────
+    const bounds = [];
+    nodes.forEach(n => {
+        if (n.lat === undefined) return;  // gar keine Nachbarn mit Position
+
+        const color = n.posInferred ? '#f0a500' : '#4ecca3';
+        const marker = L.marker([n.lat, n.lon], { icon: makeIcon(color) })
+            .addTo(markerLayer)
+            .bindPopup(() => buildPopup(n), { minWidth: 180 });
+
+        // Label als Tooltip immer sichtbar
+        marker.bindTooltip(n.call, {
+            permanent: true,
+            direction: 'top',
+            offset: [0, -8],
+            className: ''
+        });
+        markers[n.call] = marker;
+        bounds.push([n.lat, n.lon]);
+    });
+
+    // Karte auf alle Marker zoomen (nur beim ersten Laden)
+    if (bounds.length > 0 && !window._mapInitialized) {
+        window._mapInitialized = true;
+        map.fitBounds(bounds, { padding: [40, 40] });
+    }
+
+    // Sidebar
+    renderSidebar(nodes, edges);
+
+    // Header
+    document.getElementById('hdr-nodes').textContent = nodes.length;
+    document.getElementById('hdr-edges').textContent = edges.length;
+    document.getElementById('hdr-time').textContent  = fmtTime(data.generated || Date.now()/1000);
+    document.getElementById('loading').style.display = 'none';
+}
+
+// ── Popup-Inhalt ──────────────────────────────────────────────────────────────
+function buildPopup(n) {
+    const directPeers = allEdges.filter(e => e.from === n.call || e.to === n.call);
+    const routedThrough = allRoutes.filter(r => r.reporter === n.call);
+
+    let html = `<div class="popup-call">${n.call}</div>`;
+
+    if (n.posInferred) {
+        html += `<div class="popup-row"><span class="popup-label">Position:</span> <span style="color:#f0a500">geschätzt (keine GPS-Daten)</span></div>`;
+    } else if (n.position) {
+        html += `<div class="popup-row"><span class="popup-label">Position:</span> ${n.position}</div>`;
+        html += `<div class="popup-row"><span class="popup-label">Koordinaten:</span> ${n.lat.toFixed(4)}, ${n.lon.toFixed(4)}</div>`;
+    }
+
+    html += `<div class="popup-row"><span class="popup-label">Zuletzt gesehen:</span> vor ${timeAgo(n.last_seen)}</div>`;
+
+    if (directPeers.length > 0) {
+        html += `<div class="popup-peers"><div class="popup-label">Direkte Peers (${directPeers.length}):</div>`;
+        directPeers.slice(0, 8).forEach(e => {
+            const peer = e.from === n.call ? e.to : e.from;
+            html += `<div class="popup-peer">
+                &rsaquo; ${peer} &nbsp;
+                RSSI ${e.rssi.toFixed(0)} dBm, SNR ${e.snr.toFixed(1)} dB,
+                ${e.port === 0 ? 'LoRa' : 'WiFi'}
+            </div>`;
+        });
+        html += '</div>';
+    }
+
+    if (routedThrough.length > 0) {
+        html += `<div class="popup-peers"><div class="popup-label">Bekannte Routen (${routedThrough.length}):</div>`;
+        routedThrough.slice(0, 6).forEach(r => {
+            html += `<div class="popup-peer">&rsaquo; ${r.src} via ${r.via} (${r.hops} Hops)</div>`;
+        });
+        html += '</div>';
+    }
+
+    return html;
+}
+
+// ── Sidebar ───────────────────────────────────────────────────────────────────
+function renderSidebar(nodes, edges) {
+    const sorted = [...nodes].sort((a, b) => a.call.localeCompare(b.call));
+    let html = '';
+    sorted.forEach(n => {
+        const peerCount = edges.filter(e => e.from === n.call || e.to === n.call).length;
+        let posClass, posText;
+        if (n.lat !== undefined && !n.posInferred) {
+            posClass = 'node-pos-known';
+            posText  = n.position || `${n.lat.toFixed(3)}, ${n.lon.toFixed(3)}`;
+        } else if (n.posInferred) {
+            posClass = 'node-pos-inferred';
+            posText  = 'Position geschätzt';
+        } else {
+            posClass = 'node-pos-none';
+            posText  = 'Keine Position';
+        }
+
+        html += `<div class="node-card" onclick="focusNode('${n.call}')">
+            <div class="node-call">${n.call}</div>
+            <div class="node-meta ${posClass}">${posText}</div>
+            <div class="node-meta">${peerCount} Peer${peerCount !== 1 ? 's' : ''} &nbsp;·&nbsp; vor ${timeAgo(n.last_seen)}</div>
+        </div>`;
+    });
+    document.getElementById('node-list').innerHTML = html || '<div style="padding:12px;color:#555;font-size:0.85rem;">Keine Nodes gefunden.</div>';
+}
+
+function focusNode(call) {
+    const m = markers[call];
+    if (m) {
+        map.setView(m.getLatLng(), Math.max(map.getZoom(), 10));
+        m.openPopup();
+    } else {
+        // Node ohne Position: Popup aus der Sidebar heraus anzeigen
+        const n = allNodes[call];
+        if (n) alert(`${call}\nKeine Position bekannt.\nZuletzt gesehen: vor ${timeAgo(n.last_seen)}`);
+    }
+}
+
+// ── Daten laden ───────────────────────────────────────────────────────────────
+function loadData() {
+    document.getElementById('hdr-time').textContent = 'lade…';
+    fetch('topology.php?max_age=7200&_=' + Date.now())
+        .then(r => r.json())
+        .then(data => renderMap(data))
+        .catch(err => {
+            document.getElementById('loading').textContent = 'Fehler beim Laden: ' + err.message;
+            document.getElementById('loading').style.display = '';
+        });
+}
+
+// Auto-Refresh alle 5 Minuten
+loadData();
+setInterval(loadData, 5 * 60 * 1000);
+</script>
+</body>
+</html>

@@ -36,6 +36,7 @@ void showSettings() {
     }
     Serial.println();
     Serial.printf("myCall: %s\n", settings.mycall);
+    Serial.printf("position: %s\n", settings.position);
     Serial.printf("loraFrequency: %f\n", settings.loraFrequency);
     Serial.printf("loraOutputPower: %d\n", settings.loraOutputPower);
     Serial.printf("loraBandwidth: %f\n", settings.loraBandwidth);
@@ -88,6 +89,7 @@ void sendSettings() {
     //Einstellungen über Websocket senden
     JsonDocument doc;
     doc["settings"]["mycall"] = settings.mycall;
+    doc["settings"]["position"] = settings.position;
     doc["settings"]["ntp"] = settings.ntpServer;
     doc["settings"]["dhcpActive"] = settings.dhcpActive;
     doc["settings"]["wifiSSID"] = settings.wifiSSID;
@@ -184,6 +186,7 @@ void loadSettings() {
         strcpy(settings.wifiPassword, "");
         strcpy(settings.ntpServer, "de.pool.ntp.org");
         strcpy(settings.mycall, "");
+        strcpy(settings.position, "");
         settings.apMode = true;
         settings.dhcpActive = true;
         settings.wifiIP = IPAddress(192,168,33,60);
