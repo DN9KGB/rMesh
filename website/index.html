@@ -256,19 +256,6 @@
 
         .btn-group.open .dropdown-menu { display: block; }
 
-        button[slot="activate"].standalone {
-            border-radius: 8px;
-            background: var(--blue);
-            color: white;
-            border: none;
-            padding: 10px 18px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-        }
-
-        button[slot="activate"].standalone:hover { background: var(--blue-dark); }
-
         /* ── README / Markdown ─────────────────────── */
         .card {
             background: var(--card);
@@ -278,7 +265,7 @@
             border: 1px solid var(--border);
         }
 
-        .readme-body h1 { display: none; } /* rMesh title already in hero */
+        .readme-body h1 { display: none; }
 
         .readme-body h2 {
             font-size: 20px;
@@ -338,23 +325,22 @@
         }
 
         /* ── Changelog ─────────────────────────────── */
-        .changelog-inner {
-            background: #f8fafc;
-            border: 1px solid var(--border);
-            padding: 16px 20px;
-            border-radius: 10px;
-            margin-top: 0;
+        .changelog-body h2 {
+            font-size: 17px;
+            color: #0f172a;
+            margin: 20px 0 8px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid var(--border);
         }
 
-        .changelog-inner pre {
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            margin: 0;
-            font-family: 'Consolas', 'Monaco', monospace;
-            font-size: 13px;
+        .changelog-body h2:first-child { margin-top: 0; }
+
+        .changelog-body ul {
+            margin: 4px 0 12px 20px;
             color: #374151;
-            line-height: 1.65;
         }
+
+        .changelog-body li { margin: 2px 0; font-size: 14px; }
 
         /* ── Footer ────────────────────────────────── */
         footer {
@@ -419,73 +405,18 @@
     <!-- ── Firmware installer ── -->
     <section id="installer">
         <h2 class="section-title">Firmware installieren</h2>
-        <div class="device-grid">
-
-        <?php
-        $baseDir = __DIR__;
-        $devices = array_filter(glob($baseDir . '/*'), 'is_dir');
-
-        foreach ($devices as $devicePath) {
-            $device = basename($devicePath);
-
-            if (!file_exists("$devicePath/firmware.bin") && !file_exists("$devicePath/littlefs.bin")) {
-                continue;
-            }
-
-            $imagePath = "$devicePath/image.webp";
-            $imageUrl  = file_exists($imagePath)
-                ? "$device/image.webp"
-                : "https://via.placeholder.com/250x180?text=No+Image";
-            $hasZip = file_exists("$devicePath/$device.zip");
-
-            echo "<div class='device-card'>";
-            echo "<img src='$imageUrl' alt='$device'>";
-            echo "<div class='device-name'>$device</div>";
-
-            if ($hasZip) {
-                echo "
-                <div class='btn-group'>
-                    <esp-web-install-button manifest=\"manifest.php?device=$device\">
-                        <button slot='activate'>Firmware installieren</button>
-                        <span slot='unsupported'>Browser nicht unterstützt.</span>
-                    </esp-web-install-button>
-                    <button class='btn-arrow' onclick='toggleDropdown(this)'>&#9660;</button>
-                    <div class='dropdown-menu'>
-                        <a href='$device/$device.zip' download>&#8595; Firmware herunterladen</a>
-                    </div>
-                </div>
-                ";
-            } else {
-                echo "
-                <esp-web-install-button manifest=\"manifest.php?device=$device\">
-                    <button slot='activate' class='standalone'>Firmware installieren</button>
-                    <span slot='unsupported'>Browser nicht unterstützt.</span>
-                </esp-web-install-button>
-                ";
-            }
-
-            echo "</div>";
-        }
-        ?>
-
-        </div>
+        <div id="device-grid" class="device-grid"></div>
     </section>
 
     <!-- ── Changelog ── -->
-    <?php
-    $globalChangelog = $baseDir . '/changelog.txt';
-    if (file_exists($globalChangelog)):
-        $content = htmlspecialchars(file_get_contents($globalChangelog));
-    ?>
     <section>
-        <h2 class="section-title">Release Notes / Changelog</h2>
+        <h2 class="section-title">Changelog</h2>
         <div class="card">
-            <div class="changelog-inner">
-                <pre><?php echo $content; ?></pre>
+            <div id="changelog-body" class="changelog-body">
+                <p class="readme-loading">Lade Changelog von GitHub …</p>
             </div>
         </div>
     </section>
-    <?php endif; ?>
 
 </main>
 
@@ -499,6 +430,9 @@
 </footer>
 
 <script>
+const GH_RAW  = 'https://raw.githubusercontent.com/DN9KGB/rMesh/main';
+const GH_BASE = 'https://github.com/DN9KGB/rMesh/releases/latest/download';
+
 // Split-button dropdown
 function toggleDropdown(btn) {
     const group = btn.closest('.btn-group');
@@ -511,8 +445,59 @@ document.addEventListener('click', function(e) {
     }
 });
 
+// Load devices.json from GitHub, then render device cards
+fetch(`${GH_RAW}/devices.json`)
+    .then(r => {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+    })
+    .then(devices => {
+        const grid = document.getElementById('device-grid');
+        devices.forEach(({ name: device, image }) => {
+            const imgUrl = image
+                ? `${GH_RAW}/website/images/${image}`
+                : 'https://via.placeholder.com/250x180?text=No+Image';
+            const card = document.createElement('div');
+            card.className = 'device-card';
+            card.innerHTML = `
+                <img src="${imgUrl}" alt="${device}"
+                     onerror="this.src='https://via.placeholder.com/250x180?text=No+Image'">
+                <div class="device-name">${device}</div>
+                <div class="btn-group">
+                    <esp-web-install-button manifest="${GH_BASE}/${device}_manifest.json">
+                        <button slot="activate">Firmware installieren</button>
+                        <span slot="unsupported">Browser nicht unterstützt.</span>
+                    </esp-web-install-button>
+                    <button class="btn-arrow" onclick="toggleDropdown(this)">&#9660;</button>
+                    <div class="dropdown-menu">
+                        <a href="${GH_BASE}/${device}.zip" download>&#8595; Firmware herunterladen</a>
+                    </div>
+                </div>
+            `;
+            grid.appendChild(card);
+        });
+    })
+    .catch(() => {
+        document.getElementById('device-grid').innerHTML =
+            '<p style="color:var(--muted)">Geräteliste konnte nicht von GitHub geladen werden.</p>';
+    });
+
+// Load full CHANGELOG.md from GitHub and render as Markdown
+fetch(`${GH_RAW}/CHANGELOG.md`)
+    .then(r => {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.text();
+    })
+    .then(md => {
+        document.getElementById('changelog-body').innerHTML = marked.parse(md);
+    })
+    .catch(() => {
+        document.getElementById('changelog-body').innerHTML =
+            '<p style="color:var(--muted)">Changelog konnte nicht von GitHub geladen werden.</p>';
+    });
+
 // Load README from GitHub and render as Markdown
-fetch('https://raw.githubusercontent.com/DN9KGB/rMesh/refs/heads/main/README.md')
+fetch(`${GH_RAW}/README.md`)
     .then(r => {
         if (!r.ok) throw new Error('HTTP ' + r.status);
         return r.text();
