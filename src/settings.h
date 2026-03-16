@@ -10,7 +10,8 @@ struct Settings {
   bool apMode;
   char wifiSSID[64];
   char wifiPassword[64];
-  char mycall[17];     
+  char mycall[17];
+  char position[24];   // lat/lon "48.1234,11.5678" oder Maidenhead-Locator "JN48mw"
   char ntpServer[64];
   IPAddress wifiIP;
   IPAddress wifiNetMask;

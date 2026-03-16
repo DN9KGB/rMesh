@@ -60,6 +60,9 @@ void startWebServer() {
         }
         settings.mycall[sizeof(settings.mycall) - 1] = '\0';
       }
+      if (json["settings"]["position"].is<JsonVariant>()) {
+        strlcpy(settings.position, json["settings"]["position"] | "", sizeof(settings.position));
+      }
       if (json["settings"]["ntp"].is<JsonVariant>()) { strlcpy(settings.ntpServer, json["settings"]["ntp"] | "", sizeof(settings.ntpServer)); }
       if (json["settings"]["dhcpActive"].is<JsonVariant>()) { settings.dhcpActive = json["settings"]["dhcpActive"].as<bool>(); }
       if (json["settings"]["wifiSSID"].is<JsonVariant>()) { strlcpy(settings.wifiSSID, json["settings"]["wifiSSID"] | "", sizeof(settings.wifiSSID)); }

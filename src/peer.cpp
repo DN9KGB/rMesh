@@ -5,6 +5,7 @@
 #include "main.h"
 #include "webFunctions.h"
 #include "peer.h"
+#include "reporting.h"
 #include "helperFunctions.h"
 #include "config.h"
 #include "settings.h"
@@ -44,8 +45,8 @@ void checkPeerList() {
         }
     }
 
-    if (update == true) { sendPeerList(); }
-   
+    if (update == true) { sendPeerList(); markTopologyChanged(); }
+
 }
 
 void sendPeerList() {
@@ -90,7 +91,7 @@ void availablePeerList(const char* call, bool available, uint8_t port) {
         }
     }
     //Peer Liste neu senden
-    if (update == true) { sendPeerList(); }
+    if (update == true) { sendPeerList(); markTopologyChanged(); }
 }
 
 void addPeerList(Frame &f) {
@@ -122,7 +123,8 @@ void addPeerList(Frame &f) {
 
     // Sortieren nach SNR (absteigend)
     std::sort(peerList.begin(), peerList.end(), [](const Peer& a, const Peer& b) { return a.snr > b.snr; });
-    sendPeerList(); 
+    sendPeerList();
+    markTopologyChanged();
 }
 
 

@@ -2,3 +2,6 @@
 .vscode
 .vs
 
+# Zugangsdaten – niemals ins Git
+website/.env
+*.bak

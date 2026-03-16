@@ -245,6 +245,7 @@ static MenuItem netItems[] = {
 };
 static MenuItem setupItems[] = {
     {"Rufzeichen",         FTYPE_STRING,  settings.mycall,              16, nullptr, nullptr,    0.f, 0.f,  0.f, nullptr},
+    {"Position",           FTYPE_STRING,  settings.position,            23, nullptr, nullptr,    0.f, 0.f,  0.f, nullptr},
     {"Frequenz",           FTYPE_FLOAT,   &settings.loraFrequency,       0, nullptr, "MHz",    0.01f, 0.f,  0.f, nullptr},
     {"Sendeleistung",      FTYPE_INT8,    &settings.loraOutputPower,     0, nullptr, "dBm",     1.0f, 0.f,  0.f, nullptr},
     {"Bandbreite",         FTYPE_DROP_F,  &settings.loraBandwidth,       9, bwOpts,  nullptr,   0.f, 0.f,  0.f, nullptr},

@@ -2,6 +2,7 @@
 #include <ArduinoJson.h>
 
 #include "routing.h"
+#include "reporting.h"
 #include "webFunctions.h"
 #include "peer.h"
 #include "helperFunctions.h"
@@ -108,4 +109,5 @@ void addRoutingList(const char* srcCall, const char* viaCall, uint8_t hopCount) 
     });
 
     sendRoutingList();
+    markTopologyChanged();
 }
