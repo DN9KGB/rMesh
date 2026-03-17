@@ -49,11 +49,12 @@
         }
 
         .header-logo {
-            font-size: 22px;
-            font-weight: 700;
-            letter-spacing: 3px;
-            color: #38bdf8;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
         }
+
+        .header-logo img { height: 42px; }
 
         .header-nav {
             display: flex;
@@ -92,11 +93,8 @@
             padding: 32px 24px;
         }
 
-        .hero h1 {
-            font-size: 36px;
-            font-weight: 800;
-            letter-spacing: 5px;
-            color: #38bdf8;
+        .hero-logo {
+            height: 90px;
             margin-bottom: 8px;
         }
 
@@ -372,14 +370,22 @@
 <!-- ── Header ── -->
 <header>
     <div class="header-inner">
-        <div class="header-logo">rMesh</div>
+        <a href="index.html" class="header-logo">
+            <img src="images/rmesh-logo.svg" alt="rMesh">
+        </a>
         <nav class="header-nav">
+        <a href="index.html" class="nav-btn">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+            </svg>
+            Home
+        </a>
         <a href="flash.html" class="nav-btn">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/>
                 <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
             </svg>
-            Firmware flashen
+            Archiv
         </a>
         <a href="map.html" class="nav-btn">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -400,7 +406,7 @@
 
 <!-- ── Hero ── -->
 <div class="hero">
-    <h1>rMesh</h1>
+    <img src="images/rmesh-logo.svg" alt="rMesh" class="hero-logo">
     <p id="hero-version" style="font-size:13px;color:#38bdf8;letter-spacing:1px;margin-bottom:4px;min-height:20px;"></p>
     <p>Sicheres Textnachrichten-Mesh über LoRa – radikal minimalistisch, maximal effizient.</p>
     <div class="hero-links">

@@ -62,6 +62,28 @@ try {
         }
     }
 
+    // Ghost-Nodes: Peers die gesehen wurden aber sich selbst nicht gemeldet haben
+    $knownCalls = array();
+    foreach ($nodes as $n) { $knownCalls[$n['call']] = true; }
+
+    $stmt = $db->prepare("
+        SELECT peer_call, MAX(last_seen) AS last_seen
+        FROM rmesh_peers
+        WHERE last_seen >= :cutoff AND available = 1
+        GROUP BY peer_call
+    ");
+    $stmt->execute(array(':cutoff' => $cutoff));
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        if (!isset($knownCalls[$row['peer_call']])) {
+            $nodes[] = array(
+                'call'      => $row['peer_call'],
+                'position'  => '',
+                'last_seen' => (int)$row['last_seen'],
+                'ghost'     => true,
+            );
+        }
+    }
+
     // Route-Hints
     $routeEdges = array();
     $stmt = $db->prepare("

@@ -39,11 +39,11 @@ if (function_exists('fastcgi_finish_request')) {
 
 // DB-Logging nach Response
 require_once __DIR__ . '/ota_log_helper.php';
-logOtaEvent($call, $device, $logEvent, $version, $latest, $logError);
-if ($logEvent === 'version_check' && $version) {
-    if ($version !== $latest) {
+if ($logEvent === 'version_check') {
+    updateLastVersionCheck($call);
+    if ($version && $version !== $latest) {
         logOtaEvent($call, $device, 'update_found', $version, $latest, '');
-    } else {
-        logOtaEvent($call, $device, 'no_update', $version, $latest, '');
     }
+} else {
+    logOtaEvent($call, $device, $logEvent, $version, $latest, $logError);
 }

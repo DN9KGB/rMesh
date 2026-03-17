@@ -19,19 +19,20 @@
             z-index: 1000;
         }
         .header-inner {
-            max-width: 100%;
+            max-width: 1100px;
+            margin: 0 auto;
             display: flex;
             align-items: center;
             justify-content: space-between;
             height: 60px;
         }
         .header-logo {
-            font-size: 22px;
-            font-weight: 700;
-            letter-spacing: 3px;
-            color: #38bdf8;
             text-decoration: none;
+            display: flex;
+            align-items: center;
         }
+
+        .header-logo img { height: 42px; }
         .header-nav { display: flex; align-items: center; gap: 8px; }
         .nav-btn, .github-btn {
             display: flex;
@@ -97,8 +98,13 @@
         .node-call { font-weight: bold; font-size: 0.95rem; color: #e0e0e0; }
         .node-meta { font-size: 0.75rem; color: #888; margin-top: 2px; }
         .node-pos-inferred { color: #f0a500; }
-        .node-pos-none { color: #e94560; }
+        .node-pos-ghost    { color: #818cf8; }
+        .node-pos-none  { color: #e94560; }
         .node-pos-known { color: #4ecca3; }
+        .node-pos-stale { color: #555; }
+        .node-card-stale { opacity: 0.5; }
+        .node-card-stale .node-call { color: #666; }
+        .leaflet-tooltip.tooltip-stale { opacity: 0.4 !important; color: #888; }
 
         #legend {
             padding: 10px 12px;
@@ -138,9 +144,30 @@
 
 <header>
     <div class="header-inner">
-        <div class="header-logo">rMesh</div>
+        <a href="index.html" class="header-logo">
+            <img src="images/rmesh-logo.svg" alt="rMesh">
+        </a>
         <nav class="header-nav">
-            <a href="index.html" class="nav-btn">← Startseite</a>
+            <a href="index.html" class="nav-btn">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+                </svg>
+                Home
+            </a>
+            <a href="flash.html" class="nav-btn">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/>
+                    <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
+                </svg>
+                Archiv
+            </a>
+            <a href="map.html" class="nav-btn">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/>
+                    <line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/>
+                </svg>
+                Netzwerkkarte
+            </a>
             <a href="https://github.com/dn9kgb/rmesh" target="_blank" rel="noopener" class="github-btn">
                 <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                     <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/>
@@ -155,6 +182,10 @@
     Nodes: <span id="hdr-nodes">–</span>
     <span class="sep">|</span>
     Verbindungen: <span id="hdr-edges">–</span>
+    <span class="sep">|</span>
+    Ghost-Nodes: <span id="hdr-ghosts">–</span>
+    <span class="sep">|</span>
+    Inaktiv (&gt;3h): <span id="hdr-stale">–</span>
     <span class="sep">|</span>
     Stand: <span id="hdr-time">–</span>
     <span class="sep">|</span>
@@ -171,9 +202,11 @@
         </div>
         <div id="legend">
             <div class="legend-title">Legende</div>
-            <div class="legend-row"><div class="legend-dot" style="background:#4ecca3;"></div> Position bekannt</div>
-            <div class="legend-row"><div class="legend-dot" style="background:#f0a500;"></div> Position geschätzt</div>
+            <div class="legend-row"><div class="legend-dot" style="background:#4ecca3;"></div> Position bekannt (&lt;3h)</div>
+            <div class="legend-row"><div class="legend-dot" style="background:#f0a500;"></div> Position geschätzt (&lt;3h)</div>
+            <div class="legend-row"><div class="legend-dot" style="background:#818cf8;"></div> Ghost-Node (nur gesehen)</div>
             <div class="legend-row"><div class="legend-dot" style="background:#e94560;"></div> Keine Position</div>
+            <div class="legend-row"><div class="legend-dot" style="background:#555;opacity:0.5;"></div> Inaktiv (3h–72h)</div>
             <div class="legend-row"><div class="legend-line" style="background:#4ecca3;"></div> Direkte Verbindung (LoRa)</div>
             <div class="legend-row"><div class="legend-line" style="background:#a78bfa;"></div> Verbindung (WiFi/UDP)</div>
             <div class="legend-row"><div class="legend-line" style="background:#555;border-top:2px dashed #888;height:0;"></div> Route (indirekt)</div>
@@ -223,6 +256,15 @@ function fmtTime(ts) {
     });
 }
 
+// Node-Alter klassifizieren
+const AGE_FRESH = 3 * 3600;   // < 3h  → normale Farbe
+// > 3h und <= 72h             → grau (topology.php liefert max 72h)
+
+function nodeAge(n) {
+    const diff = Math.floor(Date.now() / 1000) - n.last_seen;
+    return diff <= AGE_FRESH ? 'fresh' : 'stale';
+}
+
 // SNR → Farbe (grün = gut, rot = schlecht)
 function snrColor(snr) {
     if (snr >= 5)  return '#4ecca3';
@@ -260,8 +302,16 @@ function makeIcon(color, symbol = '') {
     });
 }
 
+// ── RSSI → Gewicht (lineare Leistung in mW) ───────────────────────────────────
+// Stärkeres Signal = höhere Gewichtung beim Schwerpunkt
+function rssiToWeight(rssi) {
+    return Math.pow(10, rssi / 10);
+}
+
 // ── Virtuelle Positionen berechnen ────────────────────────────────────────────
-// Nodes ohne Position bekommen den Schwerpunkt ihrer bekannten Nachbarn + Offset.
+// Nodes ohne Position bekommen den RSSI-gewichteten Schwerpunkt ihrer Nachbarn.
+// Ghost-Nodes (nur von anderen gesehen) profitieren davon besonders, da die
+// Signalstärke anzeigt wie nah die sehende Node sein muss.
 function inferPositions(nodes, edges, routeHints) {
     const nodeMap = {};
     nodes.forEach(n => { nodeMap[n.call] = n; });
@@ -270,32 +320,33 @@ function inferPositions(nodes, edges, routeHints) {
     for (let iter = 0; iter < MAX_ITER; iter++) {
         let anyInferred = false;
         nodes.forEach(n => {
-            if (n.lat !== undefined) return;  // schon bekannt oder schon berechnet
+            if (n.lat !== undefined) return;  // schon bekannt oder berechnet
 
-            // Sammle Positionen der Nachbarn (aus Edges)
-            const neighborPositions = [];
+            // Nachbarpositionen mit RSSI-Gewicht sammeln
+            const neighbors = [];
             edges.forEach(e => {
-                let neighbor = null;
-                if (e.from === n.call && nodeMap[e.to]  && nodeMap[e.to].lat  !== undefined) neighbor = nodeMap[e.to];
+                let neighbor = null, rssi = e.rssi;
+                if (e.from === n.call && nodeMap[e.to]   && nodeMap[e.to].lat   !== undefined) neighbor = nodeMap[e.to];
                 if (e.to   === n.call && nodeMap[e.from] && nodeMap[e.from].lat !== undefined) neighbor = nodeMap[e.from];
-                if (neighbor) neighborPositions.push([neighbor.lat, neighbor.lon]);
+                if (neighbor) neighbors.push({ lat: neighbor.lat, lon: neighbor.lon, w: rssiToWeight(rssi) });
             });
 
-            // Alternativ: Route-Hints (via-Node hat vielleicht eine Position)
-            if (neighborPositions.length === 0) {
+            // Fallback: Route-Hints (gleiches Gewicht, da kein RSSI vorhanden)
+            if (neighbors.length === 0) {
                 routeHints.forEach(r => {
                     if (r.src === n.call && nodeMap[r.via] && nodeMap[r.via].lat !== undefined) {
-                        neighborPositions.push([nodeMap[r.via].lat, nodeMap[r.via].lon]);
+                        neighbors.push({ lat: nodeMap[r.via].lat, lon: nodeMap[r.via].lon, w: 1 });
                     }
                     if (r.reporter === n.call && nodeMap[r.via] && nodeMap[r.via].lat !== undefined) {
-                        neighborPositions.push([nodeMap[r.via].lat, nodeMap[r.via].lon]);
+                        neighbors.push({ lat: nodeMap[r.via].lat, lon: nodeMap[r.via].lon, w: 1 });
                     }
                 });
             }
 
-            if (neighborPositions.length > 0) {
-                const avgLat = neighborPositions.reduce((s,p) => s + p[0], 0) / neighborPositions.length;
-                const avgLon = neighborPositions.reduce((s,p) => s + p[1], 0) / neighborPositions.length;
+            if (neighbors.length > 0) {
+                const totalW = neighbors.reduce((s, d) => s + d.w, 0);
+                const avgLat = neighbors.reduce((s, d) => s + d.lat * d.w, 0) / totalW;
+                const avgLon = neighbors.reduce((s, d) => s + d.lon * d.w, 0) / totalW;
                 const [dlat, dlon] = deterministicOffset(n.call, 0.15);
                 n.lat = avgLat + dlat;
                 n.lon = avgLon + dlon;
@@ -354,11 +405,12 @@ function renderMap(data) {
         if (!from || !to) return;
         if (from.lat === undefined || to.lat === undefined) return;
 
-        const color  = e.port === 0 ? snrColor(e.snr) : '#a78bfa';
+        const edgeStale = nodeAge(from) === 'stale' || nodeAge(to) === 'stale';
+        const color  = edgeStale ? '#444' : (e.port === 0 ? snrColor(e.snr) : '#a78bfa');
         const weight = e.port === 0 ? 2 : 1.5;
 
         L.polyline([[from.lat, from.lon], [to.lat, to.lon]], {
-            color, weight, opacity: 0.85
+            color, weight, opacity: edgeStale ? 0.3 : 0.85
         }).addTo(edgeLayer)
          .bindTooltip(
             `${e.from} ↔ ${e.to}<br>` +
@@ -373,8 +425,18 @@ function renderMap(data) {
     nodes.forEach(n => {
         if (n.lat === undefined) return;  // gar keine Nachbarn mit Position
 
-        const color = n.posInferred ? '#f0a500' : '#4ecca3';
-        const marker = L.marker([n.lat, n.lon], { icon: makeIcon(color) })
+        const stale = nodeAge(n) === 'stale';
+        let color;
+        if (stale) {
+            color = '#555';
+        } else if (n.ghost) {
+            color = '#818cf8';
+        } else if (n.posInferred) {
+            color = '#f0a500';
+        } else {
+            color = '#4ecca3';
+        }
+        const marker = L.marker([n.lat, n.lon], { icon: makeIcon(color), opacity: stale ? 0.5 : 1 })
             .addTo(markerLayer)
             .bindPopup(() => buildPopup(n), { minWidth: 180 });
 
@@ -383,7 +445,7 @@ function renderMap(data) {
             permanent: true,
             direction: 'top',
             offset: [0, -8],
-            className: ''
+            className: stale ? 'tooltip-stale' : ''
         });
         markers[n.call] = marker;
         bounds.push([n.lat, n.lon]);
@@ -399,9 +461,14 @@ function renderMap(data) {
     renderSidebar(nodes, edges);
 
     // Header
-    document.getElementById('hdr-nodes').textContent = nodes.length;
-    document.getElementById('hdr-edges').textContent = edges.length;
-    document.getElementById('hdr-time').textContent  = fmtTime(data.generated || Date.now()/1000);
+    const ghostCount = nodes.filter(n => n.ghost).length;
+    const freshCount = nodes.filter(n => nodeAge(n) === 'fresh').length;
+    const staleCount = nodes.length - freshCount;
+    document.getElementById('hdr-nodes').textContent  = freshCount - nodes.filter(n => n.ghost && nodeAge(n) === 'fresh').length;
+    document.getElementById('hdr-ghosts').textContent = ghostCount;
+    document.getElementById('hdr-stale').textContent  = staleCount;
+    document.getElementById('hdr-edges').textContent  = edges.length;
+    document.getElementById('hdr-time').textContent   = fmtTime(data.generated || Date.now()/1000);
     document.getElementById('loading').style.display = 'none';
 }
 
@@ -412,7 +479,12 @@ function buildPopup(n) {
 
     let html = `<div class="popup-call">${n.call}</div>`;
 
-    if (n.posInferred) {
+    if (n.ghost) {
+        html += `<div class="popup-row"><span class="popup-label">Status:</span> <span style="color:#818cf8">Ghost-Node – nur von anderen gesehen</span></div>`;
+        if (n.posInferred) {
+            html += `<div class="popup-row"><span class="popup-label">Position:</span> <span style="color:#818cf8">RSSI-gewichtet geschätzt</span></div>`;
+        }
+    } else if (n.posInferred) {
         html += `<div class="popup-row"><span class="popup-label">Position:</span> <span style="color:#f0a500">geschätzt (keine GPS-Daten)</span></div>`;
     } else if (n.position) {
         html += `<div class="popup-row"><span class="popup-label">Position:</span> ${n.position}</div>`;
@@ -447,12 +519,25 @@ function buildPopup(n) {
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 function renderSidebar(nodes, edges) {
-    const sorted = [...nodes].sort((a, b) => a.call.localeCompare(b.call));
+    // Frische Nodes alphabetisch zuerst, dann stale alphabetisch
+    const sorted = [...nodes].sort((a, b) => {
+        const aStale = nodeAge(a) === 'stale';
+        const bStale = nodeAge(b) === 'stale';
+        if (aStale !== bStale) return aStale ? 1 : -1;
+        return a.call.localeCompare(b.call);
+    });
     let html = '';
     sorted.forEach(n => {
+        const stale = nodeAge(n) === 'stale';
         const peerCount = edges.filter(e => e.from === n.call || e.to === n.call).length;
         let posClass, posText;
-        if (n.lat !== undefined && !n.posInferred) {
+        if (stale) {
+            posClass = 'node-pos-stale';
+            posText  = 'Inaktiv seit ' + timeAgo(n.last_seen);
+        } else if (n.ghost) {
+            posClass = n.posInferred ? 'node-pos-ghost' : 'node-pos-none';
+            posText  = n.posInferred ? 'Ghost (RSSI-Schätzung)' : 'Ghost – keine Position';
+        } else if (n.lat !== undefined && !n.posInferred) {
             posClass = 'node-pos-known';
             posText  = n.position || `${n.lat.toFixed(3)}, ${n.lon.toFixed(3)}`;
         } else if (n.posInferred) {
@@ -463,10 +548,10 @@ function renderSidebar(nodes, edges) {
             posText  = 'Keine Position';
         }
 
-        html += `<div class="node-card" onclick="focusNode('${n.call}')">
+        html += `<div class="node-card${stale ? ' node-card-stale' : ''}" onclick="focusNode('${n.call}')">
             <div class="node-call">${n.call}</div>
             <div class="node-meta ${posClass}">${posText}</div>
-            <div class="node-meta">${peerCount} Peer${peerCount !== 1 ? 's' : ''} &nbsp;·&nbsp; vor ${timeAgo(n.last_seen)}</div>
+            ${stale ? '' : `<div class="node-meta">${peerCount} Peer${peerCount !== 1 ? 's' : ''} &nbsp;·&nbsp; vor ${timeAgo(n.last_seen)}</div>`}
         </div>`;
     });
     document.getElementById('node-list').innerHTML = html || '<div style="padding:12px;color:#555;font-size:0.85rem;">Keine Nodes gefunden.</div>';
@@ -487,7 +572,7 @@ function focusNode(call) {
 // ── Daten laden ───────────────────────────────────────────────────────────────
 function loadData() {
     document.getElementById('hdr-time').textContent = 'lade…';
-    fetch('topology.php?max_age=7200&_=' + Date.now())
+    fetch('topology.php?max_age=259200&_=' + Date.now())
         .then(r => r.json())
         .then(data => renderMap(data))
         .catch(err => {

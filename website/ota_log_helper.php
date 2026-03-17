@@ -3,6 +3,28 @@
  * rMesh OTA Log Helper
  */
 
+function _ensureLastVersionCheckColumn(PDO $db): void {
+    try {
+        $db->exec("ALTER TABLE rmesh_nodes ADD COLUMN `last_version_check` INT UNSIGNED NOT NULL DEFAULT 0");
+    } catch (Exception $e) {
+        // Spalte existiert bereits – ignorieren
+    }
+}
+
+function updateLastVersionCheck(string $call): void {
+    if ($call === '') return;
+    require_once __DIR__ . '/db_config.php';
+    try {
+        $dsn = 'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=' . DB_CHARSET . ';connect_timeout=2';
+        $db  = new PDO($dsn, DB_USER, DB_PASS, array(PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION));
+        _ensureLastVersionCheckColumn($db);
+        $stmt = $db->prepare("UPDATE rmesh_nodes SET `last_version_check` = :ts WHERE `call` = :call");
+        $stmt->execute([':ts' => time(), ':call' => $call]);
+    } catch (Exception $e) {
+        error_log('rMesh last_version_check: ' . $e->getMessage());
+    }
+}
+
 function _ensureOtaLogTable(PDO $db): void {
     $db->exec("CREATE TABLE IF NOT EXISTS rmesh_ota_log (
         `id`           INT UNSIGNED  NOT NULL AUTO_INCREMENT,

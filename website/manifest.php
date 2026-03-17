@@ -36,15 +36,11 @@ if ($tag) {
     $tag = json_decode($apiJson)->tag_name;
 }
 
-// Read device list from devices.json (in repo root, one level up from website/)
-$devicesPath = __DIR__ . '/../devices.json';
-if (!file_exists($devicesPath)) {
-    // Fallback: fetch from GitHub raw
-    $devicesPath = 'https://raw.githubusercontent.com/DN9KGB/rMesh/main/devices.json';
-    $devicesJson = @file_get_contents($devicesPath, false, $ctx);
-} else {
-    $devicesJson = file_get_contents($devicesPath);
-}
+// Read device list: try local file first, fall back to GitHub
+// (open_basedir may block parent-directory access, so use @ suppression)
+$devicesJson = @file_get_contents(__DIR__ . '/../devices.json')
+            ?: @file_get_contents(__DIR__ . '/devices.json')
+            ?: @file_get_contents('https://raw.githubusercontent.com/DN9KGB/rMesh/main/devices.json', false, $ctx);
 
 if (!$devicesJson) {
     http_response_code(503);

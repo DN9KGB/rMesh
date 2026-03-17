@@ -40,8 +40,7 @@ if (!$data || empty($data['call']) || empty($data['event'])) {
 }
 
 $allowed_events = array(
-    'version_check', 'update_found', 'no_update',
-    'update_start', 'update_success', 'update_failed', 'version_check_failed'
+    'update_found', 'update_start', 'update_success', 'update_failed', 'version_check_failed'
 );
 
 $call         = strtoupper(substr(preg_replace('/[^A-Z0-9\/\-]/', '', strtoupper($data['call'])), 0, 16));
