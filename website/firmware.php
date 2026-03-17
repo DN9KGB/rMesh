@@ -6,7 +6,7 @@ $tag  = $_GET['tag']  ?? '';
 $file = $_GET['file'] ?? '';
 
 // Strict allowlist: tag = vX.Y.Z or VX.Y.Z, file = DEVICE_something.bin
-if (!preg_match('/^[Vv]\d+\.\d+\.\d+$/', $tag) ||
+if (!preg_match('/^[Vv]\d+\.\d+\.\d+[a-zA-Z0-9]*$/', $tag) ||
     !preg_match('/^[a-zA-Z0-9_\-]+\.bin$/', $file)) {
     http_response_code(400);
     exit('Invalid parameters');
