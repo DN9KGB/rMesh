@@ -42,6 +42,9 @@ static void sendOtaLog(const char* event, const char* versionFrom, const char* v
 
 void checkForUpdates() {
     if (strcmp(VERSION, "unknown") == 0) { return; }
+    // Manuell gebaute/geflashte Version (git describe: "v1.0.25a-3-gb480c38"):
+    // kein automatisches Update installieren
+    if (strchr(VERSION, '-') != nullptr) { return; }
 
     // Version prüfen
     WiFiClientSecure client;
@@ -58,7 +61,12 @@ void checkForUpdates() {
     JsonDocument doc;
     if (deserializeJson(doc, http.getStream()) != DeserializationError::Ok) { http.end(); return; }
     const char* latestTag = doc["version"];
-    if (!latestTag || strcmp(latestTag, VERSION) == 0) { http.end(); return; }
+    if (!latestTag) { http.end(); return; }
+    // Gleiche Version
+    if (strcmp(latestTag, VERSION) == 0) { http.end(); return; }
+    // Aktuelle Version ist ein Dev-Build ahead des Tags (git describe: "v1.0.25a-3-gb480c38")
+    // → installierte Version ist neuer, kein Update nötig
+    if (String(VERSION).startsWith(String(latestTag) + "-")) { http.end(); return; }
     http.end();
 
     // Neues Update gefunden

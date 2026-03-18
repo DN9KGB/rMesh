@@ -163,7 +163,7 @@ enum UiMode {
 enum FieldType {
     FTYPE_BOOL, FTYPE_STRING, FTYPE_IP, FTYPE_FLOAT,
     FTYPE_INT8, FTYPE_INT16, FTYPE_UINT8, FTYPE_HEX8,
-    FTYPE_DROP_F, FTYPE_DROP_I, FTYPE_READONLY, FTYPE_ACTION,
+    FTYPE_DROP_F, FTYPE_DROP_I, FTYPE_READONLY, FTYPE_READONLY_STR, FTYPE_ACTION,
     FTYPE_DELETE_GROUP,   // delete group, aux = group index
 };
 
@@ -186,6 +186,7 @@ struct MenuItem {
 // ─── Display settings ──────────────────────────────────────────────────
 static float   dispBrightness = 200.0f;
 static float   dispTextSize   = 1.0f;
+static char    setupChipId[13] = {0};
 
 // ─── Groups ───────────────────────────────────────────────────────────
 static char groupNames[MAX_GROUPS][MAX_CALLSIGN_LENGTH + 1];
@@ -197,6 +198,8 @@ static int  activeGroup = -1;   // -1 = "Alle"
 static void doSave();
 static void doDeleteMessages();
 static void doSaveDisplay();
+static void doSaveSetup();
+static void doReboot();
 static void doSaveGroups();
 static void doNewGroup();
 static void doAnnounce();
@@ -244,25 +247,27 @@ static MenuItem netItems[] = {
     {"NTP Server",  FTYPE_STRING, settings.ntpServer,    63, nullptr, nullptr,  0.f, 0.f, 0.f, nullptr},
     {"Speichern",   FTYPE_ACTION, nullptr,                0, nullptr, nullptr,  0.f, 0.f, 0.f, doSave},
 };
-static MenuItem setupItems[] = {
-    {"Rufzeichen",         FTYPE_STRING,  settings.mycall,              16, nullptr, nullptr,    0.f, 0.f,  0.f, nullptr},
-    {"Position",           FTYPE_STRING,  settings.position,            23, nullptr, nullptr,    0.f, 0.f,  0.f, nullptr},
+static MenuItem loraItems[] = {
     {"Frequenz",           FTYPE_FLOAT,   &settings.loraFrequency,       0, nullptr, "MHz",    0.01f, 0.f,  0.f, nullptr},
     {"Sendeleistung",      FTYPE_INT8,    &settings.loraOutputPower,     0, nullptr, "dBm",     1.0f, 0.f,  0.f, nullptr},
     {"Bandbreite",         FTYPE_DROP_F,  &settings.loraBandwidth,       9, bwOpts,  nullptr,   0.f, 0.f,  0.f, nullptr},
     {"Coding Rate",        FTYPE_DROP_I,  &settings.loraCodingRate,      4, crOpts,  nullptr,   0.f, 0.f,  0.f, nullptr},
     {"Spreading Factor",   FTYPE_DROP_I,  &settings.loraSpreadingFactor, 7, sfOpts,  nullptr,   0.f, 0.f,  0.f, nullptr},
-    {"Sync Word",          FTYPE_HEX8,   &settings.loraSyncWord,         0, nullptr, nullptr,   0.f, 0.f,  0.f, nullptr},
-    {"Preamble Laenge",    FTYPE_INT16,  &settings.loraPreambleLength,   0, nullptr, nullptr,   1.f, 0.f,  0.f, nullptr},
-    {"Nachr. wiederholen", FTYPE_BOOL,   &settings.loraRepeat,           0, nullptr, nullptr,   0.f, 0.f,  0.f, nullptr},
+    {"Sync Word",          FTYPE_HEX8,    &settings.loraSyncWord,        0, nullptr, nullptr,   0.f, 0.f,  0.f, nullptr},
+    {"Preamble Laenge",    FTYPE_INT16,   &settings.loraPreambleLength,  0, nullptr, nullptr,   1.f, 0.f,  0.f, nullptr},
+    {"Nachr. wiederholen", FTYPE_BOOL,    &settings.loraRepeat,          0, nullptr, nullptr,   0.f, 0.f,  0.f, nullptr},
     {"Max. Nachr.-Laenge", FTYPE_READONLY,&settings.loraMaxMessageLength,0, nullptr, "Zeichen", 0.f, 0.f,  0.f, nullptr},
     {"Speichern",          FTYPE_ACTION,  nullptr,                       0, nullptr, nullptr,   0.f, 0.f,  0.f, doSave},
-    {"Nachr. loeschen",    FTYPE_ACTION,  nullptr,                       0, nullptr, nullptr,   0.f, 0.f,  0.f, doDeleteMessages},
 };
-static MenuItem dispItems[] = {
-    {"Helligkeit",    FTYPE_FLOAT, &dispBrightness, 0, nullptr, nullptr, 5.0f,  5.f, 255.f, nullptr},
-    {"Schriftgroesse",FTYPE_FLOAT, &dispTextSize,   0, nullptr, nullptr, 0.1f, 0.5f,   4.f, nullptr},
-    {"Speichern",     FTYPE_ACTION, nullptr,         0, nullptr, nullptr, 0.f,  0.f,   0.f, doSaveDisplay},
+static MenuItem setupItems[] = {
+    {"Rufzeichen",         FTYPE_STRING,       settings.mycall,     16, nullptr, nullptr, 0.f, 0.f, 0.f, nullptr},
+    {"Position",           FTYPE_STRING,       settings.position,   23, nullptr, nullptr, 0.f, 0.f, 0.f, nullptr},
+    {"Helligkeit",         FTYPE_FLOAT,        &dispBrightness,      0, nullptr, nullptr, 5.0f, 5.f, 255.f, nullptr},
+    {"Schriftgroesse",     FTYPE_FLOAT,        &dispTextSize,        0, nullptr, nullptr, 0.1f, 0.5f, 4.f, nullptr},
+    {"Chip ID",            FTYPE_READONLY_STR, setupChipId,          0, nullptr, nullptr, 0.f, 0.f, 0.f, nullptr},
+    {"Speichern",          FTYPE_ACTION,       nullptr,              0, nullptr, nullptr, 0.f, 0.f, 0.f, doSaveSetup},
+    {"Neustart",           FTYPE_ACTION,       nullptr,              0, nullptr, nullptr, 0.f, 0.f, 0.f, doReboot},
+    {"Nachr. loeschen",    FTYPE_ACTION,       nullptr,              0, nullptr, nullptr, 0.f, 0.f, 0.f, doDeleteMessages},
 };
 
 // Dynamically built group menu
@@ -865,6 +870,8 @@ static void fmtValue(char* buf, int buflen, MenuItem& item) {
         case FTYPE_READONLY:
             if (item.unit) snprintf(buf, buflen, "%u %s", (unsigned)*(uint8_t*)item.ptr, item.unit);
             else           snprintf(buf, buflen, "%u", (unsigned)*(uint8_t*)item.ptr); break;
+        case FTYPE_READONLY_STR:
+            snprintf(buf, buflen, "%s", (char*)item.ptr); break;
         case FTYPE_DELETE_GROUP:
         default: buf[0] = 0; break;
     }
@@ -883,18 +890,19 @@ static void drawMenuIcon(int idx, int ix, int iy, uint16_t col, uint16_t bg) {
             spr.fillRect(ix+5,  iy+7,  3,  7, col);
             spr.fillRect(ix+9,  iy+4,  3, 10, col);
             break;
-        case 1: // Setup – gear (circle with 4 teeth)
+        case 1: // LoRa – signal arcs (WiFi-style)
+            spr.fillCircle(ix+7, iy+11, 1, col);
+            spr.drawArc(ix+7, iy+11, 3, 2, 225, 315, col);
+            spr.drawArc(ix+7, iy+11, 5, 4, 225, 315, col);
+            spr.drawArc(ix+7, iy+11, 7, 6, 225, 315, col);
+            break;
+        case 2: // Setup – gear (circle with 4 teeth)
             spr.fillCircle(ix+7, iy+7, 5, col);
             spr.fillCircle(ix+7, iy+7, 2, bg);
             spr.fillRect(ix+6, iy+0,  2, 3, col);
             spr.fillRect(ix+6, iy+11, 2, 3, col);
             spr.fillRect(ix+11, iy+6, 3, 2, col);
             spr.fillRect(ix+0,  iy+6, 3, 2, col);
-            break;
-        case 2: // Display – monitor frame with stand
-            spr.drawRect(ix+1, iy+1, 12, 9, col);
-            spr.fillRect(ix+5, iy+10, 4,  2, col);
-            spr.fillRect(ix+3, iy+12, 8,  2, col);
             break;
         case 3: // Gruppen – two people
             spr.fillCircle(ix+4,  iy+3, 2, col);
@@ -934,10 +942,11 @@ static void drawMenuIcon(int idx, int ix, int iy, uint16_t col, uint16_t bg) {
             spr.drawLine(ix+7, iy+5, ix+9, iy+2,  col);
             spr.drawLine(ix+7, iy+5, ix+11, iy+1, col);
             break;
-        case 8: // Tune – radio waves from center dot
-            spr.fillCircle(ix+7, iy+7, 2, col);
-            spr.drawArc(ix+7, iy+7, 5, 4, 225, 315, col);
-            spr.drawArc(ix+7, iy+7, 7, 6, 225, 315, col);
+        case 8: // Tune – sine wave
+            spr.drawLine(ix+1,  iy+7,  ix+4,  iy+3,  col);
+            spr.drawLine(ix+4,  iy+3,  ix+7,  iy+7,  col);
+            spr.drawLine(ix+7,  iy+7,  ix+10, iy+11, col);
+            spr.drawLine(ix+10, iy+11, ix+13, iy+7,  col);
             break;
         case 9: // About – circle with "i"
             spr.drawCircle(ix+7, iy+7, 6, col);
@@ -954,8 +963,8 @@ static void drawMenuIcon(int idx, int ix, int iy, uint16_t col, uint16_t bg) {
 static void drawMenuTop() {
     static const char* labels[TOP_MENU_N] = {
         "Network",
+        "LoRa",
         "Setup",
-        "Display",
         "Gruppen",
         "Routing",
         "Peers",
@@ -1006,7 +1015,7 @@ static void drawMenuTop() {
 
 // ─── Menu: item list ──────────────────────────────────────────────────
 static void drawMenuList() {
-    const char* catNames[4] = {"Network", "Setup", "Display", "Gruppen"};
+    const char* catNames[4] = {"Network", "LoRa", "Setup", "Gruppen"};
     spr.fillRect(0, 0, DISP_W, MENU_HDR_H, COL_MENU_HDR);
     spr.setFont(&fonts::FreeSans9pt7b);
     spr.setTextSize(1);
@@ -1184,6 +1193,17 @@ static void doSaveDisplay() {
     prefs.putFloat("dispTxtSize", dispTextSize);
     uiMode = UI_CHAT; needRedraw = true;
 }
+static void doSaveSetup() {
+    instance.setBrightness((uint8_t)dispBrightness);
+    prefs.putFloat("dispBright",  dispBrightness);
+    prefs.putFloat("dispTxtSize", dispTextSize);
+    saveSettings();
+    uiMode = UI_CHAT; needRedraw = true;
+}
+static void doReboot() {
+    rebootTimer = 0;
+    uiMode = UI_CHAT; needRedraw = true;
+}
 static void doSaveGroups() {
     prefs.putInt("grpCount", groupCount);
     for (int i = 0; i < groupCount; i++) {
@@ -1267,6 +1287,13 @@ static void drawAbout() {
     drawStrS("WiFi IP:", 4, y);
     spr.setTextColor(COL_MENU_FG);
     drawStrS(ipBuf, 90, y);
+    y += lineH;
+
+    // Chip ID
+    spr.setTextColor(0x7BEFu);
+    drawStrS("Chip ID:", 4, y);
+    spr.setTextColor(COL_MENU_FG);
+    drawStrS(setupChipId, 90, y);
     y += lineH + 4;
 
     // Separator
@@ -1295,8 +1322,8 @@ static void enterSubmenu(int idx) {
     topSel = idx;
     switch (idx) {
         case 0: curMenu = netItems;   curMenuLen = sizeof(netItems)/sizeof(netItems[0]);    break;
-        case 1: curMenu = setupItems; curMenuLen = sizeof(setupItems)/sizeof(setupItems[0]); break;
-        case 2: curMenu = dispItems;  curMenuLen = sizeof(dispItems)/sizeof(dispItems[0]);   break;
+        case 1: curMenu = loraItems;  curMenuLen = sizeof(loraItems)/sizeof(loraItems[0]);   break;
+        case 2: curMenu = setupItems; curMenuLen = sizeof(setupItems)/sizeof(setupItems[0]); break;
         case 3:
             buildGroupMenu();
             curMenu = groupItemsBuf;
@@ -1346,7 +1373,7 @@ static void activateItem() {
             for (int i = 0; i < item.aux; i++) if (o[i].v==iv) {editDropIdx=i;break;}
             uiMode = UI_EDIT_DROP; needRedraw = true; break;
         }
-        case FTYPE_READONLY: break;
+        case FTYPE_READONLY: case FTYPE_READONLY_STR: break;
         case FTYPE_DELETE_GROUP:
             deleteGroup(item.aux); break;
         case FTYPE_ACTION:
@@ -1426,6 +1453,14 @@ void initDisplay() {
     dispTextSize   = prefs.getFloat("dispTxtSize", 1.0f);
     if (dispTextSize < 0.5f) dispTextSize = 0.5f;
     if (dispTextSize > 4.0f) dispTextSize = 4.0f;
+
+    // Chip ID
+    {
+        uint64_t mac = ESP.getEfuseMac();
+        snprintf(setupChipId, sizeof(setupChipId), "%02X%02X%02X%02X%02X%02X",
+            (uint8_t)(mac >> 40), (uint8_t)(mac >> 32), (uint8_t)(mac >> 24),
+            (uint8_t)(mac >> 16), (uint8_t)(mac >> 8), (uint8_t)(mac));
+    }
 
     // Load groups
     groupCount = prefs.getInt("grpCount", 0);

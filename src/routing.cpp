@@ -46,18 +46,14 @@ void sendRoutingList() {
         route["hopCount"] = routingList[i].hopCount;
     }
     
-    size_t len = measureJson(doc);
-    if (len == 0) return;
-    AsyncWebSocketMessageBuffer * wsBuffer = ws.makeBuffer(len);
-    if (wsBuffer != nullptr) {
-        serializeJson(doc, (char*)wsBuffer->get(), len);
-        ws.textAll(wsBuffer); 
+    char* jsonBuffer = (char*)malloc(measureJson(doc) + 1);
+    if (jsonBuffer != nullptr) {
+        size_t len = serializeJson(doc, jsonBuffer, measureJson(doc) + 1);
+        wsBroadcast(jsonBuffer, len);
+        free(jsonBuffer);
     } else {
         Serial.println(F("Fehler: Kein RAM für Buffer"));
     }
-
-
-
 }
 
 void addRoutingList(const char* srcCall, const char* viaCall, uint8_t hopCount) {

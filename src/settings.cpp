@@ -127,6 +127,15 @@ void sendSettings() {
     doc["settings"]["hardware"] = PIO_ENV_NAME;
     doc["settings"]["loraRepeat"] = settings.loraRepeat;
     doc["settings"]["loraMaxMessageLength"] = settings.loraMaxMessageLength;
+    doc["settings"]["webPasswordSet"] = !webPasswordHash.isEmpty();
+    {
+        uint64_t mac = ESP.getEfuseMac();
+        char chipId[13];
+        snprintf(chipId, sizeof(chipId), "%02X%02X%02X%02X%02X%02X",
+            (uint8_t)(mac >> 40), (uint8_t)(mac >> 32), (uint8_t)(mac >> 24),
+            (uint8_t)(mac >> 16), (uint8_t)(mac >> 8), (uint8_t)(mac));
+        doc["settings"]["chipId"] = chipId;
+    }
     uint8_t count = sizeof(extSettings.udpPeer) / sizeof(extSettings.udpPeer[0]);
     for (uint8_t i = 0; i < count; i++) {
         JsonObject peer = doc["settings"]["udpPeers"].add<JsonObject>();
@@ -140,7 +149,7 @@ void sendSettings() {
     doc["settings"]["maxHopTelemetry"] = extSettings.maxHopTelemetry;
     char* jsonBuffer = (char*)malloc(4096);
     size_t len = serializeJson(doc, jsonBuffer, 4096);
-    ws.textAll(jsonBuffer, len);  // sendet direkt den Puffer
+    wsBroadcast(jsonBuffer, len);
     free(jsonBuffer);
     jsonBuffer = nullptr;
 
@@ -151,6 +160,7 @@ void loadSettings() {
     //Einstellungen aus EEPROM lesen
     Serial.println("Lade Einstellungen...");
     prefs.begin("custom_settings", false);
+    loadPasswordHash();
     prefs.getBytes("config", &settings, sizeof(settings));
     prefs.getBytes("extSettings", &extSettings, sizeof(extSettings));
     size_t storedLen = prefs.getBytesLength("config");

@@ -59,68 +59,73 @@
             <tr class="AP_MODE_ENABLED"> <td>NTP-Server:</td> <td><input id="settingsNTP"></td> </tr>
         </table>
         <button class="button" onclick="saveSettings();">save</button>
-        <button class="button" onclick="reboot();">reboot</button>  
-        <button class="button" onClick="syncTime();">sync browser time</button>              
     </main>
 
     <main id="cLora" class="content-section">
         <table>
-            <tr> <td>Callsign</td> <td><input id="settingsMycall"></td> </tr>
-            <tr> <td>Position</td> <td><input id="settingsPosition" placeholder="JN48mw oder 48.1234,11.5678"></td> </tr>
             <tr> <td>Frequency</td> <td><input id="settingsLoraFrequency"></td> </tr>
             <tr> <td>Output Power</td> <td><input id="settingsLoraOutputPower"></td> </tr>
             <tr> <td>Bandwidth</td> <td>
                 <select id='settingsLoraBandwidth'>
-                    <option value="7.8">7,8 kHz</option>	
-                    <option value="10.4">10,4 kHz</option>	
-                    <option value="15.6">15,6 kHz</option>	
-                    <option value="20.8">20,8 kHz</option>	
-                    <option value="31.25">31,25 kHz</option>	
-                    <option value="62.5">62,5 kHz</option>	
-                    <option value="125">125 kHz</option>	
-                    <option value="250">250 kHz</option>	
-                    <option value="500">500 kHz</option>	
-                </select> 
+                    <option value="7.8">7,8 kHz</option>
+                    <option value="10.4">10,4 kHz</option>
+                    <option value="15.6">15,6 kHz</option>
+                    <option value="20.8">20,8 kHz</option>
+                    <option value="31.25">31,25 kHz</option>
+                    <option value="62.5">62,5 kHz</option>
+                    <option value="125">125 kHz</option>
+                    <option value="250">250 kHz</option>
+                    <option value="500">500 kHz</option>
+                </select>
             </td> </tr>
             <tr> <td>Coding Rate</td> <td>
                 <select id='settingsLoraCodingRate'>
-                    <option value="5">5 - Standard</option> 
-                    <option value="6">6 - Improved robustness</option>  
-                    <option value="7">7 - High reliability</option> 
+                    <option value="5">5 - Standard</option>
+                    <option value="6">6 - Improved robustness</option>
+                    <option value="7">7 - High reliability</option>
                     <option value="8">8 - Maximum redundancy</option>
-                </select> 
-            </td> </tr>				
+                </select>
+            </td> </tr>
             <tr> <td>Spreading Factor</td> <td>
                 <select id='settingsLoraSpreadingFactor'>
-                    <option value="6">6 - Short range</option> 
-                    <option value="7">7 - Normal</option>   
-                    <option value="8">8 - Improved range</option>   
-                    <option value="9">9 - High range</option> 
-                    <option value="10">10 - Long range</option>  
-                    <option value="11">11 - Extreme range</option>    
+                    <option value="6">6 - Short range</option>
+                    <option value="7">7 - Normal</option>
+                    <option value="8">8 - Improved range</option>
+                    <option value="9">9 - High range</option>
+                    <option value="10">10 - Long range</option>
+                    <option value="11">11 - Extreme range</option>
                     <option value="12">12 - Maximum range</option>
-                </select> 
+                </select>
             </td> </tr>
-            <tr> <td>Sync Word</td> <td><input id="settingsLoraSyncWord"></td> </tr>		
-            <tr> <td>Preamble Length</td> <td> <input id="settingsLoraPreambleLength"></td> </tr>		
-            <tr> <td> Repeat Messages </td> <td> <input type="checkbox" id="settingsLoraRepeat"> </td> </tr> 
+            <tr> <td>Sync Word</td> <td><input id="settingsLoraSyncWord"></td> </tr>
+            <tr> <td>Preamble Length</td> <td><input id="settingsLoraPreambleLength"></td> </tr>
+            <tr> <td>Repeat Messages</td> <td><input type="checkbox" id="settingsLoraRepeat"></td> </tr>
         </table>
         <button class="button" onclick="saveSettings();">save</button>
     </main>
 
-    <main id="cAbout" class="content-section">
+    <main id="cSetup" class="content-section">
         <table>
-            <tr> <td> MyCall </td> <td id="myCall"></td> </tr> 
-            <tr> <td> Hardware </td> <td id="hardware"> </td> </tr> 
-            <tr> <td> Version </td> <td id="version"></td> </tr>
-            <tr id="updateRow" style="display:none"> <td> Update </td> <td id="updateInfo" style="color:#ff8c00;"></td> </tr>
-            <tr> <td> Max Message Length </td> <td id="settingsLoraMaxMessageLength"> </td> </tr> 
-            <tr> <td> Heap </td> <td id="heap"> </td> </tr> 
-            <tr> <td> TX Buffer </td> <td id="txBuffer"> </td> </tr> 
-            <tr> <td> Retry </td> <td id="retry"> </td> </tr> 
-            <tr> <td> System Time </td> <td id="time"> </td> </tr> 
+            <tr> <td>Callsign</td> <td><input id="settingsMycall"></td> </tr>
+            <tr> <td>Position</td> <td><input id="settingsPosition" placeholder="JN48mw oder 48.1234,11.5678"></td> </tr>
+            <tr> <td>Chip ID</td> <td><span id="setupChipId"></span></td> </tr>
+            <tr> <td>Hardware</td> <td><span id="hardware"></span></td> </tr>
+            <tr> <td>Version</td> <td><span id="version"></span></td> </tr>
+            <tr id="updateRow" style="display:none"> <td>Update</td> <td><span id="updateInfo" style="color:#ff8c00;"></span></td> </tr>
+            <tr> <td>Max Msg Len</td> <td><span id="settingsLoraMaxMessageLength"></span></td> </tr>
+            <tr> <td>Heap</td> <td><span id="heap"></span></td> </tr>
+            <tr> <td>TX Buffer</td> <td><span id="txBuffer"></span></td> </tr>
+            <tr> <td>Retry</td> <td><span id="retry"></span></td> </tr>
+            <tr> <td>System Time</td> <td><span id="time"></span></td> </tr>
+            <tr> <td>Password</td> <td><span id="settingsWebPasswordStatus"></span></td> </tr>
+            <tr> <td>New Password</td> <td><input type="password" id="settingsWebPassword" autocomplete="new-password"></td> </tr>
+            <tr> <td>Confirm</td> <td><input type="password" id="settingsWebPasswordConfirm" autocomplete="new-password" oninput="checkPwMatch()"></td> </tr>
+            <tr id="settingsWebPasswordMatchRow" style="display:none;"> <td></td> <td><span id="settingsWebPasswordMatch"></span></td> </tr>
+            <tr id="settingsWebPasswordRemoveRow" style="display:none"> <td></td> <td><button class="button" onclick="removeWebPassword()">remove password</button></td> </tr>
         </table>
-        <!-- <button class="button" onclick="deleteMessages();">delete messages</button>  -->
+        <button class="button" onclick="saveSettings();">save</button>
+        <button class="button" onclick="reboot();">reboot</button>
+        <button class="button" onclick="syncTime();">sync browser time</button>
     </main>
 
     <main id="cPeers" class="content-section">
@@ -150,6 +155,30 @@
             </div>
         </div>
     </div>	
+
+    <div id="auth-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.88); z-index:9999; align-items:center; justify-content:center;">
+        <div style="background:#1e1e2e; padding:28px 24px; border-radius:14px; width:90%; max-width:340px; box-shadow:0 8px 32px rgba(0,0,0,0.5); text-align:center;">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 130 120" style="height:52px; margin-bottom:6px; display:block; margin-left:auto; margin-right:auto;">
+              <defs>
+                <radialGradient id="ngMb" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#38bdf8" stop-opacity="0.4"/><stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/></radialGradient>
+                <filter id="glMb"><feGaussianBlur stdDeviation="2.5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                <filter id="sgMb"><feGaussianBlur stdDeviation="1.5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+              </defs>
+              <g stroke="#1e40af" stroke-width="1.2" opacity="0.6"><line x1="22" y1="60" x2="46" y2="30"/><line x1="22" y1="60" x2="46" y2="90"/><line x1="46" y1="30" x2="76" y2="60"/><line x1="46" y1="90" x2="76" y2="60"/><line x1="46" y1="30" x2="76" y2="18"/><line x1="46" y1="90" x2="76" y2="102"/><line x1="76" y1="18" x2="76" y2="60"/><line x1="76" y1="60" x2="76" y2="102"/></g>
+              <g stroke="#38bdf8" stroke-width="1.2" opacity="0.35" filter="url(#sgMb)"><line x1="22" y1="60" x2="46" y2="30"/><line x1="46" y1="30" x2="76" y2="60"/><line x1="76" y1="60" x2="76" y2="18"/></g>
+              <g fill="none" stroke="#38bdf8" stroke-linecap="round" filter="url(#glMb)"><path d="M 88 44 Q 96 60 88 76" stroke-width="2.2" opacity="0.9"/><path d="M 96 36 Q 108 60 96 84" stroke-width="1.8" opacity="0.6"/><path d="M 104 29 Q 120 60 104 91" stroke-width="1.4" opacity="0.35"/></g>
+              <g filter="url(#glMb)"><circle cx="22" cy="60" r="10" fill="url(#ngMb)"/><circle cx="76" cy="60" r="14" fill="url(#ngMb)"/><circle cx="22" cy="60" r="4" fill="#0f172a" stroke="#38bdf8" stroke-width="1.8"/><circle cx="46" cy="30" r="3.5" fill="#0f172a" stroke="#38bdf8" stroke-width="1.5"/><circle cx="46" cy="90" r="3.5" fill="#0f172a" stroke="#38bdf8" stroke-width="1.5"/><circle cx="76" cy="18" r="3" fill="#0f172a" stroke="#38bdf8" stroke-width="1.5" opacity="0.7"/><circle cx="76" cy="102" r="3" fill="#0f172a" stroke="#38bdf8" stroke-width="1.5" opacity="0.7"/><circle cx="76" cy="60" r="5.5" fill="#38bdf8"/><circle cx="76" cy="60" r="3" fill="#0f172a"/></g>
+              <text x="8" y="112" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" font-size="18" font-weight="800" letter-spacing="2" fill="#38bdf8" filter="url(#sgMb)">rMesh</text>
+            </svg>
+            <div id="auth-mycall" style="color:#00d1b2; font-size:1.1rem; font-weight:bold; margin-bottom:2px;"></div>
+            <div id="auth-chipid" style="color:#555; font-size:0.72rem; letter-spacing:1px; margin-bottom:14px;"></div>
+            <input type="password" id="auth-password" placeholder="Password" autocomplete="current-password"
+                style="width:100%; padding:11px 12px; border-radius:8px; border:1px solid #444; background:#2a2a3e; color:#fff; font-size:1em; box-sizing:border-box;"
+                onkeydown="if(event.key==='Enter') doLogin();">
+            <div id="auth-error" style="color:#ff4d4d; font-size:0.85em; margin-top:8px; display:none;"></div>
+            <button onclick="doLogin()" style="margin-top:16px; width:100%; padding:13px; background:#00d1b2; border:none; border-radius:8px; color:#fff; font-size:1em; font-weight:600; cursor:pointer;">Login</button>
+        </div>
+    </div>
 
 	<script src="mobile.js" defer></script>
 	<script src="mobilesocket.js" defer></script>

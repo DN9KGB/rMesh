@@ -22,12 +22,14 @@ function setUI(value) {
     document.getElementById("dosButton").classList.remove('selected');
     document.getElementById("tuneButton").classList.remove('selected');
     document.getElementById("announceButton").classList.remove('selected');
+    document.getElementById("loraButton").classList.remove('selected');
     document.getElementById("setupButton").classList.remove('selected');
     document.getElementById("networkButton").classList.remove('selected');
     document.getElementById("monitor").classList.remove('big');
     document.getElementById("monitor").style.display = "none";
     document.getElementById("peer").style.display = "none";
     document.getElementById("routing").style.display = "none";
+    document.getElementById("lora").style.display = "none";
     document.getElementById("setup").style.display = "none";
     document.getElementById("network").style.display = "none";
     document.getElementById("dstCall").innerHTML = "";
@@ -140,6 +142,12 @@ function setUI(value) {
         case "routing":
             document.getElementById("routingButton").classList.add('selected');
             document.getElementById("routing").style.display = "flex";
+            document.getElementById("messageText0").style.display = "flex";
+            document.getElementById("dstCall").innerHTML = "";
+            break;
+        case "lora":
+            document.getElementById("loraButton").classList.add('selected');
+            document.getElementById("lora").style.display = "flex";
             document.getElementById("messageText0").style.display = "flex";
             document.getElementById("dstCall").innerHTML = "";
             break;

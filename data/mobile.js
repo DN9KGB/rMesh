@@ -272,17 +272,17 @@ function buildMenu() {
         },
         { type: 'spacer' },
         { type: 'header', label: 'Settings' },
-        { 
-            label: 'Network', 
-            action: () => showContent('cNetwork', "Network") 
+        {
+            label: 'Network',
+            action: () => showContent('cNetwork', "Network")
         },
-        { 
-            label: 'LoRa', 
-            action: () => showContent('cLora', "LoRa") 
+        {
+            label: 'LoRa',
+            action: () => showContent('cLora', "LoRa")
         },
-        { 
-            label: 'About', 
-            action: () => showContent('cAbout', "About") 
+        {
+            label: 'Setup',
+            action: () => showContent('cSetup', "Setup")
         }
     ]);
 
@@ -385,7 +385,7 @@ function loadGuiSettings() {
         ], 
         dm: [], 
         update: 0, 
-        content: {content: "cLora", title: "LoRa", dst: null, group: true}
+        content: {content: "group_all", title: "all", dst: "", group: true}
     };
 }
 

@@ -5,11 +5,48 @@ var baseURL = "";
 var gateway = "";
 var init = false;
 
+// ── Auth-State ────────────────────────────────────────────────────────────────
+var authRequired = false;
+var authNonce    = "";
+
 
 
 function onMessage(event) {
     var d = JSON.parse(event.data);
     if (d.status === undefined) {console.log("RX: " + event.data);}
+
+    // ── Auth-Flow ─────────────────────────────────────────────────────────────
+    if (d.auth) {
+        if (d.auth.required) {
+            authRequired = true;
+            authNonce    = d.auth.nonce;
+            showAuthOverlay(d.auth.mycall, d.auth.chipId);
+        }
+        if (d.auth.ok) {
+            authRequired = false;
+            hideAuthOverlay();
+        }
+        if (d.auth.error) {
+            authNonce = d.auth.nonce;  // neue Nonce für nächsten Versuch
+            showAuthError(d.auth.error);
+        }
+        return;
+    }
+
+    // ── Passwort gespeichert ──────────────────────────────────────────────────
+    if (d.passwordSaved !== undefined) {
+        console.log("[PW] passwordSaved empfangen:", d.passwordSaved);
+        if (d.passwordSaved) {
+            msgBox("Passwort gespeichert. Seite wird neu geladen...");
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            msgBox("Passwort entfernt.");
+        }
+        return;
+    }
+
+    // Nachrichten ignorieren solange Auth aussteht
+    if (authRequired) return;
 
     //RAW-RX
     if (d.monitor) {
@@ -142,6 +179,27 @@ function onMessage(event) {
             });
         }
 
+        // Chip ID + Hardware im Setup anzeigen
+        var chipIdEl = document.getElementById("setupChipId");
+        if (chipIdEl) chipIdEl.innerHTML = d.settings.chipId || "";
+        var hwEl = document.getElementById("setupHardware");
+        if (hwEl) hwEl.innerHTML = d.settings.hardware || "";
+
+        // Passwort-Status anzeigen
+        var pwStatus = document.getElementById("settingsWebPasswordStatus");
+        var pwRemoveRow = document.getElementById("settingsWebPasswordRemoveRow");
+        if (pwStatus) {
+            if (d.settings.webPasswordSet) {
+                pwStatus.textContent = "Passwort ist gesetzt";
+                pwStatus.style.color = "#4ecca3";
+                if (pwRemoveRow) pwRemoveRow.style.display = "";
+            } else {
+                pwStatus.textContent = "Kein Passwort gesetzt";
+                pwStatus.style.color = "";
+                if (pwRemoveRow) pwRemoveRow.style.display = "none";
+            }
+        }
+
         if (init == false) {
             init = true;
             //for (let i = 0; i <= 10; i++) {channels[i] = false;} 
@@ -238,39 +296,55 @@ async function sendMessage(text, channel) {
 }
 
 function saveSettings() {
-    var settings = {};
-    settings["mycall"] = document.getElementById("settingsMycall").value;
-    settings["position"] = document.getElementById("settingsPosition").value;
-    settings["ntp"] = document.getElementById("settingsNTP").value;
-    settings["dhcpActive"] = document.getElementById("settingsDHCP").checked;
-    settings["wifiSSID"] = document.getElementById("settingsSSID").value;
-    settings["wifiPassword"] = document.getElementById("settingsPassword").value;
-    settings["apMode"] = document.getElementById("settingsApMode").checked;
-    settings["wifiIP"] = document.getElementById("settingsWiFiIP").value.split('.').map(Number);
-    settings["wifiNetMask"] = document.getElementById("settingsWifiNetMask").value.split('.').map(Number);
-    settings["wifiGateway"] = document.getElementById("settingsWifiGateway").value.split('.').map(Number);
-    settings["wifiDNS"] = document.getElementById("settingsWifiDNS").value.split('.').map(Number);
-    //settings["wifiBrodcast"] = document.getElementById("settingsWifiBrodcast").value.split('.').map(Number);
-    settings["loraFrequency"] = parseFloat(document.getElementById("settingsLoraFrequency").value);
-    settings["loraOutputPower"] = parseInt(document.getElementById("settingsLoraOutputPower").value);
-    settings["loraBandwidth"] = parseFloat(document.getElementById("settingsLoraBandwidth").value);
-    settings["loraSyncWord"] = parseInt(document.getElementById("settingsLoraSyncWord").value, 16);
-    settings["loraCodingRate"] = parseInt(document.getElementById("settingsLoraCodingRate").value);
-    settings["loraSpreadingFactor"] = parseInt(document.getElementById("settingsLoraSpreadingFactor").value);
-    settings["loraPreambleLength"] = parseInt(document.getElementById("settingsLoraPreambleLength").value);
-    settings["loraRepeat"] = document.getElementById("settingsLoraRepeat").checked;
-    settings["udpPeers"] = [];
+    // ── Passwort-Felder prüfen ────────────────────────────────────────────────
+    var pw1 = document.getElementById("settingsWebPassword").value;
+    var pw2 = document.getElementById("settingsWebPasswordConfirm").value;
+    if (pw1 !== pw2) {
+        msgBox("Passwörter stimmen nicht überein!");
+        return;
+    }
+
+    var s = {};
+    s["mycall"] = document.getElementById("settingsMycall").value;
+    s["position"] = document.getElementById("settingsPosition").value;
+    s["ntp"] = document.getElementById("settingsNTP").value;
+    s["dhcpActive"] = document.getElementById("settingsDHCP").checked;
+    s["wifiSSID"] = document.getElementById("settingsSSID").value;
+    s["wifiPassword"] = document.getElementById("settingsPassword").value;
+    s["apMode"] = document.getElementById("settingsApMode").checked;
+    s["wifiIP"] = document.getElementById("settingsWiFiIP").value.split('.').map(Number);
+    s["wifiNetMask"] = document.getElementById("settingsWifiNetMask").value.split('.').map(Number);
+    s["wifiGateway"] = document.getElementById("settingsWifiGateway").value.split('.').map(Number);
+    s["wifiDNS"] = document.getElementById("settingsWifiDNS").value.split('.').map(Number);
+    s["loraFrequency"] = parseFloat(document.getElementById("settingsLoraFrequency").value);
+    s["loraOutputPower"] = parseInt(document.getElementById("settingsLoraOutputPower").value);
+    s["loraBandwidth"] = parseFloat(document.getElementById("settingsLoraBandwidth").value);
+    s["loraSyncWord"] = parseInt(document.getElementById("settingsLoraSyncWord").value, 16);
+    s["loraCodingRate"] = parseInt(document.getElementById("settingsLoraCodingRate").value);
+    s["loraSpreadingFactor"] = parseInt(document.getElementById("settingsLoraSpreadingFactor").value);
+    s["loraPreambleLength"] = parseInt(document.getElementById("settingsLoraPreambleLength").value);
+    s["loraRepeat"] = document.getElementById("settingsLoraRepeat").checked;
+    s["udpPeers"] = [];
     for (var i = 0; i < 5; i++) {
         var val = document.getElementById("settingsUDPPeer" + i).value;
         if (!val) val = "0.0.0.0";
-        var ipParts = val.split('.').map(Number);
-        settings["udpPeers"].push({
-            "ip": ipParts
-        });
+        s["udpPeers"].push({ "ip": val.split('.').map(Number) });
+    }
+    sendWS(JSON.stringify({settings: s}));
+
+    // ── Passwort setzen (nur wenn Felder ausgefüllt) ──────────────────────────
+    if (pw1 !== "") {
+        console.log("[PW] Sende setPassword...");
+        var hash = hashPassword(pw1);
+        console.log("[PW] Hash berechnet:", hash.substring(0, 8) + "...");
+        sendWS(JSON.stringify({ setPassword: hash }));
+    } else {
+        console.log("[PW] Kein Passwort eingegeben, kein setPassword gesendet");
     }
 
-
-    sendWS(JSON.stringify({settings: settings}));
+    // Felder nach dem Speichern leeren
+    document.getElementById("settingsWebPassword").value = "";
+    document.getElementById("settingsWebPasswordConfirm").value = "";
 }
 
 function showMessages(parseAll = false) {
@@ -381,8 +455,8 @@ function initWebSocket() {
 }
 
 function onOpen(event) {
-    //sendWS(JSON.stringify({scanWifi: true }));
     init = false;
+    authRequired = false;
     keepAlive();
 }
 
@@ -397,9 +471,83 @@ function sendWS(text) {
     console.log("TX: " + text);
 }
 
-function keepAlive() { 
-    if (websocket.readyState == websocket.OPEN) {  
+function keepAlive() {
+    if (websocket.readyState == websocket.OPEN) {
         websocket.send(JSON.stringify({ping: new Date() }));
-    }  
-    timeout = setTimeout(keepAlive, 1000);  
+    }
+    timeout = setTimeout(keepAlive, 1000);
+}
+
+// ── Pure JS SHA-256 / HMAC-SHA256 (kein SubtleCrypto nötig, funktioniert über HTTP) ──
+function _sha256bytes(input) {
+    function rr(v,n){return(v>>>n)|(v<<(32-n));}
+    const K=new Uint32Array([0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2]);
+    let H=new Uint32Array([0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19]);
+    const m=Array.from(input);const bl=m.length*8;m.push(0x80);
+    while((m.length%64)!==56)m.push(0);
+    m.push(0,0,0,0,(bl>>>24)&0xff,(bl>>>16)&0xff,(bl>>>8)&0xff,bl&0xff);
+    const W=new Uint32Array(64);
+    for(let i=0;i<m.length;i+=64){
+        for(let j=0;j<16;j++)W[j]=(m[i+j*4]<<24)|(m[i+j*4+1]<<16)|(m[i+j*4+2]<<8)|m[i+j*4+3];
+        for(let j=16;j<64;j++){const s0=rr(W[j-15],7)^rr(W[j-15],18)^(W[j-15]>>>3);const s1=rr(W[j-2],17)^rr(W[j-2],19)^(W[j-2]>>>10);W[j]=(W[j-16]+s0+W[j-7]+s1)|0;}
+        let a=H[0],b=H[1],c=H[2],d=H[3],e=H[4],f=H[5],g=H[6],h=H[7];
+        for(let j=0;j<64;j++){const t1=(h+(rr(e,6)^rr(e,11)^rr(e,25))+((e&f)^(~e&g))+K[j]+W[j])|0;const t2=((rr(a,2)^rr(a,13)^rr(a,22))+((a&b)^(a&c)^(b&c)))|0;h=g;g=f;f=e;e=(d+t1)|0;d=c;c=b;b=a;a=(t1+t2)|0;}
+        H[0]=(H[0]+a)|0;H[1]=(H[1]+b)|0;H[2]=(H[2]+c)|0;H[3]=(H[3]+d)|0;H[4]=(H[4]+e)|0;H[5]=(H[5]+f)|0;H[6]=(H[6]+g)|0;H[7]=(H[7]+h)|0;
+    }
+    return H;
+}
+function _sha256hex(str) {
+    const enc = new TextEncoder();
+    const H = _sha256bytes(Array.from(enc.encode(str)));
+    return Array.from(H).map(v => v.toString(16).padStart(8,'0')).join('');
+}
+function _hmacSha256hex(keyHex, msg) {
+    const enc = new TextEncoder();
+    const key = new Uint8Array(64);
+    for (let i = 0; i < 32; i++) key[i] = parseInt(keyHex.substr(i*2, 2), 16);
+    const ipad = new Uint8Array(64), opad = new Uint8Array(64);
+    for (let i = 0; i < 64; i++) { ipad[i] = key[i] ^ 0x36; opad[i] = key[i] ^ 0x5c; }
+    const msgB = Array.from(enc.encode(msg));
+    const innerH = _sha256bytes(Array.from(ipad).concat(msgB));
+    const innerB = [];
+    for (let i = 0; i < 8; i++) { innerB.push((innerH[i]>>>24)&0xff,(innerH[i]>>>16)&0xff,(innerH[i]>>>8)&0xff,innerH[i]&0xff); }
+    const outerH = _sha256bytes(Array.from(opad).concat(innerB));
+    return Array.from(outerH).map(v => v.toString(16).padStart(8,'0')).join('');
+}
+
+// ── Auth-Overlay anzeigen / verstecken ────────────────────────────────────────
+function showAuthOverlay(mycall, chipId) {
+    document.getElementById("auth-overlay").style.display = "flex";
+    document.getElementById("auth-password").value = "";
+    document.getElementById("auth-error").style.display = "none";
+    var mc = document.getElementById("auth-mycall");
+    var ci = document.getElementById("auth-chipid");
+    if (mc) mc.textContent = mycall || "";
+    if (ci) ci.textContent = chipId ? "Chip ID: " + chipId : "";
+    setTimeout(() => document.getElementById("auth-password").focus(), 50);
+}
+
+function hideAuthOverlay() {
+    document.getElementById("auth-overlay").style.display = "none";
+}
+
+function showAuthError(msg) {
+    var el = document.getElementById("auth-error");
+    el.textContent = msg;
+    el.style.display = "block";
+    document.getElementById("auth-password").value = "";
+    document.getElementById("auth-password").focus();
+}
+
+// ── HMAC-SHA256 Challenge-Response senden ─────────────────────────────────────
+function sendAuthResponse(password) {
+    const pwHash = _sha256hex(password);
+    const response = _hmacSha256hex(pwHash, authNonce);
+    sendWS(JSON.stringify({ auth: { response: response } }));
+}
+
+// ── SHA-256 eines Passworts berechnen (für setPassword) ───────────────────────
+function hashPassword(password) {
+    if (password === "") return "";
+    return _sha256hex(password);
 }
