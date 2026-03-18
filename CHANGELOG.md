@@ -1,5 +1,13 @@
 # Changelog
 
+## [v1.0.26]
+- NEU: Passwortschutz für das Web-Interface – optional, Challenge-Response-Verfahren über WebSocket (Server sendet Nonce, Client antwortet mit SHA-256(Passwort + Nonce)). Ohne gültiges Passwort werden keine Daten übertragen. Das Passwort wird als SHA-256-Hash im Flash gespeichert. Einrichtung, Änderung und Entfernung direkt im Setup-Bereich.
+- NEU: Menüstruktur in gp, mobile und T-LoRa Pager vereinheitlicht – einheitliche Aufteilung in Network, LoRa (Funkparameter) und Setup (Rufzeichen, Position, Passwort, Chip ID, Neustart). Hardware-spezifische Einstellungen (Display) beim Pager ebenfalls in Setup integriert.
+- NEU: rMesh-Logo im Login-Overlay von gp und mobile
+- Website: Einheitlicher Header, rMesh-Logo und überarbeitete Navigation auf allen Seiten
+- Website: OTA-Webinstaller überarbeitet und responsive gestaltet
+- FIX: Firmware-Versionsstring erlaubt jetzt auch Buchstaben als Suffix (z. B. v1.0.25a)
+
 ## [v1.0.25a]
 - NEU: T-LoRa Pager startet jetzt auch auf Boards ohne PSRAM (ESP32-S3FN8) – blockierende Endlosschleife in LilyGoLib bei fehlendem PSRAM durch Patch entfernt, Display-Buffer-Überlauf (426 KB → 213 KB) behoben
 - NEU: T-LoRa Pager Menü – "Tune"-Button sendet ein Tune-Frame direkt aus dem Menü
