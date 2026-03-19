@@ -787,7 +787,8 @@ function renderMap(data) {
         hasRealPos(allNodes[ie.from]) && hasRealPos(allNodes[ie.to])
     ).length;
     document.getElementById('hdr-nodes').textContent  = freshCount;
-    document.getElementById('hdr-ghosts').textContent = nodes.filter(n => n.ghost && !n.virtual).length;
+    const _hdrGhosts = document.getElementById('hdr-ghosts');
+    if (_hdrGhosts) _hdrGhosts.textContent = nodes.filter(n => n.ghost && !n.virtual).length;
     document.getElementById('hdr-stale').textContent  = staleCount;
     document.getElementById('hdr-edges').textContent  = edges.filter(e => hasRealPos(allNodes[e.from]) && hasRealPos(allNodes[e.to])).length + (inferredEdgeCount > 0 ? `+${inferredEdgeCount}` : '');
     document.getElementById('hdr-time').textContent   = fmtTime(data.generated || Date.now()/1000);
