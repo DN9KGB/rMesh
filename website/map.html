@@ -243,8 +243,6 @@
     <span class="sep">|</span>
     Verbindungen: <span id="hdr-edges">–</span>
     <span class="sep">|</span>
-    Ghost-Nodes: <span id="hdr-ghosts">–</span>
-    <span class="sep">|</span>
     Inaktiv (&gt;3h): <span id="hdr-stale">–</span>
     <span class="sep">|</span>
     Stand: <span id="hdr-time">–</span>
@@ -262,16 +260,15 @@
         </div>
         <div id="legend">
             <div class="legend-title">Legende</div>
-            <div class="legend-row"><div class="legend-dot" style="background:#4ecca3;"></div> Position bekannt (&lt;3h)</div>
-            <div class="legend-row"><div class="legend-dot" style="background:#f0a500;"></div> Position geschätzt (&lt;3h)</div>
-            <div class="legend-row"><div class="legend-dot" style="background:#818cf8;"></div> Ghost-Node (nur gesehen)</div>
-            <div class="legend-row"><div class="legend-dot" style="background:#e94560;"></div> Keine Position</div>
-            <div class="legend-row"><div class="legend-dot" style="background:#555;opacity:0.5;"></div> Inaktiv (3h–72h)</div>
+            <div class="legend-row"><div class="legend-dot" style="background:#4ecca3;"></div> Node mit Koordinaten (&lt;3h)</div>
+            <div class="legend-row"><div class="legend-dot" style="background:#555;opacity:0.5;"></div> Node inaktiv (3h–72h)</div>
+            <div class="legend-row"><div class="legend-dot" style="background:#6366f1;width:9px;height:9px;border:1px dashed #aaa;opacity:0.55;"></div> Unbekannte Relay-Node</div>
             <div class="legend-row"><div class="legend-line" style="background:#4ecca3;"></div> LoRa SNR ≥ 5 dB (gut)</div>
             <div class="legend-row"><div class="legend-line" style="background:#f0a500;"></div> LoRa SNR 0–5 dB (mäßig)</div>
             <div class="legend-row"><div class="legend-line" style="background:#e94560;"></div> LoRa SNR &lt; 0 dB (schlecht)</div>
             <div class="legend-row"><div class="legend-line" style="background:#a78bfa;"></div> Verbindung (WiFi/UDP)</div>
-            <div class="legend-row"><div class="legend-line" style="background:#555;border-top:2px dashed #888;height:0;"></div> Route (indirekt)</div>
+            <div class="legend-row"><div class="legend-line" style="background:#38bdf8;border-top:2px dashed #38bdf8;height:0;"></div> Verbindung (inferiert)</div>
+            <div class="legend-row"><div class="legend-line" style="background:#6b7280;border-top:2px dashed #6b7280;height:0;"></div> Route-Pfad</div>
         </div>
     </div>
 </div>
@@ -349,22 +346,22 @@ function deterministicOffset(call, range = 0.08) {
     return [dlat, dlon];
 }
 
-// Marker-Icon erzeugen
-function makeIcon(color, symbol = '') {
+// Marker-Icons
+function makeIcon(color) {
     return L.divIcon({
         className: '',
-        html: `<div style="
-            background:${color};
-            border:2px solid #fff;
-            border-radius:50%;
-            width:14px;height:14px;
-            box-shadow:0 0 6px ${color}88;
-        "></div>`,
-        iconSize: [14, 14],
-        iconAnchor: [7, 7],
-        popupAnchor: [0, -10]
+        html: `<div style="background:${color};border:2px solid #fff;border-radius:50%;width:14px;height:14px;box-shadow:0 0 6px ${color}88;"></div>`,
+        iconSize: [14, 14], iconAnchor: [7, 7], popupAnchor: [0, -10]
     });
 }
+function makeVirtualIcon() {
+    return L.divIcon({
+        className: '',
+        html: `<div style="background:#6366f1;border:1px dashed #aaa;border-radius:50%;width:9px;height:9px;opacity:0.55;"></div>`,
+        iconSize: [9, 9], iconAnchor: [4, 4], popupAnchor: [0, -6]
+    });
+}
+
 
 // ── RSSI → Gewicht (lineare Leistung in mW) ───────────────────────────────────
 // Stärkeres Signal = höhere Gewichtung beim Schwerpunkt
@@ -422,14 +419,239 @@ function inferPositions(nodes, edges, routeHints) {
     }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// Intelligente Netz-Analyse
+// Wertet alle Route-Hints kreuzweise aus:
+//  1. Routen-Wissensbasis (routeKB) für alle Nodes inkl. Ghost-Inferenz
+//  2. Peer-Map aus Edges + via-Beziehungen + hops=2-Schluss
+//  3. Iterative Propagation: G→dst via unbekannt → via aus Peer-Korrelation
+//  4. Inferred Edges: aus hops=2-Routen (via G → G↔dst sind direkte Peers)
+//  5. Vollständige Pfadketten: reporter→via1→via2→…→dst
+//  6. Virtuelle Zwischen-Nodes für unbekannte Hops (ohne Callsign)
+//  7. Merge nahe virtueller Nodes (möglicherweise dieselbe physische Node)
+//  8. Restliche Ghost-Node-Positionen per hop-gewichteter Pfad-Interpolation
+// ═══════════════════════════════════════════════════════════════════════════════
+function analyzeTopology(routeHints, edges, nodeMap) {
+
+    // ── 1. Routen-Wissensbasis ────────────────────────────────────────────────
+    const routeKB = {};  // nodeCall → { dstCall → {via, hops, confirmed} }
+    function addRoute(node, dst, via, hops, confirmed) {
+        if (!node || !dst || node === dst) return false;
+        if (!routeKB[node]) routeKB[node] = {};
+        const ex = routeKB[node][dst];
+        if (!ex || hops < ex.hops || (hops === ex.hops && confirmed && !ex.confirmed)) {
+            routeKB[node][dst] = { via: via || null, hops, confirmed: !!confirmed };
+            return true;
+        }
+        return false;
+    }
+    routeHints.forEach(r => addRoute(r.reporter, r.src, r.via, r.hops, true));
+
+    // ── 2. Peer-Map ───────────────────────────────────────────────────────────
+    // reporter↔via sind immer direkte Peers (via = next hop)
+    // hops=2 via G → G und src sind direkte Peers
+    const peerMap = {};
+    function addPeer(a, b) {
+        if (!a || !b || a === b) return;
+        (peerMap[a] = peerMap[a] || new Set()).add(b);
+        (peerMap[b] = peerMap[b] || new Set()).add(a);
+    }
+    edges.forEach(e => addPeer(e.from, e.to));
+    routeHints.forEach(r => {
+        addPeer(r.reporter, r.via);
+        if (r.hops === 2) addPeer(r.via, r.src);
+    });
+
+    // ── 3. Iterative Propagation + via-Auflösung ──────────────────────────────
+    // Wenn A→dst via G mit N Hops, dann G→dst mit N-1 Hops.
+    // G's via: suche unter G's Peers, wer dst mit N-2 Hops kennt.
+    for (let pass = 0; pass < 14; pass++) {
+        let changed = false;
+        const snap = [];
+        Object.entries(routeKB).forEach(([n, r]) =>
+            Object.entries(r).forEach(([d, i]) => snap.push({ n, d, ...i }))
+        );
+        snap.forEach(({ n, d: dst, via, hops }) => {
+            if (hops < 2 || !via) return;
+            const G = via, gHops = hops - 1;
+            let bestVia = null;
+            if (gHops === 1) {
+                // G und dst sind direkte Peers (1 Relay = G ist Zwischenknoten)
+                addPeer(G, dst);
+                bestVia = dst;
+            } else {
+                (peerMap[G] || new Set()).forEach(peer => {
+                    if (!bestVia && routeKB[peer]?.[dst]?.hops === gHops - 1) bestVia = peer;
+                });
+            }
+            if (addRoute(G, dst, bestVia, gHops, false)) changed = true;
+        });
+        if (!changed) break;
+    }
+
+    // ── 4. Inferred Edges ─────────────────────────────────────────────────────
+    const existingEdgeKeys = new Set(edges.map(e => [e.from, e.to].sort().join('|')));
+    const allEdgeKeys = new Set(existingEdgeKeys);
+    const inferredEdges = [];
+    Object.entries(peerMap).forEach(([a, peers]) => {
+        if (!nodeMap[a]) return;
+        peers.forEach(b => {
+            if (!nodeMap[b]) return;
+            const key = [a, b].sort().join('|');
+            if (allEdgeKeys.has(key)) return;
+            allEdgeKeys.add(key);
+            const highConf = routeHints.some(r =>
+                r.hops === 2 && ((r.via === a && r.src === b) || (r.via === b && r.src === a))
+            );
+            inferredEdges.push({ from: a, to: b, confidence: highConf ? 'high' : 'medium' });
+        });
+    });
+
+    // ── 5. Pfade verfolgen + Segmente mit Hop-Zahl sammeln ───────────────────
+    const drawnSegKeys = new Set(allEdgeKeys);
+    const rawSegments = [];  // { from, to, segHops }
+
+    const tracePath = (start, dst) => {
+        const path = [start];
+        const visited = new Set([start]);
+        let cur = start;
+        for (let d = 0; d < 14; d++) {
+            if (cur === dst) break;
+            const info = routeKB[cur]?.[dst];
+            if (!info?.via || visited.has(info.via)) break;
+            path.push(info.via);
+            visited.add(info.via);
+            cur = info.via;
+        }
+        return path;
+    };
+
+    routeHints.forEach(r => {
+        if (r.hops === 0) return;
+        const path = tracePath(r.reporter, r.src);
+        for (let i = 0; i < path.length - 1; i++) {
+            const a = path[i], b = path[i + 1];
+            const key = [a, b].sort().join('|');
+            if (drawnSegKeys.has(key)) continue;
+            drawnSegKeys.add(key);
+            if (!nodeMap[a] || !nodeMap[b]) continue;
+            const segHops = routeKB[a]?.[b]?.hops ?? 1;
+            rawSegments.push({ from: a, to: b, segHops });
+        }
+    });
+
+    // ── 6. Virtuelle Zwischen-Nodes für unbekannte Hops ──────────────────────
+    // Für jedes Segment A→B mit segHops > 1: segHops-1 virtuelle Nodes einfügen.
+    // Position: linear interpoliert zwischen A und B.
+    let vnIdx = 0;
+    const allVNs = [];       // alle erzeugten virtuellen Nodes
+    const resolvedSegs = []; // {from, to, hasVirtual}
+
+    rawSegments.forEach(seg => {
+        const aN = nodeMap[seg.from], bN = nodeMap[seg.to];
+        const nIntermed = seg.segHops - 1;
+
+        if (nIntermed <= 0 || !aN?.lat || !bN?.lat) {
+            resolvedSegs.push({ from: seg.from, to: seg.to, hasVirtual: false });
+            return;
+        }
+
+        const chain = [seg.from];
+        for (let k = 1; k <= nIntermed; k++) {
+            const f = k / seg.segHops;
+            const lat = aN.lat + f * (bN.lat - aN.lat);
+            const lon = aN.lon + f * (bN.lon - aN.lon);
+            const vnId = `__vn_${vnIdx++}`;
+            const vn = {
+                call: vnId, lat, lon,
+                virtual: true, ghost: true, posInferred: true,
+                fromCall: seg.from, toCall: seg.to,
+                last_seen: Math.floor(Date.now() / 1000)
+            };
+            nodeMap[vnId] = vn;
+            allVNs.push(vn);
+            chain.push(vnId);
+        }
+        chain.push(seg.to);
+
+        for (let k = 0; k < chain.length - 1; k++) {
+            resolvedSegs.push({ from: chain[k], to: chain[k + 1], hasVirtual: true });
+        }
+    });
+
+    // ── 7. Virtuelle Nodes zusammenführen ─────────────────────────────────────
+    // Wenn zwei VNs aus unterschiedlichen Segmenten nahe beieinander liegen
+    // (< ~8 km), könnten sie dieselbe physische Node repräsentieren.
+    const MERGE_DEG = 0.07;
+    const mergeMap = {};  // vnCall → kanonisches vnCall
+
+    for (let i = 0; i < allVNs.length; i++) {
+        const vn1 = allVNs[i];
+        if (mergeMap[vn1.call]) continue;
+        for (let j = i + 1; j < allVNs.length; j++) {
+            const vn2 = allVNs[j];
+            if (mergeMap[vn2.call]) continue;
+            if (vn1.fromCall === vn2.fromCall && vn1.toCall === vn2.toCall) continue;
+            if (Math.hypot(vn1.lat - vn2.lat, vn1.lon - vn2.lon) < MERGE_DEG) {
+                mergeMap[vn2.call] = vn1.call;
+                const w = vn1.mergeCount || 1;
+                vn1.lat = (vn1.lat * w + vn2.lat) / (w + 1);
+                vn1.lon = (vn1.lon * w + vn2.lon) / (w + 1);
+                vn1.mergeCount = w + 1;
+                delete nodeMap[vn2.call];
+            }
+        }
+    }
+
+    // Segmente auf kanonische IDs umschreiben + deduplizieren
+    const finalSegKeys = new Set(allEdgeKeys);
+    const finalSegments = [];
+    resolvedSegs.forEach(seg => {
+        const from = mergeMap[seg.from] || seg.from;
+        const to   = mergeMap[seg.to]   || seg.to;
+        if (from === to) return;
+        const key = [from, to].sort().join('|');
+        if (finalSegKeys.has(key)) return;
+        finalSegKeys.add(key);
+        finalSegments.push({ from, to, hasVirtual: seg.hasVirtual });
+    });
+
+    const finalVNs = allVNs.filter(vn => !mergeMap[vn.call]);
+
+    // ── 8. Restliche Ghost-Positionen per Pfad-Interpolation ─────────────────
+    // Ergänzt inferPositions: Nodes die noch keine Position haben,
+    // werden hop-gewichtet entlang bekannter Reporter→Ziel-Pfade interpoliert.
+    const posConstraints = {};
+    routeHints.forEach(r => {
+        const rep = nodeMap[r.reporter], src = nodeMap[r.src];
+        if (!rep?.lat || !src?.lat) return;
+        const via = nodeMap[r.via];
+        if (via && via.lat === undefined) {
+            const f = 1 / Math.max(r.hops, 1);
+            const lat = rep.lat + f * (src.lat - rep.lat);
+            const lon = rep.lon + f * (src.lon - rep.lon);
+            (posConstraints[r.via] = posConstraints[r.via] || []).push({ lat, lon, weight: r.hops });
+        }
+    });
+    Object.entries(posConstraints).forEach(([call, cs]) => {
+        const node = nodeMap[call];
+        if (!node || node.lat !== undefined) return;
+        const totalW = cs.reduce((s, c) => s + c.weight, 0);
+        const [dlat, dlon] = deterministicOffset(call, 0.08);
+        node.lat = cs.reduce((s, c) => s + c.lat * c.weight, 0) / totalW + dlat;
+        node.lon = cs.reduce((s, c) => s + c.lon * c.weight, 0) / totalW + dlon;
+        node.posInferred = true;
+        node.posMethod = 'route-path';
+    });
+
+    return { inferredEdges, routeSegments: finalSegments, virtualNodes: finalVNs };
+}
+
 // ── Karte rendern ─────────────────────────────────────────────────────────────
 function renderMap(data) {
     const nodes      = data.nodes      || [];
     const edges      = data.edges      || [];
     const routeHints = data.route_hints|| [];
-
-    // Virtuelle Positionen berechnen
-    inferPositions(nodes, edges, routeHints);
 
     // State speichern
     allNodes = {};
@@ -437,37 +659,67 @@ function renderMap(data) {
     allEdges  = edges;
     allRoutes = routeHints;
 
+    // ── Intelligente Netz-Analyse ─────────────────────────────────────────────
+    const { inferredEdges, routeSegments, virtualNodes } =
+        analyzeTopology(routeHints, edges, allNodes);
+
+    // Virtuelle Nodes (unbekannte Relay-Nodes) in allNodes eintragen + nodes-Array
+    virtualNodes.forEach(vn => { allNodes[vn.call] = vn; nodes.push(vn); });
+
+    // Echte Position = vom Node selbst gemeldet (GPS/Maidenhead), kein Schätzwert
+    const hasRealPos = n => n?.lat !== undefined && !n.posInferred && !n.virtual;
+    // Zeichenbar = echte Position ODER virtuelle Node (interpoliert zw. bekannten Nodes)
+    const isDrawable = n => n?.lat !== undefined && (hasRealPos(n) || n.virtual);
+
     // Layer leeren
     edgeLayer.clearLayers();
     routeLayer.clearLayers();
     markerLayer.clearLayers();
     markers = {};
 
-    // ── Routen (gestrichelt, grau) ────────────────────────────────────────────
-    const drawnRouteEdges = new Set();
-    routeHints.forEach(r => {
-        const from = allNodes[r.reporter];
-        const to   = allNodes[r.src];
-        if (!from || !to) return;
-        if (from.lat === undefined || to.lat === undefined) return;
-        const key = [r.reporter, r.src].sort().join('|');
-        if (drawnRouteEdges.has(key)) return;
-        drawnRouteEdges.add(key);
+    // ── Inferred Edges (geschätzte direkte Verbindungen) ──────────────────────
+    // Aus hops=2-Routen: wenn A→dst in 2 Hops via G, dann G↔dst direkte Peers.
+    inferredEdges.forEach(ie => {
+        const from = allNodes[ie.from], to = allNodes[ie.to];
+        if (!hasRealPos(from) || !hasRealPos(to)) return;
         L.polyline([[from.lat, from.lon], [to.lat, to.lon]], {
-            color: '#555',
-            weight: 1.5,
-            dashArray: '5,6',
-            opacity: 0.6
+            color:     '#38bdf8',
+            weight:    1.5,
+            dashArray: ie.confidence === 'high' ? '4,4' : '2,7',
+            opacity:   ie.confidence === 'high' ? 0.5 : 0.3
         }).addTo(routeLayer)
-         .bindTooltip(`Route: ${r.reporter} → ${r.src} via ${r.via} (${r.hops} Hops)`, {sticky: true});
+         .bindTooltip(
+            `Verbindung (inferiert): ${ie.from} ↔ ${ie.to}<br>` +
+            `<small>${ie.confidence === 'high' ? 'Schluss aus hops=2-Route' : 'via-Peer-Korrelation'}</small>`,
+            { sticky: true }
+         );
+    });
+
+    // ── Routing-Pfad-Segmente ─────────────────────────────────────────────────
+    // Aufgelöste Pfadketten reporter→via1→via2→…→dst.
+    // hasVirtual=true: Segment enthält mindestens eine unbekannte Zwischen-Node.
+    routeSegments.forEach(seg => {
+        const from = allNodes[seg.from], to = allNodes[seg.to];
+        if (!isDrawable(from) || !isDrawable(to)) return;
+        L.polyline([[from.lat, from.lon], [to.lat, to.lon]], {
+            color:     seg.hasVirtual ? '#a855f7' : '#6b7280',
+            weight:    1.5,
+            dashArray: seg.hasVirtual ? '3,5' : '5,6',
+            opacity:   seg.hasVirtual ? 0.5 : 0.65
+        }).addTo(routeLayer)
+         .bindTooltip(
+            seg.hasVirtual
+                ? `Route-Segment via unbekannte Relay-Node`
+                : `Route-Segment (bekannte Nodes)`,
+            { sticky: true }
+         );
     });
 
     // ── Direkte Verbindungen (Edges) ──────────────────────────────────────────
     edges.forEach(e => {
         const from = allNodes[e.from];
         const to   = allNodes[e.to];
-        if (!from || !to) return;
-        if (from.lat === undefined || to.lat === undefined) return;
+        if (!hasRealPos(from) || !hasRealPos(to)) return;
 
         const edgeStale = nodeAge(from) === 'stale' || nodeAge(to) === 'stale';
         const color  = edgeStale ? '#444' : (e.port === 0 ? snrColor(e.snr) : '#a78bfa');
@@ -484,27 +736,30 @@ function renderMap(data) {
          );
     });
 
-    // ── Marker ────────────────────────────────────────────────────────────────
+    // ── Marker – nur Nodes mit echten (gemeldeten) Koordinaten ───────────────
     const bounds = [];
     nodes.forEach(n => {
-        if (n.lat === undefined) return;  // gar keine Nachbarn mit Position
+        // Nur anzeigen wenn echte Position vorhanden (kein Schätzwert, kein Ghost)
+        // Virtuelle Nodes: kleiner Punkt ohne Callsign-Label
+        if (n.virtual) {
+            const hint = n.mergeCount > 1 ? ` (${n.mergeCount}× zusammengeführt)` : '';
+            L.marker([n.lat, n.lon], { icon: makeVirtualIcon(), opacity: 0.7, zIndexOffset: -200 })
+                .addTo(markerLayer)
+                .bindTooltip(`Unbekannte Relay-Node${hint}`, { sticky: true });
+            bounds.push([n.lat, n.lon]);
+            return;
+        }
+
+        // Echte Nodes: nur mit gemeldeten Koordinaten anzeigen
+        if (!hasRealPos(n)) return;
 
         const stale = nodeAge(n) === 'stale';
-        let color;
-        if (stale) {
-            color = '#555';
-        } else if (n.ghost) {
-            color = '#818cf8';
-        } else if (n.posInferred) {
-            color = '#f0a500';
-        } else {
-            color = '#4ecca3';
-        }
+        const color = stale ? '#555' : '#4ecca3';
+
         const marker = L.marker([n.lat, n.lon], { icon: makeIcon(color), opacity: stale ? 0.5 : 1 })
             .addTo(markerLayer)
             .bindPopup(() => buildPopup(n), { minWidth: 180 });
 
-        // Label als Tooltip immer sichtbar
         marker.bindTooltip(n.call, {
             permanent: true,
             direction: 'top',
@@ -524,20 +779,30 @@ function renderMap(data) {
     // Sidebar
     renderSidebar(nodes, edges);
 
-    // Header
-    const ghostCount = nodes.filter(n => n.ghost).length;
-    const freshCount = nodes.filter(n => nodeAge(n) === 'fresh').length;
-    const staleCount = nodes.length - freshCount;
-    document.getElementById('hdr-nodes').textContent  = freshCount - nodes.filter(n => n.ghost && nodeAge(n) === 'fresh').length;
-    document.getElementById('hdr-ghosts').textContent = ghostCount;
+    // Header – nur Nodes mit echter Position
+    const realNodes  = nodes.filter(n => hasRealPos(n));
+    const freshCount = realNodes.filter(n => nodeAge(n) === 'fresh').length;
+    const staleCount = realNodes.length - freshCount;
+    const inferredEdgeCount = inferredEdges.filter(ie =>
+        hasRealPos(allNodes[ie.from]) && hasRealPos(allNodes[ie.to])
+    ).length;
+    document.getElementById('hdr-nodes').textContent  = freshCount;
+    document.getElementById('hdr-ghosts').textContent = nodes.filter(n => n.ghost && !n.virtual).length;
     document.getElementById('hdr-stale').textContent  = staleCount;
-    document.getElementById('hdr-edges').textContent  = edges.length;
+    document.getElementById('hdr-edges').textContent  = edges.filter(e => hasRealPos(allNodes[e.from]) && hasRealPos(allNodes[e.to])).length + (inferredEdgeCount > 0 ? `+${inferredEdgeCount}` : '');
     document.getElementById('hdr-time').textContent   = fmtTime(data.generated || Date.now()/1000);
     document.getElementById('loading').style.display = 'none';
 }
 
 // ── Popup-Inhalt ──────────────────────────────────────────────────────────────
 function buildPopup(n) {
+    if (n.virtual) {
+        const mergeInfo = n.mergeCount > 1 ? `${n.mergeCount} Routen zusammengeführt` : 'eine Route';
+        return `<div class="popup-call" style="color:#818cf8">Unbekannte Relay-Node</div>
+            <div class="popup-row"><span class="popup-label">Typ:</span> <span style="color:#818cf8">Virtuell (inferiert, ${mergeInfo})</span></div>
+            <div class="popup-row"><span class="popup-label">Position:</span> hop-interpoliert</div>`;
+    }
+
     const directPeers = allEdges.filter(e => e.from === n.call || e.to === n.call);
     const routedThrough = allRoutes.filter(r => r.reporter === n.call);
 
@@ -581,10 +846,11 @@ function buildPopup(n) {
     return html;
 }
 
-// ── Sidebar ───────────────────────────────────────────────────────────────────
+// ── Sidebar – nur Nodes mit bekannten Koordinaten ────────────────────────────
 function renderSidebar(nodes, edges) {
-    // Frische Nodes alphabetisch zuerst, dann stale alphabetisch
-    const sorted = [...nodes].sort((a, b) => {
+    // Nur Nodes mit echter Position anzeigen (keine Ghost/Inferred/Virtual)
+    const visible = nodes.filter(n => n.lat !== undefined && !n.posInferred && !n.virtual && !n.ghost);
+    const sorted = [...visible].sort((a, b) => {
         const aStale = nodeAge(a) === 'stale';
         const bStale = nodeAge(b) === 'stale';
         if (aStale !== bStale) return aStale ? 1 : -1;
@@ -594,31 +860,14 @@ function renderSidebar(nodes, edges) {
     sorted.forEach(n => {
         const stale = nodeAge(n) === 'stale';
         const peerCount = edges.filter(e => e.from === n.call || e.to === n.call).length;
-        let posClass, posText;
-        if (stale) {
-            posClass = 'node-pos-stale';
-            posText  = 'Inaktiv seit ' + timeAgo(n.last_seen);
-        } else if (n.ghost) {
-            posClass = n.posInferred ? 'node-pos-ghost' : 'node-pos-none';
-            posText  = n.posInferred ? 'Ghost (RSSI-Schätzung)' : 'Ghost – keine Position';
-        } else if (n.lat !== undefined && !n.posInferred) {
-            posClass = 'node-pos-known';
-            posText  = n.position || `${n.lat.toFixed(3)}, ${n.lon.toFixed(3)}`;
-        } else if (n.posInferred) {
-            posClass = 'node-pos-inferred';
-            posText  = 'Position geschätzt';
-        } else {
-            posClass = 'node-pos-none';
-            posText  = 'Keine Position';
-        }
-
+        const posText = n.position || `${n.lat.toFixed(3)}, ${n.lon.toFixed(3)}`;
         html += `<div class="node-card${stale ? ' node-card-stale' : ''}" onclick="focusNode('${n.call}')">
             <div class="node-call">${n.call}</div>
-            <div class="node-meta ${posClass}">${posText}</div>
+            <div class="node-meta node-pos-${stale ? 'stale' : 'known'}">${stale ? 'Inaktiv seit ' + timeAgo(n.last_seen) : posText}</div>
             ${stale ? '' : `<div class="node-meta">${peerCount} Peer${peerCount !== 1 ? 's' : ''} &nbsp;·&nbsp; vor ${timeAgo(n.last_seen)}</div>`}
         </div>`;
     });
-    document.getElementById('node-list').innerHTML = html || '<div style="padding:12px;color:#555;font-size:0.85rem;">Keine Nodes gefunden.</div>';
+    document.getElementById('node-list').innerHTML = html || '<div style="padding:12px;color:#555;font-size:0.85rem;">Keine Nodes mit Koordinaten gefunden.</div>';
 }
 
 function toggleSidebar() {
