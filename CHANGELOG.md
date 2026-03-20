@@ -1,6 +1,19 @@
 # Changelog
 
+## [v1.0.27]
+
+- NEU: Zweites, getrenntes 868-MHz-Public-Netz (869,525 MHz, Sub-Band P) ergänzt – ohne Amateurfunklizenz nutzbar; Trennung zum 433-MHz-Amateurfunknetz auf PHY-Ebene (SyncWord) und in der Software/Weboberfläche
+- NEU: Frequenz-Presets für 433 MHz (Amateurfunk) und 868 MHz (Public) – Frequenz und passende LoRa-Parameter werden je Band automatisch gesetzt
+- NEU: Serielle Konsole um freq 433 und freq 868 erweitert – setzt direkt das jeweilige Frequenz-Preset
+- NEU: Topo-Ansicht überarbeitet – bessere Routen-Darstellung, Node-Suche und stabileres/verändertes Auto-Refresh-Verhalten
+- NEU: TX-Power im Public-Band auf max. 22 dBm begrenzt und Duty-Cycle-Tracking für 868 MHz ergänzt
+- Geändert: SyncWord wird jetzt automatisch aus dem Frequenzband abgeleitet (433: 0x2B, 868: 0x12) und kann nicht mehr manuell im UI geändert werden
+- Geändert: HF-Modul bleibt bei Erstinstallation deaktiviert, bis ein Band gewählt wurde; bestehende 433-MHz-Geräte behalten ihre bisherigen Einstellungen
+- Geändert: Reporting um chip_id, is_afu und band erweitert
+- Website: Nicht mehr benötigte Topology- und Update-Endpunkte entfernt, ungenutzten Code bereinigt und Wartbarkeit verbessert
+
 ## [v1.0.26]
+
 - NEU: Passwortschutz für das Web-Interface – optional, Challenge-Response-Verfahren über WebSocket (Server sendet Nonce, Client antwortet mit SHA-256(Passwort + Nonce)). Ohne gültiges Passwort werden keine Daten übertragen. Das Passwort wird als SHA-256-Hash im Flash gespeichert. Einrichtung, Änderung und Entfernung direkt im Setup-Bereich.
 - NEU: Menüstruktur in gp, mobile und T-LoRa Pager vereinheitlicht – einheitliche Aufteilung in Network, LoRa (Funkparameter) und Setup (Rufzeichen, Position, Passwort, Chip ID, Neustart). Hardware-spezifische Einstellungen (Display) beim Pager ebenfalls in Setup integriert.
 - NEU: rMesh-Logo im Login-Overlay von gp und mobile
@@ -9,24 +22,28 @@
 - FIX: Firmware-Versionsstring erlaubt jetzt auch Buchstaben als Suffix (z. B. v1.0.25a)
 
 ## [v1.0.25a]
+
 - NEU: T-LoRa Pager startet jetzt auch auf Boards ohne PSRAM (ESP32-S3FN8) – blockierende Endlosschleife in LilyGoLib bei fehlendem PSRAM durch Patch entfernt, Display-Buffer-Überlauf (426 KB → 213 KB) behoben
 - NEU: T-LoRa Pager Menü – "Tune"-Button sendet ein Tune-Frame direkt aus dem Menü
-- NEU: T-LoRa Pager Menü – "About"-Seite zeigt installierte Firmware-Version, WiFi-IP sowie Links zu www.rMesh.de und GitHub
+- NEU: T-LoRa Pager Menü – "About"-Seite zeigt installierte Firmware-Version, WiFi-IP sowie Links zu [www.rMesh.de](https://www.rMesh.de) und GitHub
 - NEU: T-LoRa Pager – "Ausschalten" ist jetzt der letzte Menüpunkt und erfordert eine Sicherheitsabfrage (Ja/Nein)
 - NEU: T-LoRa Pager – Boot-Splash "rMesh wird gestartet" jetzt größer und zentriert
 - FIX: UDP-Fehlerflut (`parsePacket: could not check for data`) wenn kein WLAN eingerichtet ist
 - FIX: Topologie-Reporting wurde durch häufige RSSI/SNR-Updates blockiert – Debounce-Timer wird jetzt nur noch bei echten neuen Peers/Routen zurückgesetzt
 
 ## [v1.0.25]
+
 - NEU: OTA-Debugging – jeder Update-Vorgang wird in der Datenbank protokolliert. Erfasst werden Versions-Anfragen, gefundene Updates, gestartete Downloads sowie Erfolg oder Misserfolg des Flashens mit Fehlermeldung und Gerätetyp.
 
 ## [v1.0.24]
-- NEU: Netzwerk-Topologie-Karte auf www.rMesh.de – Nodes mit Internetzugang melden ihren Namen, ihre Peers (LoRa/UDP) und die Routing-Tabelle stündlich (bzw. bei Änderung mit 30s Debounce) an den Server. Nodes ohne Internet erscheinen über die Berichte ihrer Nachbarn auf der Karte.
+
+- NEU: Netzwerk-Topologie-Karte auf [www.rMesh.de](https://www.rMesh.de) – Nodes mit Internetzugang melden ihren Namen, ihre Peers (LoRa/UDP) und die Routing-Tabelle stündlich (bzw. bei Änderung mit 30s Debounce) an den Server. Nodes ohne Internet erscheinen über die Berichte ihrer Nachbarn auf der Karte.
 - NEU: Einstellungsfeld "Position" (Maidenhead-Locator oder Lat/Lon) in der Firmware, allen Web-UIs und dem T-LoRa Pager Menü.
 - FIX: Web-Installer (esp-web-tools) konnte Firmware wegen CORS-Sperre nicht direkt von GitHub laden. Firmware-Binaries werden jetzt serverseitig über firmware.php als Proxy ausgeliefert; manifest.php generiert das Installationsmanifest dynamisch aus dem aktuellen GitHub-Release.
 - FIX: Versionsstring-Injektion robuster gemacht – get_version.py schreibt jetzt eine src/version.h (statt CPPDEFINES), die direkt in config.h eingebunden wird. src/version.h ist gitignored (generierte Datei).
 
 ## [v1.0.23]
+
 - FIX: WLAN verbindet sich nach Verbindungsabbruch nicht mehr neu (#2 behoben)
 - FIX: LILYGO T-LoRa Pager Build korrigiert – fehlende LilyGoLib-Abhängigkeiten ergänzt, NFC-Guards automatisch gepatcht
 - FIX: VERSION-Fallback und include-Pfad für Hal.h korrigiert
@@ -39,40 +56,50 @@
 - Bilder des Webinstallers nach website/images/ konsolidiert
 
 ## [v1.0.22]
+
 - Neue URL für den Autoupdater
 
 ## [v1.0.21]
+
 - Neues Device: T-LoRa Pager
 
 ## [v1.0.20a]
+
 - Max. Message json länge 4096 bytes
 - Keine Binärdaten mehr in messages und monitor
 
 ## [v1.0.19a]
+
 - 3-Block-Layout integriert. Das komplette Interface basiert jetzt auf einem strikten CSS-Flexbox-System (100dvh). Es gibt einen festen Header, einen scrollbaren Mittelteil und einen festen Footer.
 - iOS Safari Tastatur-Bug behoben. Die Eingabeleiste wird auf iPhones beim Öffnen der Tastatur nicht mehr weggeschoben oder verdeckt.
 - ENTFERNT: Cookie-Speicher (document.cookie). Das fehleranfällige und auf 4 KB limitierte Speichern der Einstellungen per Cookie wurde restlos gelöscht.
 - NEU: LocalStorage Integration. Die guiSettings (inklusive aller Chats und UI-Zustände) werden jetzt im modernen HTML5 localStorage des Browsers abgelegt. Dadurch hast du nun bis zu 10 Megabyte Speicherplatz, der das Netzwerk (ESP32) nicht belastet.
 
 ## [v1.0.18-a]
+
 - Safari/iOS fixes
 - ...weil es so schön ist....
 
 ## [v1.0.17-a]
+
 - Safari/iOS fixes
 
 ## [v1.0.16-a]
+
 - Safari/iOS fixes
 
 ## [v1.0.15-a]
+
 - FIX: Safari/iOS Input-Bar Interactivity
 
 ## [v1.0.14-a]
+
 - Die messages.json wird jetzt mit entsprechenden HTTP-Headern (no-cache) ausgeliefert. Verhindert, dass der Browser veraltete Nachrichten-Stände aus dem Cache lädt, anstatt die aktuelle Datei vom ESP32 abzurufen.
 - Anpassung der Input-Bar Logik (CSS/JS). Fokus auf die Behebung von Darstellungsfehlern und Fokus-Problemen unter iOS (Safari). Status: Experimentell / Ungetestet.
 - Der Hopcount wurde hart auf maximal 15 begrenzt.
 
 ## [v1.0.13-a]
+
 - Der Seitentitel zeigt nun ein Nachrichtensymbol an, sobald neue Mitteilungen eingegangen sind.
 - Die Scrollbars wurden optisch an das rMesh-Design angepasst.
 - Rückkehr zum „harten Scrolling" für eine direktere und präzisere Navigation in langen Chat-Verläufen.
@@ -82,6 +109,7 @@
 - Angepasstes Announce-Timing: Das Intervall für Knoten-Ankündigungen wurde zur Schonung der Airtime auf 10 Minuten gesetzt.
 
 ## [v1.0.12-alpha]
+
 - Optimierung der messages.json durch zeitgesteuertes Trimmen. Der erste Bereinigungszyklus startet nun 30 Minuten nach Systemstart, um die Boot-Phase nicht zu belasten. Danach erfolgt die Wartung automatisch in einem 24-Stunden-Intervall.
 - Ungelesen-Markierung für den "All"-Gruppe.
 - Kein akustisches Signal bei "All"-Gruppe.
@@ -89,6 +117,7 @@
 - Beschleunigter Nachrichten-Display: Nachrichten aus der messages.json werden nun unmittelbar während des Ladevorgangs gerendert, was die wahrgenommene Ladezeit bei großen Archiven deutlich reduziert.
 
 ## [v1.0.11-alpha]
+
 - LittleFS ist nicht thread-safe 🤮
 - Mutex für Webserver
 - messages.json: Nur noch Append (weil Längenbegrenzung bis zu 30Sek. dauert und dann der Webserver blockiert)
@@ -96,22 +125,27 @@
 - Mobile GUI: Titel sollte besser passen
 
 ## [v1.0.10-alpha]
+
 - Warten auf ACK bissel länger
 - Mobile GUI
 - Routing Tabelle nur noch kürzeste Route
 - Bei "ALL" keine Geräusche mehr
 
 ## [v1.0.9-alpha]
+
 - Nochmal große JSON Strings
 
 ## [v1.0.8-alpha]
+
 - Nochmal große JSON Strings
 
 ## [v1.0.7-alpha]
+
 - Große JSON Strings (PeerList und RoutungList) werden direkt in Websocket Puffer geschrieben
 - Monitor Daten auch
 
 ## [v1.0.6-alpha]
+
 - "erweiterte Einstellungen" -> WLAN Einstellungen bleiben bei FW-Update erhalten, wenn "erweiterte Einstellungen" geändert werden
 - wifiBordcast ist jetzt UDP-Peer (maximal 5 IPs)
 - Viele ACKs wieder weg (auf Stand von V1.0.4)
@@ -121,12 +155,14 @@
 - Routing für Nachrichten mit dstCall aktiv
 
 ## [v1.0.5-alpha]
+
 - Frames aus dem TX-Puffer löschen, wenn man merkt, dass ein anderes Node den Frame schon wiederholt.
 - ACKs werden jetzt immer gesendet
 - GUI: Datum in Peer Liste
 - Routing Liste wird angezeigt, aber noch nicht verwendet
 
 ## [v1.0.4-alpha]
+
 - Timing um ca. 25% verlangsamt
 - Update Prüfung alle 24h
 - ohne gesetztes Rufzeichen kein Senden möglich
@@ -145,6 +181,7 @@
 - GUI kann jetzt Messageboxen
 
 ## [v1.0.3-alpha]
+
 - Timing für UDP langsamer
 - Speichern Button hat QRG nicht übernommen
 - HELTEC_WiFi_LoRa_32_V4
@@ -156,6 +193,7 @@
 - Announce Timer in V1.0.2 war denke falsch
 
 ## [v1.0.2-alpha]
+
 - mehr Hardware
 - direkte Nachrichten
 - Gruppen
@@ -163,4 +201,5 @@
 - Ton bei neuen Nachrichten
 
 ## [v1.0.1-alpha]
+
 - erstes alpha Release
