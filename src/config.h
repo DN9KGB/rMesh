@@ -5,7 +5,7 @@
 #define AMATEUR_SYNCWORD       0x2B
 // Public SRD 869 Sub-Band P (869,4–869,65 MHz), 500 mW, 10 % Duty Cycle
 #define PUBLIC_SYNCWORD        0x12
-#define PUBLIC_MAX_TX_POWER    22    // dBm (default für 868 MHz Public)
+#define PUBLIC_MAX_TX_POWER    27    // dBm (500 mW, erlaubt im SRD869 Sub-Band P)
 
 inline bool loraConfigured(float f) { return f > 1.0f; }
 inline bool isAmateurBand(float f)  { return f >= 430.0f && f <= 440.0f; }
