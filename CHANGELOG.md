@@ -1,5 +1,10 @@
 # Changelog
 
+## [v1.0.27a]
+
+- NEU: Unterstützung für Seeed SenseCAP Indicator D1L ergänzt
+- FIX: TX-Power-Begrenzung im 868-MHz-Public-Band auf korrekte 27 dBm (500 mW) angehoben – vorheriger Wert von 22 dBm war zu restriktiv
+
 ## [v1.0.27]
 
 - NEU: Zweites, getrenntes 868-MHz-Public-Netz (869,525 MHz, Sub-Band P) ergänzt – ohne Amateurfunklizenz nutzbar; Trennung zum 433-MHz-Amateurfunknetz auf PHY-Ebene (SyncWord) und in der Software/Weboberfläche
