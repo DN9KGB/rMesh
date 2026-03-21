@@ -20,9 +20,16 @@ bool checkUDP(Frame &f) {
     if (WiFi.status() != WL_CONNECTED) return false;
     size_t packetSize = udp.parsePacket();
     if (packetSize) {
-        uint8_t packetBuffer[255];
+        uint8_t packetBuffer[256];
         int len = udp.read(packetBuffer, sizeof(packetBuffer));
-        f.importBinary(packetBuffer, len);
+        // Erstes Byte ist das SyncWord des Senders – nur gleiche Netze akzeptieren.
+        // Alte Firmware ohne SyncWord-Präfix wird als 433-MHz-Netz (AMATEUR_SYNCWORD) behandelt.
+        if (len < 1) return false;
+        bool hasSyncword = (packetBuffer[0] == AMATEUR_SYNCWORD || packetBuffer[0] == PUBLIC_SYNCWORD);
+        uint8_t pktSyncword = hasSyncword ? packetBuffer[0] : AMATEUR_SYNCWORD;
+        if (pktSyncword != settings.loraSyncWord) return false;
+        f.importBinary(hasSyncword ? packetBuffer + 1 : packetBuffer,
+                       hasSyncword ? len - 1 : len);
         f.tx = false;
         f.timestamp = time(NULL);
         f.rssi = 0;
@@ -46,7 +53,9 @@ void sendUDP(Frame &f) {
 
     //Senden
     if (strlen(f.nodeCall) == 0) {return;}
-    txBufferLength = f.exportBinary(txBuffer, sizeof(txBuffer));
+    // SyncWord als erstes Byte voranstellen, damit Empfänger fremde Netze ablehnen können
+    txBuffer[0] = settings.loraSyncWord;
+    txBufferLength = f.exportBinary(txBuffer + 1, sizeof(txBuffer) - 1) + 1;
     uint8_t count = sizeof(extSettings.udpPeer) / sizeof(extSettings.udpPeer[0]);
     bool udpTX = false;
     for (int i = 0; i < count; i++) {

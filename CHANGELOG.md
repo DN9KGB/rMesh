@@ -1,5 +1,10 @@
 # Changelog
 
+## [v1.0.28]
+
+- NEU: UDP-Netzwerktrennung – jedes UDP-Paket enthält jetzt das SyncWord als erstes Byte. Nodes akzeptieren per UDP nur noch Pakete aus dem eigenen Frequenzband (433 MHz oder 868 MHz). Verbindet man versehentlich Nodes aus verschiedenen Bändern per UDP, bleiben die LoRa-Netze trotzdem getrennt.
+- Abwärtskompatibilität: Pakete ohne SyncWord-Präfix (alte Firmware) werden als 433-MHz-Netz (AMATEUR_SYNCWORD) behandelt und von 433-MHz-Nodes weiterhin akzeptiert.
+
 ## [v1.0.27a]
 
 - NEU: Unterstützung für Seeed SenseCAP Indicator D1L ergänzt
