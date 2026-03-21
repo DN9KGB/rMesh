@@ -14,6 +14,8 @@
     #include "hal_HELTEC_WiFi_LoRa_32_V3.h"
 #elif defined(LILYGO_T_LORA_PAGER)
     #include "hal_LILYGO_T-LoraPager.h"
+#elif defined(SEEED_SENSECAP_INDICATOR)
+    #include "hal_SEEED_SenseCAP_Indicator.h"
 #elif defined(ESP32_WITHOUT_LORA)
     #include "hal_ESP32_Without_LoRa.h"
 #else

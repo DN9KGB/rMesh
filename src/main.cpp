@@ -27,6 +27,11 @@
 #include "hal_LILYGO_T-LoraPager.h"
 #endif
 
+#ifdef SEEED_SENSECAP_INDICATOR
+#include "display_SEEED_SenseCAP_Indicator.h"
+#include "hal_SEEED_SenseCAP_Indicator.h"
+#endif
+
 
 //Uhrzeitformat
 const char* TZ_INFO = "CET-1CEST,M3.5.0,M10.5.0/3";
@@ -212,6 +217,16 @@ void processRxFrame(Frame &f) {
                 displayMonitorFrame(f);
                 #endif
 
+                // Display on SenseCAP Indicator screen
+                #ifdef SEEED_SENSECAP_INDICATOR
+                if (f.messageType == Frame::MessageTypes::TEXT_MESSAGE) {
+                    char textBuf[261] = {0};
+                    memcpy(textBuf, f.message, f.messageLength);
+                    displayOnNewMessage(f.srcCall, textBuf, f.dstGroup, f.dstCall);
+                }
+                displayMonitorFrame(f);
+                #endif
+
                 //ECHO für Tracking-Message
                 if ((strcmp(f.dstCall, settings.mycall) == 0) && (f.messageType == Frame::MessageTypes::TRACE_MESSAGE) && (strstr((char*)f.message, "ECHO") == NULL)) {
                         char message[512];
@@ -323,13 +338,16 @@ void setup() {
     Serial.begin(115200);
     Serial.setDebugOutput(true);
 
-    #ifdef LILYGO_T_LORA_PAGER
+    #if defined(LILYGO_T_LORA_PAGER)
     // USB-CDC needs ~1s to enumerate; early output would be lost
     delay(2000);
     Serial.println("=== rMesh T-LoraPager boot ===");
     Serial.printf("PSRAM: %s (%u bytes)\n", psramFound() ? "OK" : "NOT FOUND", ESP.getPsramSize());
     Serial.printf("Free heap: %u\n", ESP.getFreeHeap());
     Serial.flush();
+    #elif defined(SEEED_SENSECAP_INDICATOR)
+    // UART0 via CH340 bridge — ready immediately, no wait needed
+    delay(100);
     #else
     while (!Serial) {}
     #endif
@@ -404,8 +422,11 @@ void loop() {
     //Wifi
     showWiFiStatus();
 
-    // Display + keyboard polling (T-LoraPager only)
+    // Display polling
     #ifdef LILYGO_T_LORA_PAGER
+    displayUpdateLoop();
+    #endif
+    #ifdef SEEED_SENSECAP_INDICATOR
     displayUpdateLoop();
     #endif
 
