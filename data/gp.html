@@ -296,6 +296,7 @@
                 //Init
                 drawClock(new Date(0));
                 let okSound = new Audio("ok.wav");
+                loadChannelFlags();
                 initUI();
                 setUI( Cookie.get("ui", "monitor") );
 

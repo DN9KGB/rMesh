@@ -2,6 +2,8 @@
 
 ## [v1.0.29]
 
+- NEU: Gruppen stummschalten (Mute) – Nachrichten werden weiterhin angezeigt, lösen aber keinen Sound oder Ungelesen-Badge aus. Gilt für WebUI Desktop, WebUI Mobile und Display-Geräte (T-LoraPager, SenseCAP Indicator).
+- NEU: Sammelgruppe – ein Channel-Tab (Desktop-WebUI) bzw. eine Gruppe (Mobile, Display) kann als Sammelgruppe definiert werden. Dort landen automatisch Nachrichten von Gruppen, die per Name eingetragen wurden und keinen eigenen Tab/Slot haben – sie erscheinen nicht mehr in „all". Einstellung über Doppelklick auf den Channel-Button (Desktop) bzw. Langdruck auf den Gruppen-Tab (Mobile) bzw. Gruppenmenü (Display).
 - FIX: Nachrichten wurden weitergeleitet, obwohl der eigene Node das Ziel war – die Weiterleiten-Bedingung prüfte `tf.dstCall`/`tf.hopCount` statt `f.dstCall`/`f.hopCount`; `tf` war zu diesem Zeitpunkt noch nicht befüllt und enthielt Leer- oder Altwerte (Issue #6)
 - NEU: Alle WebUI-Einstellungen sind jetzt auch über die serielle Konsole setzbar – neue Befehle: `call`, `pos`, `ntp`, `op`, `bw`, `sf`, `cr`, `pl`, `sw`, `rep`, `mhm`, `mhp`, `mht`, `udp` (Issue #5)
 - NEU: WebUI-Passwort über die serielle Konsole setzbar/löschbar: `webpw <passwort>` bzw. `webpw -`

@@ -112,26 +112,26 @@ function showMessages(parseAll) {
 
 
         //Nachrichten zuordnen (Gruppen)
-        for (var key in guiSettings.groups) { 
+        for (var key in guiSettings.groups) {
             const groupName  = guiSettings.groups[key].name;
             if ((groupName == m.dstGroup) && (m.dstCall == "")) {
                 found = true;
-                addBubble(
-                    css, 
-                    titel, 
-                    hopCount + " " + dateString,
-                    getColorForName(m.srcCall), 
-                    msg, 
-                    "group_" + groupName
-                );   
-                //Wenn Browser Focus hat und Gruppe angezeigt wird -> als gelesen merkieren
-                if ((document.getElementById("group_" + groupName).classList.contains("active")) && focus) {m.read = true;}
-                //Wenn Mute, dann als gelesen markieren
-                if (guiSettings.groups[key].mute == true) {m.read = true;};
-                //Wenn nicht gelesen, dann Gruppe als ungelesen kennzeichen
-                if (m.read == false) { guiSettings.groups[key].read = false; sound = true;}
+                const inSammel  = guiSettings.groups[key].inSammel === true;
+                const sammelName = guiSettings.sammelName || "";
+                if (inSammel && sammelName) {
+                    // Sammelgruppe: Nachricht umleiten, keine Notification
+                    addBubble(css, titel, hopCount + " " + dateString, getColorForName(m.srcCall), msg, "group_" + sammelName);
+                    m.read = true;
+                } else {
+                    addBubble(css, titel, hopCount + " " + dateString, getColorForName(m.srcCall), msg, "group_" + groupName);
+                    //Wenn Browser Focus hat und Gruppe angezeigt wird -> als gelesen merkieren
+                    if ((document.getElementById("group_" + groupName).classList.contains("active")) && focus) {m.read = true;}
+                    //Wenn Mute, dann als gelesen markieren
+                    if (guiSettings.groups[key].mute == true) {m.read = true;};
+                    //Wenn nicht gelesen, dann Gruppe als ungelesen kennzeichen
+                    if (m.read == false) { guiSettings.groups[key].read = false; sound = true;}
+                }
             }
-
         }
 
         //Direkte Nachrichten empfangen

@@ -5,6 +5,29 @@ var baseURL = "";
 var gateway = "";
 var init = false;
 
+// Mute und Sammelgruppe pro Channel (gespeichert als Cookies)
+// channelMuted[i] = true → kein Sound/Badge für Channel i
+// channelSammel   = Channel-Index 3-10 der als Sammelgruppe dient (0 = keine)
+// sammelGroups    = Array von Gruppen-Namen-Strings, die in die Sammelgruppe geleitet werden
+var channelMuted  = new Array(11).fill(false);
+var channelSammel = 0;
+var sammelGroups  = [];
+
+function loadChannelFlags() {
+    channelSammel = parseInt(Cookie.get("chSamCol") || "0");
+    for (let i = 1; i <= 10; i++) {
+        channelMuted[i] = Cookie.get("chMute" + i) === "1";
+    }
+    try { sammelGroups = JSON.parse(Cookie.get("chSamGrps") || "[]"); } catch(e) { sammelGroups = []; }
+}
+function saveChannelFlags() {
+    Cookie.set("chSamCol", String(channelSammel));
+    for (let i = 1; i <= 10; i++) {
+        Cookie.set("chMute" + i, channelMuted[i] ? "1" : "0");
+    }
+    Cookie.set("chSamGrps", JSON.stringify(sammelGroups));
+}
+
 // ── Auth-State ────────────────────────────────────────────────────────────────
 var authRequired = false;
 var authNonce    = "";
@@ -468,10 +491,16 @@ function showMessages(parseAll = false) {
             if ((m.dstGroup == Cookie.get("channel" + i)) && (m.dstCall == "") && (found == false)) {
                 found = true;
                 document.getElementById("channel" + i).innerHTML += msg;
-                if (!parseAll) {channels[i] = true;}
-                sound = 1;
+                if (!parseAll && !channelMuted[i]) { channels[i] = true; sound = 1; }
             }
-        }        
+        }
+
+        //Sammelgruppe: Nachrichten von definierten Gruppen ohne eigenen Tab
+        if (found == false && m.dstGroup && channelSammel > 0 && sammelGroups.includes(m.dstGroup)) {
+            found = true;
+            document.getElementById("channel" + channelSammel).innerHTML += msg;
+            // keine Notification
+        }
 
         //Nachrichten, die ich gesendet habe -> Channel 2
         if ((m.srcCall == document.getElementById("settingsMycall").value) && (m.dstGroup == "") && (found == false)) {

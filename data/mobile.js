@@ -142,46 +142,87 @@ function buildMenu() {
     );    
     createMainSection("group_all");
     //Gruppen hinzufügen
-    for (var key in guiSettings.groups) { 
-        const groupName  = guiSettings.groups[key].name; 
+    for (var key in guiSettings.groups) {
+        const groupName  = guiSettings.groups[key].name;
+        const isSammel   = (guiSettings.sammelName === groupName);
+        const inSammel   = guiSettings.groups[key].inSammel === true;
         //Main Section erzeugen
         createMainSection("group_" + groupName);
+        //Label
+        let displayLabel = groupName;
+        if (isSammel)       displayLabel += " 📥";
+        else if (inSammel)  displayLabel += " ↪";
+        //Long-Press Auswahl je nach Gruppentyp
+        let lpChoices;
+        if (isSammel) {
+            lpChoices = ["Quellen anzeigen", "Sammelgruppe aufheben", "delete"];
+        } else if (inSammel) {
+            lpChoices = ["aus Sammelgruppe", "delete"];
+        } else {
+            lpChoices = guiSettings.sammelName
+                ? ["→ Sammelgruppe", "Als Sammelgruppe setzen", "mute", "unmute", "delete"]
+                : ["Als Sammelgruppe setzen", "mute", "unmute", "delete"];
+        }
         //Menüeinträge hinzu
         menuItems.push(
-            { 
-                label: groupName,
+            {
+                label: displayLabel,
                 mute:  guiSettings.groups[key].mute,
                 action: () => {
                     showContent("group_" + groupName, groupName, groupName, true);
                     document.getElementById("group_" + groupName).scrollTo({top: document.getElementById("group_" + groupName).scrollHeight });
                 },
                 longPressAction: () => {
-                    //Gruppe löschen
-                     showSelectionModal("Group Actions", "",   ["delete", "mute", "unmute"]).then(function(choice) {
+                    showSelectionModal("Group Actions", "", lpChoices).then(function(choice) {
                         if (choice === "delete") {
-                            var newGroups = []; 
-                            for (var i = 0; i < guiSettings.groups.length; i++) { 
-                                if (guiSettings.groups[i].name !== groupName) { newGroups.push(guiSettings.groups[i]); } 
-                            } 
-                            guiSettings.groups = newGroups;
+                            if (guiSettings.sammelName === groupName) {
+                                guiSettings.sammelName = "";
+                                for (var i = 0; i < guiSettings.groups.length; i++) guiSettings.groups[i].inSammel = false;
+                            }
+                            guiSettings.groups = guiSettings.groups.filter(g => g.name !== groupName);
                             showMessages(true);
                             showContent("group_all", "all");
-                        }  
+                        }
+                        if (choice === "Als Sammelgruppe setzen") {
+                            guiSettings.sammelName = groupName;
+                            buildMenu();
+                        }
+                        if (choice === "Sammelgruppe aufheben") {
+                            guiSettings.sammelName = "";
+                            for (var i = 0; i < guiSettings.groups.length; i++) guiSettings.groups[i].inSammel = false;
+                            buildMenu();
+                        }
+                        if (choice === "→ Sammelgruppe") {
+                            for (var i = 0; i < guiSettings.groups.length; i++) {
+                                if (guiSettings.groups[i].name === groupName) { guiSettings.groups[i].inSammel = true; break; }
+                            }
+                            showMessages(true);
+                        }
+                        if (choice === "aus Sammelgruppe") {
+                            for (var i = 0; i < guiSettings.groups.length; i++) {
+                                if (guiSettings.groups[i].name === groupName) { guiSettings.groups[i].inSammel = false; break; }
+                            }
+                            showMessages(true);
+                        }
+                        if (choice === "Quellen anzeigen") {
+                            const sources = guiSettings.groups.filter(g => g.inSammel).map(g => g.name).join(", ") || "(keine)";
+                            showModal("Sammelgruppe: " + groupName, "Quellen: " + sources, "", false);
+                        }
                         if (choice === "mute") {
-                            for (var i = 0; i < guiSettings.groups.length; i++) { 
-                                if (guiSettings.groups[i].name == groupName) { guiSettings.groups[i].mute = true; } 
-                            }                             
-                            buildMenu();                         
-                        }                       
+                            for (var i = 0; i < guiSettings.groups.length; i++) {
+                                if (guiSettings.groups[i].name === groupName) { guiSettings.groups[i].mute = true; break; }
+                            }
+                            buildMenu();
+                        }
                         if (choice === "unmute") {
-                            for (var i = 0; i < guiSettings.groups.length; i++) { 
-                                if (guiSettings.groups[i].name == groupName) { guiSettings.groups[i].mute = false; } 
-                            }    
-                            buildMenu();                         
-                        }                       
+                            for (var i = 0; i < guiSettings.groups.length; i++) {
+                                if (guiSettings.groups[i].name === groupName) { guiSettings.groups[i].mute = false; break; }
+                            }
+                            buildMenu();
+                        }
                     });
-                }     
-            }            
+                }
+            }
         );
     }
     menuItems.push(...[
@@ -192,8 +233,9 @@ function buildMenu() {
                 if (name) {
                     name = name.trim();
                     const newGroup = {
-                        name: name, 
-                        read: true};
+                        name: name,
+                        read: true,
+                        inSammel: false};
                     guiSettings.groups.push(newGroup);
                     showMessages(true);
                     showContent("group_" + name, name, name, true);
@@ -371,20 +413,26 @@ function loadGuiSettings() {
         try {
             guiSettings = JSON.parse(savedData);
             guiSettings.dm = [];
+            // Migration: neue Felder mit Defaults befüllen
+            if (!guiSettings.sammelName) guiSettings.sammelName = "";
+            for (var i = 0; i < guiSettings.groups.length; i++) {
+                if (guiSettings.groups[i].inSammel === undefined) guiSettings.groups[i].inSammel = false;
+            }
             return;
         } catch (e) {
             console.error("Fehler beim Laden der Settings aus dem localStorage", e);
         }
     }
     // Fallback: Deine gewünschten Standardwerte, falls noch nie etwas gespeichert wurde
-    guiSettings = { 
-        groups: [ 
-            { name: "Herzog", read: false }, 
-            { name: "Wetter", read: false }, 
-            { name: "Verkehr", read: false }
-        ], 
-        dm: [], 
-        update: 0, 
+    guiSettings = {
+        groups: [
+            { name: "Herzog", read: false, inSammel: false },
+            { name: "Wetter", read: false, inSammel: false },
+            { name: "Verkehr", read: false, inSammel: false }
+        ],
+        dm: [],
+        sammelName: "",
+        update: 0,
         content: {content: "group_all", title: "all", dst: "", group: true}
     };
 }
