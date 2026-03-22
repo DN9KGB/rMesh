@@ -184,12 +184,42 @@ void loadSettings() {
     settings.wifiDNS      = IPAddress(settings.wifiDNS[0], settings.wifiDNS[1], settings.wifiDNS[2], settings.wifiDNS[3]);
     settings.wifiBrodcast = IPAddress(settings.wifiBrodcast[0], settings.wifiBrodcast[1], settings.wifiBrodcast[2], settings.wifiBrodcast[3]);
 
-    //Defaults für ext. Settings
+    //Defaults für ext. Settings / Migration alter UDP-Peer-Daten
     if (extSettingsLen != sizeof(extSettings)) {
-        Serial.println("Lade Default-extSettings");
-        extSettings.maxHopMessage = 15;
-        extSettings.maxHopPosition = 1;
-        extSettings.maxHopTelemetry = 3;
+        // Altes Format: 3 maxHop-Bytes + 5×16 IP-Strings + 5 legacy-Flags = 88 Bytes
+        const size_t OLD_EXT_SIZE = 3 + 5 * 16 + 5;
+        size_t existingPeers = prefs.getBytesLength("udpPeers");
+        if (extSettingsLen == OLD_EXT_SIZE && existingPeers == 0) {
+            Serial.println("Migriere UDP-Peers aus altem ExtSettings-Format...");
+            uint8_t* oldBuf = new uint8_t[OLD_EXT_SIZE];
+            prefs.getBytes("extSettings", oldBuf, OLD_EXT_SIZE);
+            extSettings.maxHopMessage   = oldBuf[0];
+            extSettings.maxHopPosition  = oldBuf[1];
+            extSettings.maxHopTelemetry = oldBuf[2];
+            for (int i = 0; i < 5; i++) {
+                const char* ip = (const char*)(oldBuf + 3 + i * 16);
+                if (ip[0] != '\0' && strcmp(ip, "0.0.0.0") != 0) {
+                    IPAddress addr;
+                    if (addr.fromString(ip)) {
+                        bool legacy = oldBuf[3 + 5 * 16 + i] != 0;
+                        udpPeers.push_back(addr);
+                        udpPeerLegacy.push_back(legacy);
+                        udpPeerEnabled.push_back(true);
+                        Serial.printf("  Peer migriert: %s%s\n", ip, legacy ? " [legacy]" : "");
+                    }
+                }
+            }
+            delete[] oldBuf;
+            if (!udpPeers.empty()) {
+                saveUdpPeers();
+                Serial.printf("%u UDP-Peer(s) erfolgreich migriert.\n", (unsigned)udpPeers.size());
+            }
+        } else {
+            Serial.println("Lade Default-extSettings");
+            extSettings.maxHopMessage = 15;
+            extSettings.maxHopPosition = 1;
+            extSettings.maxHopTelemetry = 3;
+        }
         prefs.putBytes("extSettings", &extSettings, sizeof(extSettings));
     }
 
