@@ -168,11 +168,18 @@ function setUI(value) {
     document.getElementById('monitor').scrollTop = document.getElementById("monitor").scrollHeight;
     var globalUnread = false;
     for (let i = 1; i <= 10; i++) {
-        document.getElementById('channel' + i).scrollTop = document.getElementById("channel" + i).scrollHeight
-        //Ungelesene Nachrichten anzeigen
-        if ((channels[i] != false) && (document.hidden)) {globalUnread = true;}
-        if ((channels[i] != false) && (activeChannel != i)) {document.getElementById("channelButton" + i).classList.add('unread');}
+        document.getElementById('channel' + i).scrollTop = document.getElementById("channel" + i).scrollHeight;
+        //Ungelesene Nachrichten anzeigen (nur wenn nicht muted)
+        if ((channels[i] != false) && (document.hidden) && !channelMuted[i]) {globalUnread = true;}
+        if ((channels[i] != false) && (activeChannel != i) && !channelMuted[i]) {document.getElementById("channelButton" + i).classList.add('unread');}
         if (activeChannel == i) {channels[i] = false;}
+        // Mute/Sammelgruppe-Indikatoren im Button-Label
+        if (i > 2) {
+            let label = i + ":" + (Cookie.get("channel" + i) || "........");
+            if (i === channelSammel) label += " 📥";
+            else if (channelMuted[i]) label += " 🔕";
+            document.getElementById("channelButton" + i).innerHTML = label;
+        }
     }      
 
     //Fenstertitel
@@ -210,14 +217,160 @@ function settingsVisibility() {
 }
 
 
+// Gruppen-Einstellungsdialog (Doppelklick auf Channel-Button)
+function showChannelSettings(channelIdx) {
+    document.querySelectorAll('.ch-settings-overlay').forEach(e => e.remove());
+
+    const currentName = Cookie.get("channel" + channelIdx) || "";
+    let localMuted        = channelMuted[channelIdx];
+    let localSammel       = channelSammel;
+    let localSammelGroups = sammelGroups.slice();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'ch-settings-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9998;display:flex;align-items:center;justify-content:center;';
+
+    const dialog = document.createElement('div');
+    dialog.style.cssText = 'background:#222;border:1px solid #555;border-radius:6px;padding:16px 18px;min-width:280px;max-width:340px;font-size:14px;color:#ddd;';
+    dialog.innerHTML = `
+        <div style="font-weight:bold;margin-bottom:12px;">Gruppe ${channelIdx}</div>
+        <div id="chsNameRow">
+            <label style="display:block;margin-bottom:4px;font-size:12px;color:#aaa;">Gruppenname (Ziel)</label>
+            <input id="chsName" type="text" value="${currentName.replace(/"/g,'&quot;')}"
+                   style="width:100%;box-sizing:border-box;padding:5px;background:#333;border:1px solid #666;border-radius:3px;color:#ddd;margin-bottom:12px;">
+        </div>
+        <div id="chsMiddle"></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+            <button id="chsCancel" style="padding:6px 14px;background:#444;border:none;border-radius:4px;color:#ddd;cursor:pointer;">Abbrechen</button>
+            <button id="chsOk" style="padding:6px 14px;background:#4ecca3;border:none;border-radius:4px;color:#111;font-weight:bold;cursor:pointer;">OK</button>
+        </div>`;
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    function mkBtn(label, onclick) {
+        const b = document.createElement('button');
+        b.textContent = label;
+        b.style.cssText = 'padding:5px 10px;background:#444;border:1px solid #666;border-radius:4px;color:#ddd;cursor:pointer;';
+        b.onclick = onclick;
+        return b;
+    }
+
+    function renderSamList(listEl) {
+        listEl.innerHTML = '';
+        if (localSammelGroups.length === 0) {
+            listEl.innerHTML = '<div style="color:#888;font-size:12px;margin-bottom:4px;">(keine)</div>';
+            return;
+        }
+        localSammelGroups.forEach((grp, idx) => {
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:4px;';
+            const lbl = document.createElement('span');
+            lbl.textContent = grp;
+            lbl.style.flex = '1';
+            const del = mkBtn('×', () => { localSammelGroups.splice(idx, 1); renderSamList(listEl); });
+            del.style.padding = '2px 7px';
+            row.appendChild(lbl);
+            row.appendChild(del);
+            listEl.appendChild(row);
+        });
+    }
+
+    function renderMiddle() {
+        const mid = dialog.querySelector('#chsMiddle');
+        mid.innerHTML = '';
+        // Gruppenname-Feld nur anzeigen wenn kein Sammelgruppe-Channel
+        dialog.querySelector('#chsNameRow').style.display = (localSammel === channelIdx) ? 'none' : '';
+
+        if (localSammel === channelIdx) {
+            // Diese Gruppe ist die Sammelgruppe → Filterliste verwalten
+            const hdr = document.createElement('div');
+            hdr.style.cssText = 'font-size:12px;color:#aaa;margin-bottom:6px;';
+            hdr.textContent = 'Gruppen, die hier gesammelt werden:';
+            mid.appendChild(hdr);
+
+            const listEl = document.createElement('div');
+            listEl.id = 'chsSamList';
+            listEl.style.marginBottom = '8px';
+            renderSamList(listEl);
+            mid.appendChild(listEl);
+
+            const addRow = document.createElement('div');
+            addRow.style.cssText = 'display:flex;gap:6px;margin-bottom:10px;';
+            const addInput = document.createElement('input');
+            addInput.type = 'text';
+            addInput.placeholder = 'Gruppenname...';
+            addInput.style.cssText = 'flex:1;padding:4px 6px;background:#333;border:1px solid #666;border-radius:3px;color:#ddd;';
+            addInput.addEventListener('keydown', e => { if (e.key === 'Enter') addGroup(addInput); });
+            const addBtn = mkBtn('+ Hinzufügen', () => addGroup(addInput));
+            addRow.appendChild(addInput);
+            addRow.appendChild(addBtn);
+            mid.appendChild(addRow);
+
+            mid.appendChild(mkBtn('📥 Sammelgruppe aufheben', () => {
+                localSammel = 0;
+                renderMiddle();
+            }));
+        } else {
+            // Normaler Channel → Mute + Als Sammelgruppe
+            const muteRow = document.createElement('div');
+            muteRow.style.marginBottom = '8px';
+            muteRow.appendChild(mkBtn(localMuted ? '🔔 Laut schalten' : '🔕 Stummschalten', () => {
+                localMuted = !localMuted;
+                renderMiddle();
+            }));
+            mid.appendChild(muteRow);
+
+            mid.appendChild(mkBtn('📥 Als Sammelgruppe', () => {
+                localSammel = channelIdx;
+                renderMiddle();
+            }));
+        }
+    }
+
+    function addGroup(input) {
+        const val = input.value.trim();
+        if (val && !localSammelGroups.includes(val)) {
+            localSammelGroups.push(val);
+            const listEl = dialog.querySelector('#chsSamList');
+            if (listEl) renderSamList(listEl);
+        }
+        input.value = '';
+        input.focus();
+    }
+
+    renderMiddle();
+    setTimeout(() => dialog.querySelector('#chsName').focus(), 10);
+
+    function confirm() {
+        if (localSammel !== channelIdx) {
+            Cookie.set("channel" + channelIdx, dialog.querySelector('#chsName').value);
+        } else {
+            Cookie.set("channel" + channelIdx, "");
+        }
+        channelMuted[channelIdx] = localMuted;
+        channelSammel = localSammel;
+        sammelGroups = localSammelGroups;
+        saveChannelFlags();
+        overlay.remove();
+        showMessages(true);
+        setUI(ui);
+    }
+
+    dialog.querySelector('#chsOk').onclick = confirm;
+    dialog.querySelector('#chsCancel').onclick = () => overlay.remove();
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    dialog.querySelector('#chsName').addEventListener('keydown', e => {
+        if (e.key === 'Enter') confirm();
+        if (e.key === 'Escape') overlay.remove();
+    });
+}
+
 function initUI() {
     //Aktionen für Channel Buttons
     for (let i = 1; i <= 10; i++) {
         if (i > 2) {
-            document.getElementById("channelButton" + i).addEventListener("dblclick", async function() {
-                var value = await inputBox("Group Name?");
-                Cookie.set("channel" + i, value);
-                showMessages(true);
+            document.getElementById("channelButton" + i).addEventListener("dblclick", function() {
+                showChannelSettings(i);
             });
         }
 
