@@ -8,7 +8,6 @@
 - NEU: LoRa-Frequenz- und SyncWord-Felder in der WebUI sind jetzt editierbar; bei manuellem Bandwechsel (433↔868 MHz) werden die Band-Defaults automatisch geladen, die eingetippte Frequenz bleibt erhalten
 - NEU: SyncWord ist jetzt manuell setzbar (WebUI, Konsole `sw <hex>`) und wird nicht mehr automatisch aus der Frequenz überschrieben; Band-Presets setzen es weiterhin korrekt
 - FIX: 868-MHz-Preset-Default-TX-Power korrigiert: war 22 dBm, ist jetzt korrekt 27 dBm (500 mW, regulatorisches Maximum)
-- FIX: Serielle Konsole – `password` und `reboot` wurden nach dem Hinzufügen der neuen Befehle nicht mehr erkannt
 
 ## [v1.0.28]
 
