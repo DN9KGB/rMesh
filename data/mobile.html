@@ -109,6 +109,7 @@
             <tr> <td>Sync Word</td> <td><input id="settingsLoraSyncWord" title="Hexadezimal, z.B. 2B oder 12"></td> </tr>
             <tr> <td>Preamble Length</td> <td><input id="settingsLoraPreambleLength"></td> </tr>
             <tr> <td>Repeat Messages</td> <td><input type="checkbox" id="settingsLoraRepeat"></td> </tr>
+            <tr> <td>HF aktiv</td> <td><input type="checkbox" id="settingsLoraEnabled"></td> </tr>
         </table>
         <button class="button" onclick="saveSettings();">save</button>
     </main>
@@ -132,7 +133,8 @@
                     <option value="1">Dev</option>
                 </select>
             </td> </tr>
-            <tr> <td>Installieren</td> <td>
+            <tr> <td>Update</td> <td>
+                <button class="button" onclick="triggerUpdate();">check &amp; install</button>
                 <button class="button" onclick="forceInstall()">force install</button>
             </td> </tr>
             <tr> <td>Password</td> <td><span id="settingsWebPasswordStatus"></span></td> </tr>
@@ -143,7 +145,7 @@
         </table>
         <button class="button" onclick="saveSettings();">save</button>
         <button class="button" onclick="reboot();">reboot</button>
-        <button class="button" onclick="triggerUpdate();">update</button>
+        <button class="button" onclick="shutdown();">shutdown</button>
         <button class="button" onclick="syncTime();">sync browser time</button>
     </main>
 

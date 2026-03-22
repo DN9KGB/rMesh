@@ -386,6 +386,7 @@ function onMessage(event) {
         var chipIdEl = document.getElementById("setupChipId");
         if (chipIdEl) chipIdEl.innerHTML = d.settings.chipId || "";
         document.getElementById("settingsLoraRepeat").checked = d.settings.loraRepeat;
+        document.getElementById("settingsLoraEnabled").checked = d.settings.loraEnabled !== false;
         document.getElementById("settingsUpdateChannel").value = d.settings.updateChannel || 0;
         document.getElementById("settingsLoraMaxMessageLength").innerHTML = d.settings.loraMaxMessageLength + " characters";
         const pwStatus = document.getElementById("settingsWebPasswordStatus");
@@ -598,6 +599,7 @@ function saveSettings() {
     settings["loraSpreadingFactor"] = parseInt(document.getElementById("settingsLoraSpreadingFactor").value);
     settings["loraPreambleLength"] = parseInt(document.getElementById("settingsLoraPreambleLength").value);
     settings["loraRepeat"] = document.getElementById("settingsLoraRepeat").checked;
+    settings["loraEnabled"] = document.getElementById("settingsLoraEnabled").checked;
     settings["updateChannel"] = parseInt(document.getElementById("settingsUpdateChannel").value);
     settings["udpPeers"] = [];
     document.querySelectorAll('#udpPeerList .udpPeerRow').forEach(function(row) {
@@ -611,6 +613,13 @@ function saveSettings() {
 function reboot() {
     showModal("Note", "Neustart wird durchgeführt...", "", false);
     sendWS(JSON.stringify({reboot: true }));
+}
+
+function shutdown() {
+    if (confirm("Gerät wirklich herunterfahren?\n\nNur durch Hardware-Reset (Reset-Button oder Stromtrennung) wieder startbar.")) {
+        showModal("Note", "Gerät wird heruntergefahren...", "", false);
+        sendWS(JSON.stringify({shutdown: true}));
+    }
 }
 
 function triggerUpdate() {

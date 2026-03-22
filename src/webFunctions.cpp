@@ -201,6 +201,7 @@ void startWebServer() {
       if (json["settings"]["maxHopPosition"].is<JsonVariant>()) { extSettings.maxHopPosition = json["settings"]["maxHopPosition"].as<uint8_t>(); }
       if (json["settings"]["maxHopTelemetry"].is<JsonVariant>()) { extSettings.maxHopTelemetry = json["settings"]["maxHopTelemetry"].as<uint8_t>(); }
       if (json["settings"]["updateChannel"].is<JsonVariant>()) { updateChannel = json["settings"]["updateChannel"].as<uint8_t>(); }
+      if (json["settings"]["loraEnabled"].is<JsonVariant>()) { loraEnabled = json["settings"]["loraEnabled"].as<bool>(); }
       saveSettings();
     }
 
@@ -286,6 +287,12 @@ void startWebServer() {
     if (json["reboot"].is<JsonVariant>()) {
       Serial.println("Reboot");
       rebootTimer = 0;
+    }
+
+    //Shutdown
+    if (json["shutdown"].is<JsonVariant>()) {
+      Serial.println("Shutdown");
+      pendingShutdown = true;
     }
 
     //OTA Update (deferred – Aufruf im Main-Loop, nicht im async_tcp-Task)

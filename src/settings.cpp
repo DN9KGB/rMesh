@@ -12,6 +12,7 @@
 Settings settings;
 ExtSettings extSettings;
 uint8_t updateChannel = 0;
+bool loraEnabled = true;
 std::vector<IPAddress> udpPeers;
 std::vector<bool> udpPeerLegacy;
 std::vector<bool> udpPeerEnabled;
@@ -162,6 +163,7 @@ void sendSettings() {
     doc["settings"]["maxHopPosition"] = extSettings.maxHopPosition;
     doc["settings"]["maxHopTelemetry"] = extSettings.maxHopTelemetry;
     doc["settings"]["updateChannel"] = updateChannel;
+    doc["settings"]["loraEnabled"]   = loraEnabled;
     char* jsonBuffer = (char*)malloc(4096);
     size_t len = serializeJson(doc, jsonBuffer, 4096);
     wsBroadcast(jsonBuffer, len);
@@ -178,6 +180,7 @@ void loadSettings() {
     loadPasswordHash();
     prefs.getBytes("config", &settings, sizeof(settings));
     updateChannel = prefs.getUChar("updateChannel", 0);
+    loraEnabled   = prefs.getBool("loraEnabled", true);
     prefs.getBytes("extSettings", &extSettings, sizeof(extSettings));
     size_t storedLen = prefs.getBytesLength("config");
     size_t extSettingsLen = prefs.getBytesLength("extSettings");
@@ -319,6 +322,7 @@ void saveSettings() {
     prefs.putBytes("config", &settings, sizeof(settings));
     prefs.putBytes("extSettings", &extSettings, sizeof(extSettings));
     prefs.putUChar("updateChannel", updateChannel);
+    prefs.putBool("loraEnabled", loraEnabled);
     saveUdpPeers();  // speichert Peers + ruft sendSettings()
     initHal();
 }

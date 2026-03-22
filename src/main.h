@@ -11,6 +11,7 @@ struct MSG {
 
 extern uint32_t rebootTimer;
 extern bool pendingManualUpdate;
+extern bool pendingShutdown;
 extern bool pendingForceUpdate;
 extern uint8_t pendingForceChannel;
 extern uint32_t statusTimer;

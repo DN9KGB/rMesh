@@ -128,6 +128,12 @@
                             <span class="checkmark"></span>
                         </label>
                     </td> </tr>
+                    <tr> <td>HF aktiv:</td> <td>
+                        <label class="retro-checkbox-container">
+                            <input type="checkbox" id="settingsLoraEnabled">
+                            <span class="checkmark"></span>
+                        </label>
+                    </td> </tr>
                     <tr> <td>Max Message Length:</td> <td><span id="settingsLoraMaxMessageLength"></span></td> </tr>
                     <tr> <td>&nbsp;</td> <td>
                         <button class="button" onclick="saveSettings();">save</button>
@@ -147,6 +153,10 @@
                             <option value="1">Dev</option>
                         </select>
                     </td> </tr>
+                    <tr> <td>Update:</td> <td>
+                        <button class="button" id="settingsUpdate">check &amp; install</button>
+                        <button class="button" id="settingsForceInstall">force install</button>
+                    </td> </tr>
                     <tr> <td colspan="2" style="padding-top:12px; padding-bottom:4px; color:#4ecca3; font-size:0.8rem; letter-spacing:1px; text-transform:uppercase;">Web-Interface Passwort</td> </tr>
                     <tr> <td>Status:</td> <td><span id="settingsWebPasswordStatus">–</span></td> </tr>
                     <tr> <td>Neues Passwort:</td> <td><input class="input-box" type="password" id="settingsWebPassword" placeholder="(leer = nicht ändern)" autocomplete="new-password"></td> </tr>
@@ -159,8 +169,7 @@
                         <button class="button" id="settingsSave" onclick="saveSettings();">save</button>
                         <button class="button" id="settingsDeleteMessages">delete messages</button>
                         <button class="button" id="settingsReboot">reboot</button>
-                        <button class="button" id="settingsUpdate">update</button>
-                        <button class="button" id="settingsForceInstall">force install</button>
+                        <button class="button" id="settingsShutdown">shutdown</button>
                     </td> </tr>
                 </table>
             </div>
@@ -329,6 +338,13 @@
 			document.getElementById("settingsReboot").addEventListener("click", function() {
 				msgBox("Neustart wird durchgeführt...");
 				sendWS(JSON.stringify({reboot: true }));
+			});
+
+			document.getElementById("settingsShutdown").addEventListener("click", function() {
+				if (confirm("Gerät wirklich herunterfahren?\n\nNur durch Hardware-Reset (Reset-Button oder Stromtrennung) wieder startbar.")) {
+					msgBox("Gerät wird heruntergefahren...");
+					sendWS(JSON.stringify({shutdown: true}));
+				}
 			});
 
 			document.getElementById("settingsUpdate").addEventListener("click", function() {

@@ -53,5 +53,6 @@ extern Settings settings;
 extern ExtSettings extSettings;
 extern Preferences prefs;
 extern uint8_t updateChannel; // 0=release (default), 1=dev
+extern bool loraEnabled;      // HF-Sender aktiv (false = LoRa komplett deaktiviert)
 extern bool loraReady;  // true = HF-Modul initialisiert und betriebsbereit
 

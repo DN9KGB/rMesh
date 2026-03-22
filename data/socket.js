@@ -200,6 +200,7 @@ function onMessage(event) {
         document.getElementById("version").innerHTML = d.settings.name + " " + d.settings.version;
         document.getElementById("myCall").innerHTML = d.settings.mycall;
         document.getElementById("settingsLoraRepeat").checked = d.settings.loraRepeat;
+        document.getElementById("settingsLoraEnabled").checked = d.settings.loraEnabled !== false;
         document.getElementById("settingsUpdateChannel").value = d.settings.updateChannel || 0;
         document.getElementById("settingsLoraMaxMessageLength").innerHTML = d.settings.loraMaxMessageLength + " characters"; 
         settings.titel = settings.name + " - " + settings.mycall;
@@ -442,6 +443,7 @@ function saveSettings() {
     s["loraSpreadingFactor"] = parseInt(document.getElementById("settingsLoraSpreadingFactor").value);
     s["loraPreambleLength"] = parseInt(document.getElementById("settingsLoraPreambleLength").value);
     s["loraRepeat"] = document.getElementById("settingsLoraRepeat").checked;
+    s["loraEnabled"] = document.getElementById("settingsLoraEnabled").checked;
     s["updateChannel"] = parseInt(document.getElementById("settingsUpdateChannel").value);
     s["udpPeers"] = [];
     document.querySelectorAll('#udpPeerList .udpPeerRow').forEach(function(row) {

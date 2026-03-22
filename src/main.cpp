@@ -52,6 +52,7 @@ uint32_t statusTimer = 0;
 uint32_t rebootTimer = 0xFFFFFFFF;
 uint8_t currentRetry = 0;
 bool pendingManualUpdate = false;
+bool pendingShutdown = false;
 bool pendingForceUpdate = false;
 uint8_t pendingForceChannel = 0;
 uint32_t updateCheckTimer = 60 * 60 * 1000;  //Erster Check nach 1 Stunde
@@ -511,10 +512,14 @@ void loop() {
     	for (int i = 0; i < txBuffer.size(); i++) {
     		//Prüfen, ob Frame gesendet werden muss
     		if ((millis() > txBuffer[i].transmitMillis) && ((txBuffer[i].retry <= 1) || (txBuffer[i].syncFlag == true))) {
-    			//Frame senden
-                switch (txBuffer[i].port){
-                    case 0: transmitFrame(txBuffer[i]); break;
-                    case 1: sendUDP(txBuffer[i]); break;
+    			//Frame senden (LoRa überspringen wenn HF deaktiviert)
+                if (txBuffer[i].port == 0 && !loraEnabled) {
+                    txBuffer[i].retry = 0; // Frame verwerfen
+                } else {
+                    switch (txBuffer[i].port){
+                        case 0: transmitFrame(txBuffer[i]); break;
+                        case 1: sendUDP(txBuffer[i]); break;
+                    }
                 }
                 //Retrys runterzählen
                 if (txBuffer[i].retry > 0) {txBuffer[i].retry --;}
@@ -567,6 +572,9 @@ void loop() {
 
     //Reboot
     if (millis() > rebootTimer) {ESP.restart();}
+
+    //Shutdown (Deep-Sleep ohne Wakeup = maximale Stromsparung)
+    if (pendingShutdown) { esp_deep_sleep_start(); }
 
     //Update Check
     if (millis() > updateCheckTimer) {

@@ -14,6 +14,8 @@
 - NEU: Sendreihenfolge – WiFi wird vor LoRa in den Sendepuffer eingereiht, da UDP deutlich schneller übertragen wird
 - NEU: UDP-Peer-Verfügbarkeit wird regelmäßig geprüft – beim Senden eines Announces werden alle WiFi-Peers auf „nicht verfügbar" gesetzt und erst durch den eintreffenden Announce-ACK wieder aktiviert; offline gegangene Nodes werden so spätestens nach einem Announce-Zyklus (~10 Min) erkannt
 - NEU: Rufzeichen je UDP-Peer wird automatisch gelernt – sobald eine Node einen Frame sendet, wird ihr Rufzeichen der IP-Adresse zugeordnet und in der WebUI (Desktop & Mobile) bei den UDP-Peers angezeigt
+- NEU: HF-Deaktivierungsschalter in der WebUI (Desktop & Mobile) – ist HF deaktiviert, werden alle LoRa-Frames still verworfen und es wird garantiert nichts über HF gesendet; Zustand wird persistent gespeichert
+- NEU: Shutdown-Button in der WebUI (Desktop & Mobile) mit Sicherheitsabfrage – versetzt das Gerät in Tiefschlaf (kein Senden mehr); Aufwecken nur per Hardware-Reset oder Stromtrennung; nützlich für Akku-Geräte ohne Antenne
 
 ## [v1.0.29a]
 
