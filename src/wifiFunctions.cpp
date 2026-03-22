@@ -116,13 +116,22 @@ void checkForUpdates() {
     callParam += PIO_ENV_NAME;
     httpUpdate.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
 
-    // Frischer Client für httpUpdate (der alte ist nach dem Versionscheck dirty)
-    WiFiClientSecure updateClient;
-    updateClient.setInsecure();
-
-    // LittleFS
-    t_httpUpdate_return spiffsResult = httpUpdate.updateSpiffs(updateClient,
-        "https://www.rMesh.de/update.php?file=" PIO_ENV_NAME "_littlefs.bin" + callParam);
+    // LittleFS – bis zu 3 Versuche
+    String spiffsUrl = "https://www.rMesh.de/update.php?file=" PIO_ENV_NAME "_littlefs.bin" + callParam;
+    t_httpUpdate_return spiffsResult = HTTP_UPDATE_FAILED;
+    for (int attempt = 1; attempt <= 3; attempt++) {
+        if (attempt > 1) {
+            char retryMsg[64];
+            snprintf(retryMsg, sizeof(retryMsg), "LittleFS-Update Versuch %d/3...", attempt);
+            sendUpdateStatus(retryMsg);
+            delay(3000);
+        }
+        WiFiClientSecure spiffsClient;
+        spiffsClient.setInsecure();
+        spiffsClient.setTimeout(30000);
+        spiffsResult = httpUpdate.updateSpiffs(spiffsClient, spiffsUrl);
+        if (spiffsResult != HTTP_UPDATE_FAILED) break;
+    }
     if (spiffsResult == HTTP_UPDATE_FAILED) {
         String errMsg = "Update fehlgeschlagen (LittleFS): " + httpUpdate.getLastErrorString();
         sendUpdateStatus(errMsg.c_str());
@@ -136,8 +145,22 @@ void checkForUpdates() {
         sendOtaLog("update_success", VERSION, newVersion.c_str(), "");
     });
 
-    t_httpUpdate_return fwResult = httpUpdate.update(updateClient,
-        "https://www.rMesh.de/update.php?file=" PIO_ENV_NAME "_firmware.bin" + callParam);
+    // Firmware – bis zu 3 Versuche
+    String fwUrl = "https://www.rMesh.de/update.php?file=" PIO_ENV_NAME "_firmware.bin" + callParam;
+    t_httpUpdate_return fwResult = HTTP_UPDATE_FAILED;
+    for (int attempt = 1; attempt <= 3; attempt++) {
+        if (attempt > 1) {
+            char retryMsg[64];
+            snprintf(retryMsg, sizeof(retryMsg), "Firmware-Update Versuch %d/3...", attempt);
+            sendUpdateStatus(retryMsg);
+            delay(3000);
+        }
+        WiFiClientSecure fwClient;
+        fwClient.setInsecure();
+        fwClient.setTimeout(30000);
+        fwResult = httpUpdate.update(fwClient, fwUrl);
+        if (fwResult != HTTP_UPDATE_FAILED) break;
+    }
     // Nur erreicht wenn fehlgeschlagen (Erfolg = Neustart)
     if (fwResult == HTTP_UPDATE_FAILED) {
         String errMsg = "Update fehlgeschlagen (Firmware): " + httpUpdate.getLastErrorString();
