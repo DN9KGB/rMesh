@@ -198,7 +198,6 @@ void loadSettings() {
         const size_t OLD_EXT_SIZE = 3 + 5 * 16 + 5;
         size_t existingPeers = prefs.getBytesLength("udpPeers");
         if (extSettingsLen == OLD_EXT_SIZE && existingPeers == 0) {
-            Serial.println("Migriere UDP-Peers aus altem ExtSettings-Format...");
             uint8_t* oldBuf = new uint8_t[OLD_EXT_SIZE];
             prefs.getBytes("extSettings", oldBuf, OLD_EXT_SIZE);
             extSettings.maxHopMessage   = oldBuf[0];
@@ -214,17 +213,14 @@ void loadSettings() {
                         udpPeerLegacy.push_back(legacy);
                         udpPeerEnabled.push_back(true);
                         udpPeerCall.push_back("");
-                        Serial.printf("  Peer migriert: %s%s\n", ip, legacy ? " [legacy]" : "");
                     }
                 }
             }
             delete[] oldBuf;
             if (!udpPeers.empty()) {
                 saveUdpPeers();
-                Serial.printf("%u UDP-Peer(s) erfolgreich migriert.\n", (unsigned)udpPeers.size());
             }
         } else {
-            Serial.println("Lade Default-extSettings");
             extSettings.maxHopMessage = 15;
             extSettings.maxHopPosition = 1;
             extSettings.maxHopTelemetry = 3;
@@ -252,12 +248,10 @@ void loadSettings() {
             udpPeerCall.push_back("");
         }
         delete[] buf;
-        Serial.printf("%u UDP-Peer(s) geladen.\n", (unsigned)udpPeers.size());
     }
 
     //Defaults laden
     if (storedLen != sizeof(settings)) {
-        Serial.println("Lade Default-Settings");
         strcpy(settings.wifiSSID, "");
         strcpy(settings.wifiPassword, "");
         strcpy(settings.ntpServer, "de.pool.ntp.org");

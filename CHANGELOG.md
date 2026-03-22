@@ -1,5 +1,9 @@
 # Changelog
 
+## [v1.0.29c]
+
+- FIX: OTA-Update von v1.0.29a → v1.0.29b schlug auf LILYGO T3 LoRa32 V1.6.1 mit „Not Enough Space" fehl – Firmware war 749 Bytes zu groß für die alte 1.280-KB-Partition; nicht benötigte Serial-Debug-Ausgaben entfernt (Trim-Task-Status, UDP-Peer-Migration, WiFi-Scan-Tabelle, Topologie-Reporting); Firmware um 1.252 Bytes reduziert und damit OTA-Update-Pfad auf Geräten mit alter Partitionstabelle wieder freigegeben
+
 ## [v1.0.29b]
 
 - FIX: OTA-Update schlug in manchen Netzwerken mit "read Timeout" fehl – LittleFS- und Firmware-Download werden jetzt bei Fehler bis zu 3x wiederholt
