@@ -51,11 +51,10 @@
             <tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td>Subnet</td> <td> <input id='settingsWifiNetMask'> </td> </tr>
             <tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td>Gateway</td> <td> <input id='settingsWifiGateway'> </td> </tr>
             <tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td>DNS</td> <td> <input id='settingsWifiDNS'> </td> </tr>
-            <tr> <td> UDP-Peer 1 </td> <td> <input id='settingsUDPPeer0'> </td> </tr>
-            <tr> <td> UDP-Peer 2 </td> <td> <input id='settingsUDPPeer1'> </td> </tr>
-            <tr> <td> UDP-Peer 3 </td> <td> <input id='settingsUDPPeer2'> </td> </tr>
-            <tr> <td> UDP-Peer 4 </td> <td> <input id='settingsUDPPeer3'> </td> </tr>
-            <tr> <td> UDP-Peer 5 </td> <td> <input id='settingsUDPPeer4'> </td> </tr>
+            <tr> <td> UDP-Peers </td> <td>
+                <div id="udpPeerList"></div>
+                <button onclick="addUdpPeer()">+ Peer</button>
+            </td> </tr>
             <tr class="AP_MODE_ENABLED"> <td>NTP-Server:</td> <td><input id="settingsNTP"></td> </tr>
         </table>
         <button class="button" onclick="saveSettings();">save</button>
@@ -73,7 +72,7 @@
                     </select>
                 </td>
             </tr>
-            <tr> <td>Frequency</td> <td><input id="settingsLoraFrequency" readonly style="background:#1a1a2e;color:#aaa;cursor:not-allowed;" title="Wird über Preset gesetzt"></td> </tr>
+            <tr> <td>Frequency</td> <td><input id="settingsLoraFrequency" onchange="onFrequencyChange()" title="Frequenz in MHz – bei Bandwechsel werden Standardwerte geladen"></td> </tr>
             <tr> <td>Output Power</td> <td><input id="settingsLoraOutputPower"></td> </tr>
             <tr> <td>Bandwidth</td> <td>
                 <select id='settingsLoraBandwidth'>
@@ -107,7 +106,7 @@
                     <option value="12">12 - Maximum range</option>
                 </select>
             </td> </tr>
-            <tr> <td>Sync Word</td> <td><input id="settingsLoraSyncWord" readonly style="background:#1a1a2e;color:#555;cursor:not-allowed;" title="Wird automatisch aus der Frequenz abgeleitet"></td> </tr>
+            <tr> <td>Sync Word</td> <td><input id="settingsLoraSyncWord" title="Hexadezimal, z.B. 2B oder 12"></td> </tr>
             <tr> <td>Preamble Length</td> <td><input id="settingsLoraPreambleLength"></td> </tr>
             <tr> <td>Repeat Messages</td> <td><input type="checkbox" id="settingsLoraRepeat"></td> </tr>
         </table>
@@ -135,6 +134,7 @@
         </table>
         <button class="button" onclick="saveSettings();">save</button>
         <button class="button" onclick="reboot();">reboot</button>
+        <button class="button" onclick="triggerUpdate();">update</button>
         <button class="button" onclick="syncTime();">sync browser time</button>
     </main>
 

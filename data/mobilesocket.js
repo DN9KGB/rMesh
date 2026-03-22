@@ -112,26 +112,26 @@ function showMessages(parseAll) {
 
 
         //Nachrichten zuordnen (Gruppen)
-        for (var key in guiSettings.groups) { 
+        for (var key in guiSettings.groups) {
             const groupName  = guiSettings.groups[key].name;
             if ((groupName == m.dstGroup) && (m.dstCall == "")) {
                 found = true;
-                addBubble(
-                    css, 
-                    titel, 
-                    hopCount + " " + dateString,
-                    getColorForName(m.srcCall), 
-                    msg, 
-                    "group_" + groupName
-                );   
-                //Wenn Browser Focus hat und Gruppe angezeigt wird -> als gelesen merkieren
-                if ((document.getElementById("group_" + groupName).classList.contains("active")) && focus) {m.read = true;}
-                //Wenn Mute, dann als gelesen markieren
-                if (guiSettings.groups[key].mute == true) {m.read = true;};
-                //Wenn nicht gelesen, dann Gruppe als ungelesen kennzeichen
-                if (m.read == false) { guiSettings.groups[key].read = false; sound = true;}
+                const inSammel  = guiSettings.groups[key].inSammel === true;
+                const sammelName = guiSettings.sammelName || "";
+                if (inSammel && sammelName) {
+                    // Sammelgruppe: Nachricht umleiten, keine Notification
+                    addBubble(css, titel, hopCount + " " + dateString, getColorForName(m.srcCall), msg, "group_" + sammelName);
+                    m.read = true;
+                } else {
+                    addBubble(css, titel, hopCount + " " + dateString, getColorForName(m.srcCall), msg, "group_" + groupName);
+                    //Wenn Browser Focus hat und Gruppe angezeigt wird -> als gelesen merkieren
+                    if ((document.getElementById("group_" + groupName).classList.contains("active")) && focus) {m.read = true;}
+                    //Wenn Mute, dann als gelesen markieren
+                    if (guiSettings.groups[key].mute == true) {m.read = true;};
+                    //Wenn nicht gelesen, dann Gruppe als ungelesen kennzeichen
+                    if (m.read == false) { guiSettings.groups[key].read = false; sound = true;}
+                }
             }
-
         }
 
         //Direkte Nachrichten empfangen
@@ -397,9 +397,7 @@ function onMessage(event) {
 
         //UDP Peers
         if (d.settings.udpPeers) {
-            d.settings.udpPeers.forEach(function(p, index) {
-                document.getElementById("settingsUDPPeer" + index).value = p.ip[0] + "." + p.ip[1] + "." + p.ip[2] + "." + p.ip[3];                
-            });
+            renderUdpPeers(d.settings.udpPeers);
         }
 
         if (init == false) {
@@ -462,6 +460,11 @@ function onMessage(event) {
         }
     }
 
+    //Update-Status
+    if (d.updateStatus !== undefined) {
+        showModal("Update", d.updateStatus, "", false);
+    }
+
     //WiFi Scan
     if (d.wifiScan) {
         const select = document.getElementById('settingsSSIDList');
@@ -492,7 +495,7 @@ const LORA_PRESETS = {
         bandwidth:       125,      // kHz – passt in 250-kHz-Sub-Band, kürzere ToA
         spreadingFactor: 7,
         codingRate:      5,        // CR 4/5 – effizienter bei 10%-Duty-Cycle
-        outputPower:     22,       // dBm – Default 868 MHz Public
+        outputPower:     27,       // dBm – Default 868 MHz Public (500 mW, max. erlaubt)
         preambleLength:  10,
         syncWord:        '12',     // PUBLIC_SYNCWORD (Info, wird von Firmware gesetzt)
     }
@@ -508,6 +511,54 @@ function applyLoraPreset(band) {
     document.getElementById('settingsLoraOutputPower').value     = p.outputPower;
     document.getElementById('settingsLoraPreambleLength').value  = p.preambleLength;
     document.getElementById('settingsLoraSyncWord').value        = p.syncWord;
+    document.getElementById('loraPreset').value                  = band;
+}
+
+function onFrequencyChange() {
+    const newFreq = parseFloat(document.getElementById('settingsLoraFrequency').value);
+    if (isNaN(newFreq) || newFreq === 0) return;
+
+    let newBand = null;
+    if (newFreq >= 430 && newFreq <= 440)        newBand = '433';
+    else if (newFreq >= 869.4 && newFreq <= 869.65) newBand = '868';
+    if (!newBand) return;
+
+    const currentBand = document.getElementById('loraPreset').value;
+    if (newBand !== currentBand) {
+        applyLoraPreset(newBand);
+        // Eingetippte Frequenz beibehalten, nur Restparameter aus Preset laden
+        document.getElementById('settingsLoraFrequency').value = newFreq;
+    }
+}
+
+function renderUdpPeers(peers) {
+    var list = document.getElementById('udpPeerList');
+    if (!list) return;
+    list.innerHTML = '<table class="udpPeerTable">'
+        + '<thead><tr><th>IP</th><th>legacy</th><th>aktiv</th><th></th></tr></thead>'
+        + '<tbody id="udpPeerBody"></tbody></table>';
+    peers.forEach(function(p) {
+        var tbody = document.getElementById('udpPeerBody');
+        var tr = document.createElement('tr');
+        tr.className = 'udpPeerRow';
+        tr.innerHTML = '<td><input class="udpPeerIP" value="' + p.ip.join('.') + '"></td>'
+            + '<td><input type="checkbox" class="udpPeerLegacy"' + (p.legacy ? ' checked' : '') + '></td>'
+            + '<td><input type="checkbox" class="udpPeerEnabled"' + (p.enabled !== false ? ' checked' : '') + '></td>'
+            + '<td><button onclick="this.closest(\'tr\').remove()">✕</button></td>';
+        tbody.appendChild(tr);
+    });
+}
+
+function addUdpPeer() {
+    var tbody = document.getElementById('udpPeerBody');
+    if (!tbody) { renderUdpPeers([]); tbody = document.getElementById('udpPeerBody'); }
+    var tr = document.createElement('tr');
+    tr.className = 'udpPeerRow';
+    tr.innerHTML = '<td><input class="udpPeerIP" value=""></td>'
+        + '<td><input type="checkbox" class="udpPeerLegacy"></td>'
+        + '<td><input type="checkbox" class="udpPeerEnabled" checked></td>'
+        + '<td><button onclick="this.closest(\'tr\').remove()">✕</button></td>';
+    tbody.appendChild(tr);
 }
 
 function saveSettings() {
@@ -546,21 +597,21 @@ function saveSettings() {
     settings["loraPreambleLength"] = parseInt(document.getElementById("settingsLoraPreambleLength").value);
     settings["loraRepeat"] = document.getElementById("settingsLoraRepeat").checked;
     settings["udpPeers"] = [];
-    for (var i = 0; i < 5; i++) {
-        var val = document.getElementById("settingsUDPPeer" + i).value;
-        if (!val) val = "0.0.0.0";
-        var ipParts = val.split('.').map(Number);
-        settings["udpPeers"].push({
-            "ip": ipParts
-        });
-    }
+    document.querySelectorAll('#udpPeerList .udpPeerRow').forEach(function(row) {
+        var val = row.querySelector('.udpPeerIP').value || "0.0.0.0";
+        settings["udpPeers"].push({ "ip": val.split('.').map(Number), "legacy": row.querySelector('.udpPeerLegacy').checked, "enabled": row.querySelector('.udpPeerEnabled').checked });
+    });
     sendWS(JSON.stringify({settings: settings}));
     showModal("Note", "Settings saved.", "", false); 
 }
 
 function reboot() {
+    showModal("Note", "Neustart wird durchgeführt...", "", false);
     sendWS(JSON.stringify({reboot: true }));
-    showModal("Note", "System rebooting...", "", false);
+}
+
+function triggerUpdate() {
+    sendWS(JSON.stringify({update: true }));
 }
 
 function syncTime() {
@@ -576,11 +627,13 @@ function deleteMessages() {
 function sendAnnounce() {
     sendWS(JSON.stringify({announce: true }));
     okSound.play();
+    showModal("Note", "Announcement gesendet.", "", false);
 }
 
 function sendTuning() {
     sendWS(JSON.stringify({tune: true }));
     okSound.play();
+    showModal("Note", "Tune gesendet.", "", false);
 }
 
 function hashPassword(password) {

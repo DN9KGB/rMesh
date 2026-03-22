@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <Preferences.h>
+#include <vector>
 
 
 //Konfiguration
@@ -30,20 +31,20 @@ struct Settings {
 };
 
 struct ExtSettings {
-    IPAddress udpPeer[5] = {
-        IPAddress(0, 0, 0, 0),
-        IPAddress(0, 0, 0, 0),
-        IPAddress(0, 0, 0, 0),
-        IPAddress(0, 0, 0, 0),
-        IPAddress(0, 0, 0, 0)
-    };  
     uint8_t maxHopMessage = 15;
     uint8_t maxHopPosition = 1;
     uint8_t maxHopTelemetry = 3;
 };
 
+// Dynamische UDP-Peer-Liste (unbegrenzt, separat in NVS gespeichert)
+// Format NVS-Key "udpPeers": [count:1][ip:4][legacy:1][enabled:1] pro Eintrag
+extern std::vector<IPAddress> udpPeers;
+extern std::vector<bool> udpPeerLegacy;
+extern std::vector<bool> udpPeerEnabled;
+
 void loadSettings();
 void saveSettings();
+void saveUdpPeers();   // Nur Peers speichern + WebUI benachrichtigen (kein initHal)
 void showSettings();
 void sendSettings();
 

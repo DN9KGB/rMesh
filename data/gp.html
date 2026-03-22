@@ -86,7 +86,7 @@
                             </select>
                         </td>
                     </tr>
-                    <tr> <td>Frequency:</td> <td><input class="input-box" id="settingsLoraFrequency" readonly style="opacity:0.5;cursor:not-allowed;" title="Wird über Preset gesetzt"></td> </tr>
+                    <tr> <td>Frequency:</td> <td><input class="input-box" id="settingsLoraFrequency" onchange="onFrequencyChange()" title="Frequenz in MHz – bei Bandwechsel werden Standardwerte geladen"></td> </tr>
                     <tr> <td>Output Power:</td> <td><input class="input-box" id="settingsLoraOutputPower"></td> </tr>
                     <tr> <td>Bandwidth:</td> <td>
                         <select id='settingsLoraBandwidth' class="input-box">
@@ -120,7 +120,7 @@
                             <option value="12">12 - Maximum (Deep Indoor)</option>
                         </select>
                     </td> </tr>
-                    <tr> <td>Sync Word:</td> <td><input class="input-box" id="settingsLoraSyncWord" readonly style="opacity:0.4;cursor:not-allowed;" title="Wird automatisch aus der Frequenz abgeleitet"></td> </tr>
+                    <tr> <td>Sync Word:</td> <td><input class="input-box" id="settingsLoraSyncWord" title="Hexadezimal, z.B. 2B oder 12"></td> </tr>
                     <tr> <td>Preamble Length:</td> <td><input class="input-box" id="settingsLoraPreambleLength"></td> </tr>
                     <tr> <td>Repeat Messages:</td> <td>
                         <label class="retro-checkbox-container">
@@ -153,6 +153,7 @@
                         <button class="button" id="settingsSave" onclick="saveSettings();">save</button>
                         <button class="button" id="settingsDeleteMessages">delete messages</button>
                         <button class="button" id="settingsReboot">reboot</button>
+                        <button class="button" id="settingsUpdate">update</button>
                     </td> </tr>
                 </table>
             </div>
@@ -189,11 +190,10 @@
                     <tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td> Subnet </td> <td> <input class="input-box" id='settingsWifiNetMask'> </td> </tr>
                     <tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td> Gateway </td> <td> <input class="input-box" id='settingsWifiGateway'> </td> </tr>
                     <tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td> DNS </td> <td> <input class="input-box" id='settingsWifiDNS'> </td> </tr>
-                    <tr> <td> UDP-Peer 1 </td> <td> <input class="input-box" id='settingsUDPPeer0'> </td> </tr>
-                    <tr> <td> UDP-Peer 2 </td> <td> <input class="input-box" id='settingsUDPPeer1'> </td> </tr>
-                    <tr> <td> UDP-Peer 3 </td> <td> <input class="input-box" id='settingsUDPPeer2'> </td> </tr>
-                    <tr> <td> UDP-Peer 4 </td> <td> <input class="input-box" id='settingsUDPPeer3'> </td> </tr>
-                    <tr> <td> UDP-Peer 5 </td> <td> <input class="input-box" id='settingsUDPPeer4'> </td> </tr>
+                    <tr> <td> UDP-Peers </td> <td>
+                        <div id="udpPeerList"></div>
+                        <button class="button" onclick="addUdpPeer()">+ Peer</button>
+                    </td> </tr>
                     <tr class="AP_MODE_ENABLED"> <td>NTP-Server:</td> <td><input class="input-box" id="settingsNTP"></td> </tr>
                     <tr> <td>&nbsp;</td> <td>
                         <button class="button" onclick="saveSettings();">save</button>
@@ -296,6 +296,7 @@
                 //Init
                 drawClock(new Date(0));
                 let okSound = new Audio("ok.wav");
+                loadChannelFlags();
                 initUI();
                 setUI( Cookie.get("ui", "monitor") );
 
@@ -310,14 +311,21 @@
 
 			document.getElementById("tuneButton").addEventListener("click", function() {
 				sendWS(JSON.stringify({tune: true }));
-			});   
+				msgBox("Tune gesendet.");
+			});
 
             document.getElementById("announceButton").addEventListener("click", function() {
 				sendWS(JSON.stringify({announce: true }));
-			});   
+				msgBox("Announcement gesendet.");
+			});
 
 			document.getElementById("settingsReboot").addEventListener("click", function() {
+				msgBox("Neustart wird durchgeführt...");
 				sendWS(JSON.stringify({reboot: true }));
+			});
+
+			document.getElementById("settingsUpdate").addEventListener("click", function() {
+				sendWS(JSON.stringify({update: true }));
 			});
 
             document.getElementById("settingsDeleteMessages").addEventListener("click", function() {

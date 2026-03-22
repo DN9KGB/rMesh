@@ -14,6 +14,7 @@
 #include "frame.h"
 #include "routing.h"
 #include "peer.h"
+#include "wifiFunctions.h"
 
 #include <LilyGoLib.h>
 #include <WiFi.h>
@@ -165,6 +166,9 @@ enum FieldType {
     FTYPE_INT8, FTYPE_INT16, FTYPE_UINT8, FTYPE_HEX8,
     FTYPE_DROP_F, FTYPE_DROP_I, FTYPE_READONLY, FTYPE_READONLY_STR, FTYPE_ACTION,
     FTYPE_DELETE_GROUP,   // delete group, aux = group index
+    FTYPE_TOGGLE_MUTE,    // toggle mute,   aux = group index
+    FTYPE_TOGGLE_INSAM,   // toggle inSammel, aux = group index
+    FTYPE_SET_SAMMEL,     // set/unset as Sammelgruppe, aux = group index
 };
 
 struct DropF { const char* label; float v; };
@@ -191,7 +195,10 @@ static char    setupChipId[13] = {0};
 // ─── Groups ───────────────────────────────────────────────────────────
 static char groupNames[MAX_GROUPS][MAX_CALLSIGN_LENGTH + 1];
 static int  groupCount  = 0;
-static int  groupUnread[MAX_GROUPS] = {0};
+static int  groupUnread[MAX_GROUPS]  = {0};
+static bool groupMute[MAX_GROUPS]    = {false};
+static bool groupInSammel[MAX_GROUPS]= {false};
+static int  sammelGroupIdx           = -1;   // Index der Sammelgruppe, -1 = keine
 static int  activeGroup = -1;   // -1 = "Alle"
 
 // ─── Forward declarations ──────────────────────────────────────────────
@@ -200,6 +207,7 @@ static void doDeleteMessages();
 static void doSaveDisplay();
 static void doSaveSetup();
 static void doReboot();
+static void doUpdate();
 static void doSaveGroups();
 static void doNewGroup();
 static void doAnnounce();
@@ -267,14 +275,17 @@ static MenuItem setupItems[] = {
     {"Chip ID",            FTYPE_READONLY_STR, setupChipId,          0, nullptr, nullptr, 0.f, 0.f, 0.f, nullptr},
     {"Speichern",          FTYPE_ACTION,       nullptr,              0, nullptr, nullptr, 0.f, 0.f, 0.f, doSaveSetup},
     {"Neustart",           FTYPE_ACTION,       nullptr,              0, nullptr, nullptr, 0.f, 0.f, 0.f, doReboot},
+    {"Update",             FTYPE_ACTION,       nullptr,              0, nullptr, nullptr, 0.f, 0.f, 0.f, doUpdate},
     {"Nachr. loeschen",    FTYPE_ACTION,       nullptr,              0, nullptr, nullptr, 0.f, 0.f, 0.f, doDeleteMessages},
 };
 
 // Dynamically built group menu
-// Per group: [Name (FTYPE_STRING)] + [Loeschen (FTYPE_DELETE_GROUP)]
+// Per group: [Name] + [Loeschen] + [Stumm] + [Sammel/InSammel]
 // At the end: [+ Neue Gruppe] + [Speichern]
-static MenuItem groupItemsBuf[MAX_GROUPS * 2 + 2];
+static MenuItem groupItemsBuf[MAX_GROUPS * 4 + 2];  // 4 items per group
 static char     groupLabelBufs[MAX_GROUPS][16];
+static char     groupMuteLbls [MAX_GROUPS][16];
+static char     groupSamLbls  [MAX_GROUPS][16];
 static int      groupItemsLen = 0;
 
 // For "New group" – which slot is currently being created
@@ -367,9 +378,10 @@ static bool      monNewData  = false;
 // ─── Group helper functions ────────────────────────────────────────────
 static int buildTabList(int* tabList) {
     int count = 0;
-    tabList[count++] = -1;
+    tabList[count++] = -1;  // "Alle"
     for (int i = 0; i < groupCount; i++) {
-        if (strlen(groupNames[i]) > 0) tabList[count++] = i;
+        // inSammel-Gruppen werden nicht als eigener Tab angezeigt
+        if (strlen(groupNames[i]) > 0 && !groupInSammel[i]) tabList[count++] = i;
     }
     return count;
 }
@@ -394,6 +406,23 @@ static void buildGroupMenu() {
             "Loeschen", FTYPE_DELETE_GROUP, nullptr, i,
             nullptr, nullptr, 0.f, 0.f, 0.f, nullptr
         };
+        snprintf(groupMuteLbls[i], sizeof(groupMuteLbls[i]), groupMute[i] ? "Laut" : "Stumm");
+        groupItemsBuf[groupItemsLen++] = {
+            groupMuteLbls[i], FTYPE_TOGGLE_MUTE, nullptr, i,
+            nullptr, nullptr, 0.f, 0.f, 0.f, nullptr
+        };
+        if (sammelGroupIdx == i) {
+            snprintf(groupSamLbls[i], sizeof(groupSamLbls[i]), "Sam.aufheben");
+        } else if (groupInSammel[i]) {
+            snprintf(groupSamLbls[i], sizeof(groupSamLbls[i]), "ausSammel");
+        } else {
+            snprintf(groupSamLbls[i], sizeof(groupSamLbls[i]),
+                     sammelGroupIdx >= 0 ? "->Sammel" : "AlsSammel");
+        }
+        groupItemsBuf[groupItemsLen++] = {
+            groupSamLbls[i], FTYPE_TOGGLE_INSAM, nullptr, i,
+            nullptr, nullptr, 0.f, 0.f, 0.f, nullptr
+        };
     }
     if (groupCount < MAX_GROUPS) {
         groupItemsBuf[groupItemsLen++] = {
@@ -412,11 +441,18 @@ static void deleteGroup(int idx) {
     // Shift down
     for (int i = idx; i < groupCount - 1; i++) {
         strncpy(groupNames[i], groupNames[i + 1], MAX_CALLSIGN_LENGTH);
-        groupUnread[i] = groupUnread[i + 1];
+        groupUnread[i]   = groupUnread[i + 1];
+        groupMute[i]     = groupMute[i + 1];
+        groupInSammel[i] = groupInSammel[i + 1];
     }
     groupCount--;
     groupNames[groupCount][0] = '\0';
-    groupUnread[groupCount] = 0;
+    groupUnread[groupCount]   = 0;
+    groupMute[groupCount]     = false;
+    groupInSammel[groupCount] = false;
+    // Adjust sammelGroupIdx
+    if (sammelGroupIdx == idx)       sammelGroupIdx = -1;
+    else if (sammelGroupIdx > idx)   sammelGroupIdx--;
     // Adjust activeGroup
     if (activeGroup == idx)        activeGroup = -1;
     else if (activeGroup > idx)    activeGroup--;
@@ -433,12 +469,14 @@ static void doNewGroup() {
     if (groupCount >= MAX_GROUPS) return;
     newGroupSlot = groupCount;
     groupNames[newGroupSlot][0] = '\0';
-    groupUnread[newGroupSlot] = 0;
+    groupUnread[newGroupSlot]   = 0;
+    groupMute[newGroupSlot]     = false;
+    groupInSammel[newGroupSlot] = false;
     groupCount++;
     buildGroupMenu();
     curMenuLen = groupItemsLen;
     // The name entry for the new slot is at position newGroupSlot*2
-    editItemIdx = newGroupSlot * 2;
+    editItemIdx = newGroupSlot * 4;
     editStrBuf[0] = '\0';
     uiMode = UI_EDIT_STR;
     needRedraw = true;
@@ -1183,7 +1221,18 @@ static void doAnnounce() {
     uiMode = UI_CHAT; needRedraw = true;
 }
 static void doSave() {
-    for (int i = 0; i < 5; i++) strToIP(tmpPeerIP[i], extSettings.udpPeer[i]);
+    IPAddress parsedIPs[5];
+    for (int i = 0; i < 5; i++) strToIP(tmpPeerIP[i], parsedIPs[i]);
+    bool legacyBak[5] = {};
+    for (int i = 0; i < 5 && (size_t)i < udpPeerLegacy.size(); i++) legacyBak[i] = (bool)udpPeerLegacy[i];
+    std::vector<IPAddress> tail;
+    std::vector<bool> tailLegacy;
+    for (size_t i = 5; i < udpPeers.size(); i++) { tail.push_back(udpPeers[i]); tailLegacy.push_back((bool)udpPeerLegacy[i]); }
+    udpPeers.clear(); udpPeerLegacy.clear();
+    for (int i = 0; i < 5; i++) {
+        if (parsedIPs[i] != IPAddress(0,0,0,0)) { udpPeers.push_back(parsedIPs[i]); udpPeerLegacy.push_back(legacyBak[i]); }
+    }
+    for (size_t i = 0; i < tail.size(); i++) { udpPeers.push_back(tail[i]); udpPeerLegacy.push_back(tailLegacy[i]); }
     uiMode = UI_CHAT; needRedraw = true;
     saveSettings();
 }
@@ -1204,16 +1253,23 @@ static void doReboot() {
     rebootTimer = 0;
     uiMode = UI_CHAT; needRedraw = true;
 }
+static void doUpdate() {
+    checkForUpdates();
+    uiMode = UI_CHAT; needRedraw = true;
+}
 static void doSaveGroups() {
     prefs.putInt("grpCount", groupCount);
+    prefs.putInt("grpSamCol", sammelGroupIdx);
     for (int i = 0; i < groupCount; i++) {
-        char key[8]; snprintf(key, sizeof(key), "grp%d", i);
-        prefs.putString(key, groupNames[i]);
+        char key[8];  snprintf(key,  sizeof(key),  "grp%d",    i); prefs.putString(key, groupNames[i]);
+        char mkey[10]; snprintf(mkey, sizeof(mkey), "grpMute%d", i); prefs.putUChar(mkey, groupMute[i] ? 1 : 0);
+        char skey[10]; snprintf(skey, sizeof(skey), "grpInSm%d", i); prefs.putUChar(skey, groupInSammel[i] ? 1 : 0);
     }
     // Remove excess old slots
     for (int i = groupCount; i < MAX_GROUPS; i++) {
-        char key[8]; snprintf(key, sizeof(key), "grp%d", i);
-        prefs.remove(key);
+        char key[8];   snprintf(key,  sizeof(key),  "grp%d",    i); prefs.remove(key);
+        char mkey[10]; snprintf(mkey, sizeof(mkey), "grpMute%d", i); prefs.remove(mkey);
+        char skey[10]; snprintf(skey, sizeof(skey), "grpInSm%d", i); prefs.remove(skey);
     }
     uiMode = UI_CHAT; needRedraw = true;
 }
@@ -1314,7 +1370,10 @@ static void drawAbout() {
 
 // ─── Menu navigation ──────────────────────────────────────────────────
 static void openMenu() {
-    for (int i = 0; i < 5; i++) ipToStr(extSettings.udpPeer[i], tmpPeerIP[i], sizeof(tmpPeerIP[i]));
+    for (int i = 0; i < 5; i++) {
+        if ((size_t)i < udpPeers.size()) ipToStr(udpPeers[i], tmpPeerIP[i], sizeof(tmpPeerIP[i]));
+        else strncpy(tmpPeerIP[i], "0.0.0.0", sizeof(tmpPeerIP[i]));
+    }
     topSel = 0; topScroll = 0; uiMode = UI_MENU_TOP; needRedraw = true;
 }
 
@@ -1376,6 +1435,39 @@ static void activateItem() {
         case FTYPE_READONLY: case FTYPE_READONLY_STR: break;
         case FTYPE_DELETE_GROUP:
             deleteGroup(item.aux); break;
+        case FTYPE_TOGGLE_MUTE: {
+            int idx = item.aux;
+            if (idx >= 0 && idx < groupCount) {
+                groupMute[idx] = !groupMute[idx];
+                doSaveGroups();
+                buildGroupMenu();
+                curMenuLen = groupItemsLen;
+                needRedraw = true;
+            }
+            break;
+        }
+        case FTYPE_TOGGLE_INSAM: {
+            int idx = item.aux;
+            if (idx >= 0 && idx < groupCount) {
+                if (sammelGroupIdx == idx) {
+                    // Ist die Sammelgruppe selbst → aufheben
+                    sammelGroupIdx = -1;
+                    for (int j = 0; j < groupCount; j++) groupInSammel[j] = false;
+                } else if (sammelGroupIdx < 0) {
+                    // Noch keine Sammelgruppe → diese Gruppe als Sammelgruppe setzen
+                    sammelGroupIdx = idx;
+                } else if (groupInSammel[idx]) {
+                    groupInSammel[idx] = false;
+                } else {
+                    groupInSammel[idx] = true;
+                }
+                doSaveGroups();
+                buildGroupMenu();
+                curMenuLen = groupItemsLen;
+                needRedraw = true;
+            }
+            break;
+        }
         case FTYPE_ACTION:
             if (item.action) item.action(); break;
     }
@@ -1465,12 +1557,16 @@ void initDisplay() {
     // Load groups
     groupCount = prefs.getInt("grpCount", 0);
     if (groupCount > MAX_GROUPS) groupCount = MAX_GROUPS;
+    sammelGroupIdx = prefs.getInt("grpSamCol", -1);
+    if (sammelGroupIdx >= groupCount) sammelGroupIdx = -1;
     for (int i = 0; i < groupCount; i++) {
-        char key[8]; snprintf(key, sizeof(key), "grp%d", i);
+        char key[8];   snprintf(key,  sizeof(key),  "grp%d",    i);
         String s = prefs.getString(key, "");
         strncpy(groupNames[i], s.c_str(), MAX_CALLSIGN_LENGTH);
         groupNames[i][MAX_CALLSIGN_LENGTH] = '\0';
         groupUnread[i] = 0;
+        char mkey[10]; snprintf(mkey, sizeof(mkey), "grpMute%d", i); groupMute[i]     = (prefs.getUChar(mkey, 0) != 0);
+        char skey[10]; snprintf(skey, sizeof(skey), "grpInSm%d", i); groupInSammel[i] = (prefs.getUChar(skey, 0) != 0);
     }
 
     spr.setColorDepth(16);
@@ -1503,13 +1599,27 @@ void initDisplay() {
 void displayOnNewMessage(const char* srcCall, const char* text, const char* dstGroup, const char* dstCall) {
     const char* grp = (dstGroup && strlen(dstGroup) > 0) ? dstGroup : "";
     const char* dst = (dstCall  && strlen(dstCall)  > 0) ? dstCall  : "";
-    addLine(srcCall, text, false, grp, dst);
 
-    // Increment unread counter for non-active groups
+    // Sammelgruppe-Umleitung: Nachricht in Sammelgruppe-Gruppe einsortieren
+    const char* storeGrp = grp;
+    if (strlen(grp) > 0 && sammelGroupIdx >= 0) {
+        for (int i = 0; i < groupCount; i++) {
+            if (strcmp(groupNames[i], grp) == 0 && groupInSammel[i]) {
+                storeGrp = groupNames[sammelGroupIdx];
+                break;
+            }
+        }
+    }
+    addLine(srcCall, text, false, storeGrp, dst);
+
+    // Unread-Counter: nur für normale, nicht-gemutete Gruppen
     if (strlen(grp) > 0) {
         for (int i = 0; i < groupCount; i++) {
-            if (strcmp(groupNames[i], grp) == 0 && activeGroup != i) {
-                groupUnread[i]++;
+            if (strcmp(groupNames[i], grp) == 0) {
+                if (!groupMute[i] && !groupInSammel[i] && activeGroup != i) {
+                    groupUnread[i]++;
+                }
+                // Sammelgruppe selbst bekommt keinen Unread-Counter
                 break;
             }
         }
