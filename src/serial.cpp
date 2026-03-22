@@ -90,7 +90,7 @@ void checkSerialRX() {
                 }
 
                 //Reboot
-                if (strncmp(serialRxBuffer, "r", 1) == 0) {
+                if (serialRxBuffer[0] == 'r' && (serialRxBuffer[1] == ' ' || serialRxBuffer[1] == '\0')) {
                     Serial.println("Reboot...");
                     rebootTimer = 0;
                 }
@@ -114,7 +114,7 @@ void checkSerialRX() {
                 }    
                 
                 //Wifi Password
-                if (strncmp(serialRxBuffer, "p", 1) == 0) {
+                if (serialRxBuffer[0] == 'p' && (serialRxBuffer[1] == ' ' || serialRxBuffer[1] == '\0')) {
                     if (strlen(parameter) > 0) {
                         strncpy(settings.wifiPassword, parameter, sizeof(settings.wifiPassword) - 1);
                         settings.wifiPassword[sizeof(settings.wifiPassword) - 1] = '\0'; 
@@ -240,7 +240,7 @@ void checkSerialRX() {
                         settings.loraBandwidth       = 125.0f;
                         settings.loraSpreadingFactor = 7;
                         settings.loraCodingRate      = 5;
-                        settings.loraOutputPower     = 22;
+                        settings.loraOutputPower     = 27;
                         settings.loraPreambleLength  = 10;
                         settings.loraSyncWord        = syncWordForFrequency(settings.loraFrequency);
                         saveSettings();
@@ -251,7 +251,164 @@ void checkSerialRX() {
                     }
                 }
 
-                
+
+                // Callsign
+                // "call DG2NBN-1" → Callsign setzen
+                if (strncmp(serialRxBuffer, "call", 4) == 0) {
+                    if (strlen(parameter) > 0) {
+                        strncpy(settings.mycall, parameter, sizeof(settings.mycall) - 1);
+                        settings.mycall[sizeof(settings.mycall) - 1] = '\0';
+                        for (size_t i = 0; settings.mycall[i]; i++) settings.mycall[i] = toupper(settings.mycall[i]);
+                        saveSettings();
+                    }
+                    Serial.printf("Callsign: %s\n", settings.mycall);
+                }
+
+                // Position
+                // "pos JN48mw" oder "pos 48.1234,11.5678"
+                if (strncmp(serialRxBuffer, "pos", 3) == 0) {
+                    if (strlen(parameter) > 0) {
+                        strncpy(settings.position, parameter, sizeof(settings.position) - 1);
+                        settings.position[sizeof(settings.position) - 1] = '\0';
+                        saveSettings();
+                    }
+                    Serial.printf("Position: %s\n", settings.position);
+                }
+
+                // NTP-Server
+                if (strncmp(serialRxBuffer, "ntp", 3) == 0) {
+                    if (strlen(parameter) > 0) {
+                        strncpy(settings.ntpServer, parameter, sizeof(settings.ntpServer) - 1);
+                        settings.ntpServer[sizeof(settings.ntpServer) - 1] = '\0';
+                        saveSettings();
+                    }
+                    Serial.printf("NTP: %s\n", settings.ntpServer);
+                }
+
+                // TX-Power (Output Power in dBm)
+                // "op 20" → TX-Power auf 20 dBm setzen
+                if (strncmp(serialRxBuffer, "op", 2) == 0) {
+                    if (strlen(parameter) > 0) {
+                        int8_t txp = (int8_t)atoi(parameter);
+                        if (isPublicBand(settings.loraFrequency) && txp > PUBLIC_MAX_TX_POWER) { txp = PUBLIC_MAX_TX_POWER; }
+                        settings.loraOutputPower = txp;
+                        saveSettings();
+                    }
+                    Serial.printf("TX Power: %d dBm\n", settings.loraOutputPower);
+                }
+
+                // Bandwidth in kHz
+                // "bw 62.5"
+                if (strncmp(serialRxBuffer, "bw", 2) == 0) {
+                    if (strlen(parameter) > 0) {
+                        settings.loraBandwidth = atof(parameter);
+                        saveSettings();
+                    }
+                    Serial.printf("Bandwidth: %.2f kHz\n", settings.loraBandwidth);
+                }
+
+                // Spreading Factor (6–12)
+                if (strncmp(serialRxBuffer, "sf", 2) == 0) {
+                    if (strlen(parameter) > 0) {
+                        settings.loraSpreadingFactor = (uint8_t)atoi(parameter);
+                        saveSettings();
+                    }
+                    Serial.printf("Spreading Factor: %d\n", settings.loraSpreadingFactor);
+                }
+
+                // Coding Rate (5–8)
+                if (strncmp(serialRxBuffer, "cr", 2) == 0) {
+                    if (strlen(parameter) > 0) {
+                        settings.loraCodingRate = (uint8_t)atoi(parameter);
+                        saveSettings();
+                    }
+                    Serial.printf("Coding Rate: %d\n", settings.loraCodingRate);
+                }
+
+                // Preamble Length
+                // "pl 10"
+                if (strncmp(serialRxBuffer, "pl", 2) == 0) {
+                    if (strlen(parameter) > 0) {
+                        settings.loraPreambleLength = (int16_t)atoi(parameter);
+                        saveSettings();
+                    }
+                    Serial.printf("Preamble Length: %d\n", settings.loraPreambleLength);
+                }
+
+                // Sync Word (hexadezimal, z.B. "sw 2B")
+                if (strncmp(serialRxBuffer, "sw", 2) == 0) {
+                    if (strlen(parameter) > 0) {
+                        settings.loraSyncWord = (uint8_t)strtol(parameter, nullptr, 16);
+                        saveSettings();
+                    }
+                    Serial.printf("SyncWord: %02X\n", settings.loraSyncWord);
+                }
+
+                // Repeat / Relay
+                // "rep 1" oder "rep 0"
+                if (strncmp(serialRxBuffer, "rep", 3) == 0) {
+                    if (strlen(parameter) > 0) {
+                        bool value = (parameter[0] == '1' || parameter[0] == 'e' || parameter[0] == 't');
+                        settings.loraRepeat = value;
+                        saveSettings();
+                    }
+                    Serial.printf("Repeat: %s\n", settings.loraRepeat ? "true" : "false");
+                }
+
+                // Max Hop Message
+                if (strncmp(serialRxBuffer, "mhm", 3) == 0) {
+                    if (strlen(parameter) > 0) {
+                        extSettings.maxHopMessage = (uint8_t)atoi(parameter);
+                        saveSettings();
+                    }
+                    Serial.printf("MaxHopMessage: %d\n", extSettings.maxHopMessage);
+                }
+
+                // Max Hop Position
+                if (strncmp(serialRxBuffer, "mhp", 3) == 0) {
+                    if (strlen(parameter) > 0) {
+                        extSettings.maxHopPosition = (uint8_t)atoi(parameter);
+                        saveSettings();
+                    }
+                    Serial.printf("MaxHopPosition: %d\n", extSettings.maxHopPosition);
+                }
+
+                // Max Hop Telemetry
+                if (strncmp(serialRxBuffer, "mht", 3) == 0) {
+                    if (strlen(parameter) > 0) {
+                        extSettings.maxHopTelemetry = (uint8_t)atoi(parameter);
+                        saveSettings();
+                    }
+                    Serial.printf("MaxHopTelemetry: %d\n", extSettings.maxHopTelemetry);
+                }
+
+                // UDP-Peer
+                // "udp 2 192.168.1.1" → Peer 2 (1-basiert) auf IP setzen
+                // "udp"               → alle Peers anzeigen
+                if (strncmp(serialRxBuffer, "udp", 3) == 0) {
+                    char* spacePos = strchr(parameter, ' ');
+                    if (spacePos != nullptr) {
+                        int idx = atoi(parameter) - 1; // 1-basiert → 0-basiert
+                        if (idx >= 0 && idx < 5) {
+                            spacePos++;
+                            IPAddress tempIP;
+                            if (tempIP.fromString(spacePos)) {
+                                extSettings.udpPeer[idx] = tempIP;
+                                saveSettings();
+                                Serial.printf("UDP-Peer %d: %d.%d.%d.%d\n", idx + 1, tempIP[0], tempIP[1], tempIP[2], tempIP[3]);
+                            } else {
+                                Serial.println("Fehler: Ungültiges IP-Format!");
+                            }
+                        } else {
+                            Serial.println("Fehler: Index 1–5 erwartet!");
+                        }
+                    } else {
+                        for (int i = 0; i < 5; i++) {
+                            Serial.printf("UDP-Peer %d: %d.%d.%d.%d\n", i + 1, extSettings.udpPeer[i][0], extSettings.udpPeer[i][1], extSettings.udpPeer[i][2], extSettings.udpPeer[i][3]);
+                        }
+                    }
+                }
+
             }
             //Puffer löschen
             serialRxBuffer[0] = '\0';

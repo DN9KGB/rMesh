@@ -492,7 +492,7 @@ const LORA_PRESETS = {
         bandwidth:       125,      // kHz – passt in 250-kHz-Sub-Band, kürzere ToA
         spreadingFactor: 7,
         codingRate:      5,        // CR 4/5 – effizienter bei 10%-Duty-Cycle
-        outputPower:     22,       // dBm – Default 868 MHz Public
+        outputPower:     27,       // dBm – Default 868 MHz Public (500 mW, max. erlaubt)
         preambleLength:  10,
         syncWord:        '12',     // PUBLIC_SYNCWORD (Info, wird von Firmware gesetzt)
     }
@@ -508,6 +508,24 @@ function applyLoraPreset(band) {
     document.getElementById('settingsLoraOutputPower').value     = p.outputPower;
     document.getElementById('settingsLoraPreambleLength').value  = p.preambleLength;
     document.getElementById('settingsLoraSyncWord').value        = p.syncWord;
+    document.getElementById('loraPreset').value                  = band;
+}
+
+function onFrequencyChange() {
+    const newFreq = parseFloat(document.getElementById('settingsLoraFrequency').value);
+    if (isNaN(newFreq) || newFreq === 0) return;
+
+    let newBand = null;
+    if (newFreq >= 430 && newFreq <= 440)        newBand = '433';
+    else if (newFreq >= 869.4 && newFreq <= 869.65) newBand = '868';
+    if (!newBand) return;
+
+    const currentBand = document.getElementById('loraPreset').value;
+    if (newBand !== currentBand) {
+        applyLoraPreset(newBand);
+        // Eingetippte Frequenz beibehalten, nur Restparameter aus Preset laden
+        document.getElementById('settingsLoraFrequency').value = newFreq;
+    }
 }
 
 function saveSettings() {

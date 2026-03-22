@@ -73,7 +73,7 @@
                     </select>
                 </td>
             </tr>
-            <tr> <td>Frequency</td> <td><input id="settingsLoraFrequency" readonly style="background:#1a1a2e;color:#aaa;cursor:not-allowed;" title="Wird über Preset gesetzt"></td> </tr>
+            <tr> <td>Frequency</td> <td><input id="settingsLoraFrequency" onchange="onFrequencyChange()" title="Frequenz in MHz – bei Bandwechsel werden Standardwerte geladen"></td> </tr>
             <tr> <td>Output Power</td> <td><input id="settingsLoraOutputPower"></td> </tr>
             <tr> <td>Bandwidth</td> <td>
                 <select id='settingsLoraBandwidth'>
@@ -107,7 +107,7 @@
                     <option value="12">12 - Maximum range</option>
                 </select>
             </td> </tr>
-            <tr> <td>Sync Word</td> <td><input id="settingsLoraSyncWord" readonly style="background:#1a1a2e;color:#555;cursor:not-allowed;" title="Wird automatisch aus der Frequenz abgeleitet"></td> </tr>
+            <tr> <td>Sync Word</td> <td><input id="settingsLoraSyncWord" title="Hexadezimal, z.B. 2B oder 12"></td> </tr>
             <tr> <td>Preamble Length</td> <td><input id="settingsLoraPreambleLength"></td> </tr>
             <tr> <td>Repeat Messages</td> <td><input type="checkbox" id="settingsLoraRepeat"></td> </tr>
         </table>
