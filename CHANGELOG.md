@@ -1,5 +1,10 @@
 # Changelog
 
+## [v1.0.29d]
+
+- NEU: Serielle Konsole – `uc 0` / `uc 1` setzt den Update-Kanal (Release/Dev) und speichert ihn persistent; `updf` / `updf 0` / `updf 1` startet eine Force-Installation aus dem gewählten Kanal
+- NEU: Frisch geflashte Nodes wählen den Update-Kanal automatisch passend zur Firmware: Dev-Builds (`-dev`-Suffix) setzen den Default auf „Dev", Release-Builds auf „Release" – ein bereits gespeicherter Wert im Flash bleibt erhalten
+
 ## [v1.0.29c]
 
 - FIX: OTA-Update von v1.0.29a → v1.0.29b schlug auf LILYGO T3 LoRa32 V1.6.1 mit „Not Enough Space" fehl – Firmware war 749 Bytes zu groß für die alte 1.280-KB-Partition; nicht benötigte Serial-Debug-Ausgaben entfernt (Trim-Task-Status, UDP-Peer-Migration, WiFi-Scan-Tabelle, Topologie-Reporting); Firmware um 1.252 Bytes reduziert und damit OTA-Update-Pfad auf Geräten mit alter Partitionstabelle wieder freigegeben

@@ -6,6 +6,7 @@
 
 #include "settings.h"
 #include "config.h"
+#include "version.h"
 #include "webFunctions.h"
 #include "hal.h"
 
@@ -58,6 +59,8 @@ void showSettings() {
     Serial.printf("loraSpreadingFactor: %d\n", settings.loraSpreadingFactor);
     Serial.printf("loraPreambleLength: %d\n", settings.loraPreambleLength);
     Serial.printf("loraRepeat: %d\n", settings.loraRepeat);
+    Serial.printf("version: %s\n", VERSION);
+    Serial.printf("updateChannel: %d\n", updateChannel);
     Serial.printf("maxHopMessage: %d\n", extSettings.maxHopMessage);
     Serial.printf("maxHopPosition: %d\n", extSettings.maxHopPosition);
     Serial.printf("maxHopTelemetry: %d\n", extSettings.maxHopTelemetry);
@@ -179,7 +182,8 @@ void loadSettings() {
     prefs.begin("custom_settings", false);
     loadPasswordHash();
     prefs.getBytes("config", &settings, sizeof(settings));
-    updateChannel = prefs.getUChar("updateChannel", 0);
+    uint8_t defaultChannel = (strstr(VERSION, "-dev") != nullptr) ? 1 : 0;
+    updateChannel = prefs.getUChar("updateChannel", defaultChannel);
     loraEnabled   = prefs.getBool("loraEnabled", true);
     prefs.getBytes("extSettings", &extSettings, sizeof(extSettings));
     size_t storedLen = prefs.getBytesLength("config");
