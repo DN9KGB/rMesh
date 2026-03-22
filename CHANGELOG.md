@@ -16,7 +16,7 @@
 - NEU: Rufzeichen je UDP-Peer wird automatisch gelernt – sobald eine Node einen Frame sendet, wird ihr Rufzeichen der IP-Adresse zugeordnet und in der WebUI (Desktop & Mobile) bei den UDP-Peers angezeigt
 - NEU: HF-Deaktivierungsschalter in der WebUI (Desktop & Mobile) – ist HF deaktiviert, werden alle LoRa-Frames still verworfen und es wird garantiert nichts über HF gesendet; Zustand wird persistent gespeichert
 - NEU: Shutdown-Button in der WebUI (Desktop & Mobile) mit Sicherheitsabfrage – versetzt das Gerät in Tiefschlaf (kein Senden mehr); Aufwecken nur per Hardware-Reset oder Stromtrennung; nützlich für Akku-Geräte ohne Antenne
-- FIX: Flash-Overflow bei LILYGO T3 LoRa32 V1.6.1 und T-Beam – App-Partition von 1.280 KB auf 1.344 KB vergrößert, SPIFFS entsprechend angepasst (partitions.csv)
+- FIX: Flash-Overflow bei LILYGO T3 LoRa32 V1.6.1 und T-Beam – Partitionstabelle neu ausbalanciert: App-Partition auf 1.792 KB vergrößert (war 1.280 KB), LittleFS auf 448 KB verkleinert; Firmware-Auslastung sinkt von 95 % auf 71 %
 - Optimierung: WebUI-Assets (HTML, JS, CSS, TXT) werden beim Filesystem-Build automatisch per gzip komprimiert und als .gz-Dateien ins LittleFS-Image verpackt; ESPAsyncWebServer liefert sie transparent komprimiert aus – LittleFS-Inhalt um 61 % reduziert (275 KB → 110 KB); Quellfiles bleiben unverändert editierbar
 - Optimierung: Retro-Font „Fixedsys Excelsior" (167 KB) aus dem LittleFS entfernt – Desktop-WebUI verwendet nun den systemseitigen Fallback-Font „Courier New" (optisch nahezu identisch)
 
