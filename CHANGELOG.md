@@ -2,6 +2,14 @@
 
 ## [v1.0.29]
 
+- NEU: UDP-Peer-Liste ist jetzt unbegrenzt dynamisch – vorher war sie auf 5 Einträge begrenzt; Verwaltung über WebUI, Display und serielle Konsole (`udp add`, `udp del`, `udp <N>`, `udp clear`)
+- NEU: UDP-Peers aktivieren/deaktivieren – jeder Peer hat eine Aktiv-Checkbox; deaktivierte Peers werden beim Senden übersprungen
+- NEU: Automatische Peer-Erkennung per Broadcast – Announcements werden immer auch per UDP-Broadcast gesendet; antwortende Nodes werden automatisch in die Peer-Liste eingetragen
+- NEU: Legacy-Node-Erkennung – Nodes ohne SyncWord-Präfix (alte Firmware) werden automatisch erkannt, als Peer eingetragen und per Legacy-Flag markiert, damit sie weiterhin ohne SyncWord versorgt werden
+- NEU: OTA-Update-Button in allen UIs (WebUI Desktop, WebUI Mobile, Display-Menü, serielle Konsole `update`) – startet die Update-Prüfung manuell
+- NEU: Update-Statusmeldung per WebSocket – die UI zeigt ob das Gerät bereits aktuell ist, kein Server erreichbar war, oder ein Update installiert wird
+- NEU: Aktions-Feedback in der WebUI – beim Betätigen von Reboot, Announce und Tune erscheint eine Bestätigungsmeldung
+- NEU: UDP-Peers werden in der WebUI als Tabelle (mit Header-Zeile) dargestellt
 - NEU: Gruppen stummschalten (Mute) – Nachrichten werden weiterhin angezeigt, lösen aber keinen Sound oder Ungelesen-Badge aus. Gilt für WebUI Desktop, WebUI Mobile und Display-Geräte (T-LoraPager, SenseCAP Indicator).
 - NEU: Sammelgruppe – ein Channel-Tab (Desktop-WebUI) bzw. eine Gruppe (Mobile, Display) kann als Sammelgruppe definiert werden. Dort landen automatisch Nachrichten von Gruppen, die per Name eingetragen wurden und keinen eigenen Tab/Slot haben – sie erscheinen nicht mehr in „all". Einstellung über Doppelklick auf den Channel-Button (Desktop) bzw. Langdruck auf den Gruppen-Tab (Mobile) bzw. Gruppenmenü (Display).
 - FIX: Nachrichten wurden weitergeleitet, obwohl der eigene Node das Ziel war – die Weiterleiten-Bedingung prüfte `tf.dstCall`/`tf.hopCount` statt `f.dstCall`/`f.hopCount`; `tf` war zu diesem Zeitpunkt noch nicht befüllt und enthielt Leer- oder Altwerte (Issue #6)

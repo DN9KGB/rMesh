@@ -11,6 +11,9 @@
 
 Settings settings;
 ExtSettings extSettings;
+std::vector<IPAddress> udpPeers;
+std::vector<bool> udpPeerLegacy;
+std::vector<bool> udpPeerEnabled;
 
 Preferences prefs;
 bool loraReady = false;
@@ -31,9 +34,15 @@ void showSettings() {
         //Serial.printf("Brodcast: %d.%d.%d.%d\n", settings.wifiBrodcast[0], settings.wifiBrodcast[1], settings.wifiBrodcast[2], settings.wifiBrodcast[3]);
     }
     Serial.printf("NTP-Server: %s\n", settings.ntpServer);
-    uint8_t count = sizeof(extSettings.udpPeer) / sizeof(extSettings.udpPeer[0]);
-    for (uint8_t i = 0; i < count; i++) {
-        Serial.printf("UDP Peer %i: %d.%d.%d.%d\n", i, extSettings.udpPeer[i][0], extSettings.udpPeer[i][1], extSettings.udpPeer[i][2], extSettings.udpPeer[i][3]);
+    if (udpPeers.empty()) {
+        Serial.println("UDP Peers: keine");
+    } else {
+        for (size_t i = 0; i < udpPeers.size(); i++) {
+            Serial.printf("UDP Peer %zu: %d.%d.%d.%d%s%s\n", i + 1,
+                udpPeers[i][0], udpPeers[i][1], udpPeers[i][2], udpPeers[i][3],
+                udpPeerLegacy[i] ? " [legacy]" : "",
+                (bool)udpPeerEnabled[i] ? "" : " [deaktiviert]");
+        }
     }
     Serial.println();
     Serial.printf("myCall: %s\n", settings.mycall);
@@ -137,13 +146,14 @@ void sendSettings() {
             (uint8_t)(mac >> 16), (uint8_t)(mac >> 8), (uint8_t)(mac));
         doc["settings"]["chipId"] = chipId;
     }
-    uint8_t count = sizeof(extSettings.udpPeer) / sizeof(extSettings.udpPeer[0]);
-    for (uint8_t i = 0; i < count; i++) {
+    for (size_t i = 0; i < udpPeers.size(); i++) {
         JsonObject peer = doc["settings"]["udpPeers"].add<JsonObject>();
-        peer["ip"][0] = extSettings.udpPeer[i][0];
-        peer["ip"][1] = extSettings.udpPeer[i][1];
-        peer["ip"][2] = extSettings.udpPeer[i][2];
-        peer["ip"][3] = extSettings.udpPeer[i][3];
+        peer["ip"][0] = udpPeers[i][0];
+        peer["ip"][1] = udpPeers[i][1];
+        peer["ip"][2] = udpPeers[i][2];
+        peer["ip"][3] = udpPeers[i][3];
+        peer["legacy"]  = (bool)udpPeerLegacy[i];
+        peer["enabled"] = (bool)udpPeerEnabled[i];
     }
     doc["settings"]["maxHopMessage"] = extSettings.maxHopMessage;
     doc["settings"]["maxHopPosition"] = extSettings.maxHopPosition;
@@ -167,27 +177,41 @@ void loadSettings() {
     size_t storedLen = prefs.getBytesLength("config");
     size_t extSettingsLen = prefs.getBytesLength("extSettings");
 
-    //IP-Adressen fixen 
+    //IP-Adressen fixen
     settings.wifiIP       = IPAddress(settings.wifiIP[0], settings.wifiIP[1], settings.wifiIP[2], settings.wifiIP[3]);
     settings.wifiNetMask  = IPAddress(settings.wifiNetMask[0], settings.wifiNetMask[1], settings.wifiNetMask[2], settings.wifiNetMask[3]);
     settings.wifiGateway  = IPAddress(settings.wifiGateway[0], settings.wifiGateway[1], settings.wifiGateway[2], settings.wifiGateway[3]);
     settings.wifiDNS      = IPAddress(settings.wifiDNS[0], settings.wifiDNS[1], settings.wifiDNS[2], settings.wifiDNS[3]);
     settings.wifiBrodcast = IPAddress(settings.wifiBrodcast[0], settings.wifiBrodcast[1], settings.wifiBrodcast[2], settings.wifiBrodcast[3]);
-    uint8_t count = sizeof(extSettings.udpPeer) / sizeof(extSettings.udpPeer[0]);
-    for (uint8_t i = 0; i < count; i++) {
-        extSettings.udpPeer[i] = IPAddress(extSettings.udpPeer[i][0], extSettings.udpPeer[i][1], extSettings.udpPeer[i][2], extSettings.udpPeer[i][3]);
-    }
 
     //Defaults für ext. Settings
     if (extSettingsLen != sizeof(extSettings)) {
         Serial.println("Lade Default-extSettings");
-        for (uint8_t i = 0; i < count; i++) {
-            extSettings.udpPeer[i] = IPAddress(extSettings.udpPeer[i][0], extSettings.udpPeer[i][1], extSettings.udpPeer[i][2], extSettings.udpPeer[i][3]);
-        }
         extSettings.maxHopMessage = 15;
         extSettings.maxHopPosition = 1;
         extSettings.maxHopTelemetry = 3;
         prefs.putBytes("extSettings", &extSettings, sizeof(extSettings));
+    }
+
+    // Dynamische UDP-Peers laden
+    udpPeers.clear();
+    udpPeerLegacy.clear();
+    udpPeerEnabled.clear();
+    size_t peersLen = prefs.getBytesLength("udpPeers");
+    if (peersLen >= 1) {
+        uint8_t* buf = new uint8_t[peersLen];
+        prefs.getBytes("udpPeers", buf, peersLen);
+        uint8_t peerCount = buf[0];
+        // Altes Format: 5 Bytes/Peer (ohne enabled), neues Format: 6 Bytes/Peer
+        bool newFormat = (peersLen == 1 + (size_t)peerCount * 6);
+        size_t stride = newFormat ? 6 : 5;
+        for (uint8_t i = 0; i < peerCount && 1 + (size_t)i * stride + 4 < peersLen; i++) {
+            udpPeers.push_back(IPAddress(buf[1+i*stride], buf[2+i*stride], buf[3+i*stride], buf[4+i*stride]));
+            udpPeerLegacy.push_back(buf[5+i*stride] != 0);
+            udpPeerEnabled.push_back(newFormat ? buf[6+i*stride] != 0 : true);
+        }
+        delete[] buf;
+        Serial.printf("%u UDP-Peer(s) geladen.\n", (unsigned)udpPeers.size());
     }
 
     //Defaults laden
@@ -233,12 +257,30 @@ void loadSettings() {
     initHal();
 }
 
+void saveUdpPeers() {
+    uint8_t count = (uint8_t)udpPeers.size();
+    size_t bufLen = 1 + (size_t)count * 6;
+    uint8_t* buf = new uint8_t[bufLen];
+    buf[0] = count;
+    for (uint8_t i = 0; i < count; i++) {
+        buf[1+i*6] = udpPeers[i][0];
+        buf[2+i*6] = udpPeers[i][1];
+        buf[3+i*6] = udpPeers[i][2];
+        buf[4+i*6] = udpPeers[i][3];
+        buf[5+i*6] = udpPeerLegacy[i] ? 1 : 0;
+        buf[6+i*6] = udpPeerEnabled[i] ? 1 : 0;
+    }
+    prefs.putBytes("udpPeers", buf, bufLen);
+    delete[] buf;
+    sendSettings();
+}
+
 void saveSettings() {
     //Einstellungen im EEPROM speichern
     Serial.println("Speichere Einstellungen...");
     prefs.putBytes("config", &settings, sizeof(settings));
     prefs.putBytes("extSettings", &extSettings, sizeof(extSettings));
-    sendSettings();
+    saveUdpPeers();  // speichert Peers + ruft sendSettings()
     initHal();
 }
 

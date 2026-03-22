@@ -40,13 +40,27 @@ static void sendOtaLog(const char* event, const char* versionFrom, const char* v
     logHttp.end();
 }
 
+static void sendUpdateStatus(const char* msg) {
+    char buf[128];
+    snprintf(buf, sizeof(buf), "{\"updateStatus\":\"%s\"}", msg);
+    wsBroadcast(buf, strlen(buf));
+    Serial.printf("[OTA] %s\n", msg);
+}
+
 void checkForUpdates() {
-    if (strcmp(VERSION, "unknown") == 0) { return; }
+    if (strcmp(VERSION, "unknown") == 0) {
+        sendUpdateStatus("Kein Update: Dev-Build (unknown).");
+        return;
+    }
     // Manuell gebaute/geflashte Version (git describe: "v1.0.25a-3-gb480c38"):
     // kein automatisches Update installieren
-    if (strchr(VERSION, '-') != nullptr) { return; }
+    if (strchr(VERSION, '-') != nullptr) {
+        sendUpdateStatus("Kein Update: lokaler Dev-Build.");
+        return;
+    }
 
     // Version prüfen
+    sendUpdateStatus("Suche nach Updates...");
     WiFiClientSecure client;
     client.setInsecure();
     HTTPClient http;
@@ -57,21 +71,45 @@ void checkForUpdates() {
     latestUrl += "&version=";
     latestUrl += VERSION;
     http.begin(client, latestUrl);
-    if (http.GET() != 200) { http.end(); return; }
+    if (http.GET() != 200) {
+        http.end();
+        sendUpdateStatus("Update-Server nicht erreichbar.");
+        return;
+    }
     JsonDocument doc;
-    if (deserializeJson(doc, http.getStream()) != DeserializationError::Ok) { http.end(); return; }
+    if (deserializeJson(doc, http.getStream()) != DeserializationError::Ok) {
+        http.end();
+        sendUpdateStatus("Antwort des Update-Servers ungültig.");
+        return;
+    }
     const char* latestTag = doc["version"];
-    if (!latestTag) { http.end(); return; }
+    if (!latestTag) {
+        http.end();
+        sendUpdateStatus("Kein Update gefunden.");
+        return;
+    }
     // Gleiche Version
-    if (strcmp(latestTag, VERSION) == 0) { http.end(); return; }
+    if (strcmp(latestTag, VERSION) == 0) {
+        http.end();
+        sendUpdateStatus("Bereits aktuell.");
+        return;
+    }
     // Aktuelle Version ist ein Dev-Build ahead des Tags (git describe: "v1.0.25a-3-gb480c38")
     // → installierte Version ist neuer, kein Update nötig
-    if (String(VERSION).startsWith(String(latestTag) + "-")) { http.end(); return; }
+    if (String(VERSION).startsWith(String(latestTag) + "-")) {
+        http.end();
+        sendUpdateStatus("Bereits aktuell (Dev-Build).");
+        return;
+    }
     http.end();
 
     // Neues Update gefunden
     String newVersion = latestTag;
-    Serial.printf("Update verfügbar: %s -> %s\n", VERSION, newVersion.c_str());
+    {
+        char msg[64];
+        snprintf(msg, sizeof(msg), "Update %s wird installiert...", newVersion.c_str());
+        sendUpdateStatus(msg);
+    }
     String callParam = "&call=";
     callParam += settings.mycall;
     callParam += "&device=";
@@ -86,6 +124,8 @@ void checkForUpdates() {
     t_httpUpdate_return spiffsResult = httpUpdate.updateSpiffs(updateClient,
         "https://www.rMesh.de/update.php?file=" PIO_ENV_NAME "_littlefs.bin" + callParam);
     if (spiffsResult == HTTP_UPDATE_FAILED) {
+        String errMsg = "Update fehlgeschlagen (LittleFS): " + httpUpdate.getLastErrorString();
+        sendUpdateStatus(errMsg.c_str());
         sendOtaLog("update_failed", VERSION, newVersion.c_str(),
             ("LittleFS: " + httpUpdate.getLastErrorString()).c_str());
         return;
@@ -100,6 +140,8 @@ void checkForUpdates() {
         "https://www.rMesh.de/update.php?file=" PIO_ENV_NAME "_firmware.bin" + callParam);
     // Nur erreicht wenn fehlgeschlagen (Erfolg = Neustart)
     if (fwResult == HTTP_UPDATE_FAILED) {
+        String errMsg = "Update fehlgeschlagen (Firmware): " + httpUpdate.getLastErrorString();
+        sendUpdateStatus(errMsg.c_str());
         sendOtaLog("update_failed", VERSION, newVersion.c_str(),
             ("Firmware: " + httpUpdate.getLastErrorString()).c_str());
     }

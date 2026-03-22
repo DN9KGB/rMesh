@@ -14,6 +14,7 @@
 #include "frame.h"
 #include "routing.h"
 #include "peer.h"
+#include "wifiFunctions.h"
 
 #include <LilyGoLib.h>
 #include <WiFi.h>
@@ -206,6 +207,7 @@ static void doDeleteMessages();
 static void doSaveDisplay();
 static void doSaveSetup();
 static void doReboot();
+static void doUpdate();
 static void doSaveGroups();
 static void doNewGroup();
 static void doAnnounce();
@@ -273,6 +275,7 @@ static MenuItem setupItems[] = {
     {"Chip ID",            FTYPE_READONLY_STR, setupChipId,          0, nullptr, nullptr, 0.f, 0.f, 0.f, nullptr},
     {"Speichern",          FTYPE_ACTION,       nullptr,              0, nullptr, nullptr, 0.f, 0.f, 0.f, doSaveSetup},
     {"Neustart",           FTYPE_ACTION,       nullptr,              0, nullptr, nullptr, 0.f, 0.f, 0.f, doReboot},
+    {"Update",             FTYPE_ACTION,       nullptr,              0, nullptr, nullptr, 0.f, 0.f, 0.f, doUpdate},
     {"Nachr. loeschen",    FTYPE_ACTION,       nullptr,              0, nullptr, nullptr, 0.f, 0.f, 0.f, doDeleteMessages},
 };
 
@@ -1218,7 +1221,18 @@ static void doAnnounce() {
     uiMode = UI_CHAT; needRedraw = true;
 }
 static void doSave() {
-    for (int i = 0; i < 5; i++) strToIP(tmpPeerIP[i], extSettings.udpPeer[i]);
+    IPAddress parsedIPs[5];
+    for (int i = 0; i < 5; i++) strToIP(tmpPeerIP[i], parsedIPs[i]);
+    bool legacyBak[5] = {};
+    for (int i = 0; i < 5 && (size_t)i < udpPeerLegacy.size(); i++) legacyBak[i] = (bool)udpPeerLegacy[i];
+    std::vector<IPAddress> tail;
+    std::vector<bool> tailLegacy;
+    for (size_t i = 5; i < udpPeers.size(); i++) { tail.push_back(udpPeers[i]); tailLegacy.push_back((bool)udpPeerLegacy[i]); }
+    udpPeers.clear(); udpPeerLegacy.clear();
+    for (int i = 0; i < 5; i++) {
+        if (parsedIPs[i] != IPAddress(0,0,0,0)) { udpPeers.push_back(parsedIPs[i]); udpPeerLegacy.push_back(legacyBak[i]); }
+    }
+    for (size_t i = 0; i < tail.size(); i++) { udpPeers.push_back(tail[i]); udpPeerLegacy.push_back(tailLegacy[i]); }
     uiMode = UI_CHAT; needRedraw = true;
     saveSettings();
 }
@@ -1237,6 +1251,10 @@ static void doSaveSetup() {
 }
 static void doReboot() {
     rebootTimer = 0;
+    uiMode = UI_CHAT; needRedraw = true;
+}
+static void doUpdate() {
+    checkForUpdates();
     uiMode = UI_CHAT; needRedraw = true;
 }
 static void doSaveGroups() {
@@ -1352,7 +1370,10 @@ static void drawAbout() {
 
 // ─── Menu navigation ──────────────────────────────────────────────────
 static void openMenu() {
-    for (int i = 0; i < 5; i++) ipToStr(extSettings.udpPeer[i], tmpPeerIP[i], sizeof(tmpPeerIP[i]));
+    for (int i = 0; i < 5; i++) {
+        if ((size_t)i < udpPeers.size()) ipToStr(udpPeers[i], tmpPeerIP[i], sizeof(tmpPeerIP[i]));
+        else strncpy(tmpPeerIP[i], "0.0.0.0", sizeof(tmpPeerIP[i]));
+    }
     topSel = 0; topScroll = 0; uiMode = UI_MENU_TOP; needRedraw = true;
 }
 

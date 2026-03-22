@@ -97,6 +97,12 @@ void checkSerialRX() {
                     rebootTimer = 0;
                 }
 
+                //OTA Update
+                if (strncmp(serialRxBuffer, "upd", 3) == 0) {
+                    Serial.println("OTA Update gestartet...");
+                    checkForUpdates();
+                }
+
                 //Wifi Scannen
                 if (strncmp(serialRxBuffer, "sc", 2) == 0) {
                     Serial.println("WiFi scan.....");
@@ -412,29 +418,101 @@ void checkSerialRX() {
                     }
                 }
 
-                // UDP-Peer
-                // "udp 2 192.168.1.1" → Peer 2 (1-basiert) auf IP setzen
-                // "udp"               → alle Peers anzeigen
+                // UDP-Peer-Verwaltung
+                // "udp"                  → alle Peers auflisten
+                // "udp add <IP>"         → Peer anhängen
+                // "udp add <IP> legacy"  → Legacy-Peer anhängen
+                // "udp del <N>"          → Peer N löschen (1-basiert)
+                // "udp <N> <IP>"         → IP von Peer N setzen
+                // "udp <N> legacy"       → Legacy-Flag von Peer N umschalten
+                // "udp <N> enabled"      → Enabled-Flag von Peer N umschalten
+                // "udp clear"            → alle Peers löschen
                 if (strncmp(serialRxBuffer, "udp", 3) == 0) {
-                    char* spacePos = strchr(parameter, ' ');
-                    if (spacePos != nullptr) {
-                        int idx = atoi(parameter) - 1; // 1-basiert → 0-basiert
-                        if (idx >= 0 && idx < 5) {
-                            spacePos++;
-                            IPAddress tempIP;
-                            if (tempIP.fromString(spacePos)) {
-                                extSettings.udpPeer[idx] = tempIP;
-                                saveSettings();
-                                Serial.printf("UDP-Peer %d: %d.%d.%d.%d\n", idx + 1, tempIP[0], tempIP[1], tempIP[2], tempIP[3]);
-                            } else {
-                                Serial.println("Fehler: Ungültiges IP-Format!");
-                            }
+                    if (parameter == nullptr || parameter[0] == '\0') {
+                        // Alle Peers auflisten
+                        if (udpPeers.empty()) {
+                            Serial.println("UDP Peers: keine");
                         } else {
-                            Serial.println("Fehler: Index 1–5 erwartet!");
+                            for (size_t i = 0; i < udpPeers.size(); i++) {
+                                Serial.printf("UDP-Peer %zu: %d.%d.%d.%d%s\n", i + 1,
+                                    udpPeers[i][0], udpPeers[i][1], udpPeers[i][2], udpPeers[i][3],
+                                    udpPeerLegacy[i] ? " [legacy]" : "");
+                            }
+                        }
+                    } else if (strncmp(parameter, "clear", 5) == 0) {
+                        udpPeers.clear();
+                        udpPeerLegacy.clear();
+                        saveUdpPeers();
+                        Serial.println("Alle UDP-Peers gelöscht.");
+                    } else if (strncmp(parameter, "add ", 4) == 0) {
+                        const char* rest = parameter + 4;
+                        // IP extrahieren (bis Leerzeichen oder Ende)
+                        char ipStr[20];
+                        const char* sp = strchr(rest, ' ');
+                        if (sp) {
+                            size_t ipLen = sp - rest;
+                            if (ipLen < sizeof(ipStr)) {
+                                strncpy(ipStr, rest, ipLen);
+                                ipStr[ipLen] = '\0';
+                            } else { ipStr[0] = '\0'; }
+                        } else {
+                            strncpy(ipStr, rest, sizeof(ipStr) - 1);
+                            ipStr[sizeof(ipStr)-1] = '\0';
+                        }
+                        IPAddress tempIP;
+                        if (tempIP.fromString(ipStr)) {
+                            bool legacy = (sp && strstr(sp, "legacy") != nullptr);
+                            udpPeers.push_back(tempIP);
+                            udpPeerLegacy.push_back(legacy);
+                            saveUdpPeers();
+                            Serial.printf("UDP-Peer %zu hinzugefügt: %d.%d.%d.%d%s\n",
+                                udpPeers.size(), tempIP[0], tempIP[1], tempIP[2], tempIP[3],
+                                legacy ? " [legacy]" : "");
+                        } else {
+                            Serial.println("Fehler: Ungültiges IP-Format!");
+                        }
+                    } else if (strncmp(parameter, "del ", 4) == 0) {
+                        int idx = atoi(parameter + 4) - 1;
+                        if (idx >= 0 && (size_t)idx < udpPeers.size()) {
+                            Serial.printf("UDP-Peer %d gelöscht: %d.%d.%d.%d\n", idx + 1,
+                                udpPeers[idx][0], udpPeers[idx][1], udpPeers[idx][2], udpPeers[idx][3]);
+                            udpPeers.erase(udpPeers.begin() + idx);
+                            udpPeerLegacy.erase(udpPeerLegacy.begin() + idx);
+                            udpPeerEnabled.erase(udpPeerEnabled.begin() + idx);
+                            saveUdpPeers();
+                        } else {
+                            Serial.printf("Fehler: Index 1–%zu erwartet!\n", udpPeers.size());
                         }
                     } else {
-                        for (int i = 0; i < 5; i++) {
-                            Serial.printf("UDP-Peer %d: %d.%d.%d.%d\n", i + 1, extSettings.udpPeer[i][0], extSettings.udpPeer[i][1], extSettings.udpPeer[i][2], extSettings.udpPeer[i][3]);
+                        // "udp <N> <IP>", "udp <N> legacy" oder "udp <N> enabled"
+                        char* spacePos = strchr(parameter, ' ');
+                        if (spacePos != nullptr) {
+                            int idx = atoi(parameter) - 1;
+                            spacePos++;
+                            if (idx >= 0 && (size_t)idx < udpPeers.size()) {
+                                if (strncmp(spacePos, "legacy", 6) == 0) {
+                                    udpPeerLegacy[idx] = !udpPeerLegacy[idx];
+                                    saveUdpPeers();
+                                    Serial.printf("UDP-Peer %d legacy: %s\n", idx + 1, (bool)udpPeerLegacy[idx] ? "an" : "aus");
+                                } else if (strncmp(spacePos, "enabled", 7) == 0) {
+                                    udpPeerEnabled[idx] = !(bool)udpPeerEnabled[idx];
+                                    saveUdpPeers();
+                                    Serial.printf("UDP-Peer %d enabled: %s\n", idx + 1, (bool)udpPeerEnabled[idx] ? "an" : "aus");
+                                } else {
+                                    IPAddress tempIP;
+                                    if (tempIP.fromString(spacePos)) {
+                                        udpPeers[idx] = tempIP;
+                                        saveUdpPeers();
+                                        Serial.printf("UDP-Peer %d: %d.%d.%d.%d\n", idx + 1, tempIP[0], tempIP[1], tempIP[2], tempIP[3]);
+                                    } else {
+                                        Serial.println("Fehler: Ungültiges IP-Format!");
+                                    }
+                                }
+                            } else {
+                                Serial.printf("Fehler: Index 1–%zu erwartet!\n", udpPeers.size());
+                            }
+                        } else {
+                            Serial.println("Befehle: udp | udp add <IP> [legacy] | udp del <N> | udp <N> <IP> | udp <N> legacy | udp <N> enabled | udp clear");
                         }
                     }
                 }

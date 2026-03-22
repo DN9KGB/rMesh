@@ -397,9 +397,7 @@ function onMessage(event) {
 
         //UDP Peers
         if (d.settings.udpPeers) {
-            d.settings.udpPeers.forEach(function(p, index) {
-                document.getElementById("settingsUDPPeer" + index).value = p.ip[0] + "." + p.ip[1] + "." + p.ip[2] + "." + p.ip[3];                
-            });
+            renderUdpPeers(d.settings.udpPeers);
         }
 
         if (init == false) {
@@ -460,6 +458,11 @@ function onMessage(event) {
             guiSettings.update = d.status.time;
             saveGuiSettings();
         }
+    }
+
+    //Update-Status
+    if (d.updateStatus !== undefined) {
+        showModal("Update", d.updateStatus, "", false);
     }
 
     //WiFi Scan
@@ -528,6 +531,36 @@ function onFrequencyChange() {
     }
 }
 
+function renderUdpPeers(peers) {
+    var list = document.getElementById('udpPeerList');
+    if (!list) return;
+    list.innerHTML = '<table class="udpPeerTable">'
+        + '<thead><tr><th>IP</th><th>legacy</th><th>aktiv</th><th></th></tr></thead>'
+        + '<tbody id="udpPeerBody"></tbody></table>';
+    peers.forEach(function(p) {
+        var tbody = document.getElementById('udpPeerBody');
+        var tr = document.createElement('tr');
+        tr.className = 'udpPeerRow';
+        tr.innerHTML = '<td><input class="udpPeerIP" value="' + p.ip.join('.') + '"></td>'
+            + '<td><input type="checkbox" class="udpPeerLegacy"' + (p.legacy ? ' checked' : '') + '></td>'
+            + '<td><input type="checkbox" class="udpPeerEnabled"' + (p.enabled !== false ? ' checked' : '') + '></td>'
+            + '<td><button onclick="this.closest(\'tr\').remove()">✕</button></td>';
+        tbody.appendChild(tr);
+    });
+}
+
+function addUdpPeer() {
+    var tbody = document.getElementById('udpPeerBody');
+    if (!tbody) { renderUdpPeers([]); tbody = document.getElementById('udpPeerBody'); }
+    var tr = document.createElement('tr');
+    tr.className = 'udpPeerRow';
+    tr.innerHTML = '<td><input class="udpPeerIP" value=""></td>'
+        + '<td><input type="checkbox" class="udpPeerLegacy"></td>'
+        + '<td><input type="checkbox" class="udpPeerEnabled" checked></td>'
+        + '<td><button onclick="this.closest(\'tr\').remove()">✕</button></td>';
+    tbody.appendChild(tr);
+}
+
 function saveSettings() {
     // Web password handling
     const pw1 = document.getElementById("settingsWebPassword").value;
@@ -564,21 +597,21 @@ function saveSettings() {
     settings["loraPreambleLength"] = parseInt(document.getElementById("settingsLoraPreambleLength").value);
     settings["loraRepeat"] = document.getElementById("settingsLoraRepeat").checked;
     settings["udpPeers"] = [];
-    for (var i = 0; i < 5; i++) {
-        var val = document.getElementById("settingsUDPPeer" + i).value;
-        if (!val) val = "0.0.0.0";
-        var ipParts = val.split('.').map(Number);
-        settings["udpPeers"].push({
-            "ip": ipParts
-        });
-    }
+    document.querySelectorAll('#udpPeerList .udpPeerRow').forEach(function(row) {
+        var val = row.querySelector('.udpPeerIP').value || "0.0.0.0";
+        settings["udpPeers"].push({ "ip": val.split('.').map(Number), "legacy": row.querySelector('.udpPeerLegacy').checked, "enabled": row.querySelector('.udpPeerEnabled').checked });
+    });
     sendWS(JSON.stringify({settings: settings}));
     showModal("Note", "Settings saved.", "", false); 
 }
 
 function reboot() {
+    showModal("Note", "Neustart wird durchgeführt...", "", false);
     sendWS(JSON.stringify({reboot: true }));
-    showModal("Note", "System rebooting...", "", false);
+}
+
+function triggerUpdate() {
+    sendWS(JSON.stringify({update: true }));
 }
 
 function syncTime() {
@@ -594,11 +627,13 @@ function deleteMessages() {
 function sendAnnounce() {
     sendWS(JSON.stringify({announce: true }));
     okSound.play();
+    showModal("Note", "Announcement gesendet.", "", false);
 }
 
 function sendTuning() {
     sendWS(JSON.stringify({tune: true }));
     okSound.play();
+    showModal("Note", "Tune gesendet.", "", false);
 }
 
 function hashPassword(password) {
