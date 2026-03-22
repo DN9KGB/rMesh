@@ -31,4 +31,6 @@ Befehlsübersicht:
   mht <hops>           Max Hops fuer Telemetrie
   udp <1-5> <ip>       UDP-Peer setzen (z.B. udp 1 192.168.1.100)
   udp                  Alle UDP-Peers anzeigen
+  webpw <passwort>     WebUI-Passwort setzen
+  webpw -              WebUI-Passwort loeschen
 

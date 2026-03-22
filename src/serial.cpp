@@ -14,6 +14,8 @@
 #include "wifiFunctions.h"
 #include "helperFunctions.h"
 #include "routing.h"
+#include "auth.h"
+#include "mbedtls/md.h"
 
 //String serialRxBuffer;
 
@@ -380,6 +382,34 @@ void checkSerialRX() {
                         saveSettings();
                     }
                     Serial.printf("MaxHopTelemetry: %d\n", extSettings.maxHopTelemetry);
+                }
+
+                // WebUI-Passwort
+                // "webpw <passwort>" → Passwort setzen (wird als SHA256 gespeichert)
+                // "webpw -"          → Passwort loeschen
+                if (strncmp(serialRxBuffer, "webp", 4) == 0) {
+                    if (strlen(parameter) > 0) {
+                        if (strcmp(parameter, "-") == 0) {
+                            savePasswordHash("");
+                            Serial.println("WebUI-Passwort geloescht.");
+                        } else {
+                            uint8_t hash[32];
+                            mbedtls_md_context_t ctx;
+                            mbedtls_md_init(&ctx);
+                            mbedtls_md_setup(&ctx, mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), 0);
+                            mbedtls_md_starts(&ctx);
+                            mbedtls_md_update(&ctx, (const uint8_t*)parameter, strlen(parameter));
+                            mbedtls_md_finish(&ctx, hash);
+                            mbedtls_md_free(&ctx);
+                            char hexHash[65];
+                            for (int i = 0; i < 32; i++) sprintf(hexHash + 2 * i, "%02x", hash[i]);
+                            hexHash[64] = '\0';
+                            savePasswordHash(String(hexHash));
+                            Serial.println("WebUI-Passwort gesetzt.");
+                        }
+                    } else {
+                        Serial.printf("WebUI-Passwort: %s\n", webPasswordHash.isEmpty() ? "nicht gesetzt" : "gesetzt");
+                    }
                 }
 
                 // UDP-Peer
