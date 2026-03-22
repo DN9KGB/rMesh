@@ -244,7 +244,6 @@ void trimFileTask(void * pvParameters) {
             }
             countFile.close();
         }
-        Serial.printf("Trim-Task gestartet: Datei=%s, Zeilen aktuell=%d, Behalten=%d\n", p->fileName, lineCount, p->maxLines);
         // Berechnen, wie viele Zeilen übersprungen werden müssen
         if (lineCount > p->maxLines) {
             size_t linesToSkip = lineCount - p->maxLines;
@@ -288,7 +287,6 @@ void trimFileTask(void * pvParameters) {
                 
             }
         }
-        Serial.printf("Datei %s bereinigt. Zeilen vorher: %d, nachher: %d\n", p->fileName, lineCount, p->maxLines);
         xSemaphoreGive(fsMutex);
     }
 
