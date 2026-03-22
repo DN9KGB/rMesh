@@ -1,13 +1,4 @@
 
-@font-face {
-  font-family: 'FixedsysExcelsior';
-  /* Stelle sicher, dass die Datei im selben Ordner wie die CSS-Datei liegt */
-  src: url('Fixedsys_Excelsior.woff') format('woff');
-  font-weight: normal;
-  font-style: normal;
-
-}
-
   #overlay {
     position: fixed;
     inset: 0;
@@ -45,7 +36,7 @@ html {
 }
 
 body, button {
-    font-family: 'FixedsysExcelsior', 'Courier New', monospace;
+    font-family: 'Courier New', monospace;
     font-size: 18px;
     padding: 0px;
     margin: 0px;
