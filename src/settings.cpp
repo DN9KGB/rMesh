@@ -220,8 +220,6 @@ void loadSettings() {
 
     // Band-spezifische Korrekturen nach dem Laden
     if (loraConfigured(settings.loraFrequency)) {
-        // SyncWord immer aus Frequenz ableiten (verhindert Netz-Crossover)
-        settings.loraSyncWord = syncWordForFrequency(settings.loraFrequency);
         // TX-Power auf regulatorisches Maximum begrenzen (Public-Band: 27 dBm)
         if (isPublicBand(settings.loraFrequency) && settings.loraOutputPower > PUBLIC_MAX_TX_POWER) {
             settings.loraOutputPower = PUBLIC_MAX_TX_POWER;

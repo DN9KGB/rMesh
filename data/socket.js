@@ -319,7 +319,7 @@ const LORA_PRESETS = {
         bandwidth:       125,
         spreadingFactor: 7,
         codingRate:      5,
-        outputPower:     22,
+        outputPower:     27,
         preambleLength:  10,
         syncWord:        '12',
     }
@@ -335,6 +335,24 @@ function applyLoraPreset(band) {
     document.getElementById('settingsLoraOutputPower').value     = p.outputPower;
     document.getElementById('settingsLoraPreambleLength').value  = p.preambleLength;
     document.getElementById('settingsLoraSyncWord').value        = p.syncWord;
+    document.getElementById('loraPreset').value                  = band;
+}
+
+function onFrequencyChange() {
+    const newFreq = parseFloat(document.getElementById('settingsLoraFrequency').value);
+    if (isNaN(newFreq) || newFreq === 0) return;
+
+    let newBand = null;
+    if (newFreq >= 430 && newFreq <= 440)        newBand = '433';
+    else if (newFreq >= 869.4 && newFreq <= 869.65) newBand = '868';
+    if (!newBand) return;
+
+    const currentBand = document.getElementById('loraPreset').value;
+    if (newBand !== currentBand) {
+        applyLoraPreset(newBand);
+        // Eingetippte Frequenz beibehalten, nur Restparameter aus Preset laden
+        document.getElementById('settingsLoraFrequency').value = newFreq;
+    }
 }
 
 function saveSettings() {
