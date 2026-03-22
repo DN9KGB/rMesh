@@ -90,7 +90,7 @@ void checkSerialRX() {
                 }
 
                 //Reboot
-                if (serialRxBuffer[0] == 'r' && (serialRxBuffer[1] == ' ' || serialRxBuffer[1] == '\0')) {
+                if (strncmp(serialRxBuffer, "reb", 3) == 0) {
                     Serial.println("Reboot...");
                     rebootTimer = 0;
                 }
@@ -114,7 +114,7 @@ void checkSerialRX() {
                 }    
                 
                 //Wifi Password
-                if (serialRxBuffer[0] == 'p' && (serialRxBuffer[1] == ' ' || serialRxBuffer[1] == '\0')) {
+                if (strncmp(serialRxBuffer, "pa", 2) == 0) {
                     if (strlen(parameter) > 0) {
                         strncpy(settings.wifiPassword, parameter, sizeof(settings.wifiPassword) - 1);
                         settings.wifiPassword[sizeof(settings.wifiPassword) - 1] = '\0'; 
