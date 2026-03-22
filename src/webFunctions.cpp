@@ -163,28 +163,21 @@ void startWebServer() {
         //UDP Peers
         if (json["settings"]["udpPeers"].is<JsonArray>()) {
             JsonArray peers = json["settings"]["udpPeers"];
-            uint8_t count = sizeof(extSettings.udpPeer) / sizeof(extSettings.udpPeer[0]);
-            for (int i = 0; i < count; i++) {
-                if (i < peers.size()) {
-                    JsonVariant v = peers[i]["ip"];
-                    if (v.is<JsonArray>() && v.size() == 4) {
-                        JsonArray ipBytes = v.as<JsonArray>();
-                        extSettings.udpPeer[i] = IPAddress(
-                            ipBytes[0] | 0,
-                            ipBytes[1] | 0,
-                            ipBytes[2] | 0,
-                            ipBytes[3] | 0
-                        );
-                    }
-                } else {
-                    extSettings.udpPeer[i] = IPAddress(0, 0, 0, 0);
+            udpPeers.clear();
+            udpPeerLegacy.clear();
+            udpPeerEnabled.clear();
+            for (JsonObject p : peers) {
+                JsonVariant v = p["ip"];
+                if (v.is<JsonArray>() && v.size() == 4) {
+                    JsonArray ip = v.as<JsonArray>();
+                    udpPeers.push_back(IPAddress(ip[0]|0, ip[1]|0, ip[2]|0, ip[3]|0));
+                    udpPeerLegacy.push_back(p["legacy"] | false);
+                    udpPeerEnabled.push_back(p["enabled"] | true);
                 }
             }
         }
       if (json["settings"]["loraFrequency"].is<JsonVariant>()) {
         settings.loraFrequency = json["settings"]["loraFrequency"].as<float>();
-        // SyncWord automatisch aus Frequenz ableiten – verhindert Netz-Crossover
-        settings.loraSyncWord = syncWordForFrequency(settings.loraFrequency);
         // TX-Power auf regulatorisches Maximum begrenzen (Public-Band: 27 dBm)
         if (isPublicBand(settings.loraFrequency) && settings.loraOutputPower > PUBLIC_MAX_TX_POWER) {
             settings.loraOutputPower = PUBLIC_MAX_TX_POWER;
@@ -197,10 +190,7 @@ void startWebServer() {
         }
       }
       if (json["settings"]["loraBandwidth"].is<JsonVariant>()) { settings.loraBandwidth = json["settings"]["loraBandwidth"].as<float>(); }
-      if (json["settings"]["loraSyncWord"].is<JsonVariant>()) {
-        // SyncWord kann nicht manuell geändert werden – wird immer aus Frequenz abgeleitet
-        // Dieser Eintrag wird ignoriert.
-      }
+      if (json["settings"]["loraSyncWord"].is<JsonVariant>()) { settings.loraSyncWord = json["settings"]["loraSyncWord"].as<uint8_t>(); }
       if (json["settings"]["loraCodingRate"].is<JsonVariant>()) { settings.loraCodingRate = json["settings"]["loraCodingRate"].as<uint8_t>(); }
       if (json["settings"]["loraSpreadingFactor"].is<JsonVariant>()) { settings.loraSpreadingFactor = json["settings"]["loraSpreadingFactor"].as<uint8_t>(); }
       if (json["settings"]["loraPreambleLength"].is<JsonVariant>()) { settings.loraPreambleLength = json["settings"]["loraPreambleLength"].as<int16_t>(); }
@@ -293,6 +283,12 @@ void startWebServer() {
     if (json["reboot"].is<JsonVariant>()) {
       Serial.println("Reboot");
       rebootTimer = 0;
+    }
+
+    //OTA Update
+    if (json["update"].is<JsonVariant>()) {
+      Serial.println("OTA Update gestartet...");
+      checkForUpdates();
     }
 
   });

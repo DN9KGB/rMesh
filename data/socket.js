@@ -5,6 +5,29 @@ var baseURL = "";
 var gateway = "";
 var init = false;
 
+// Mute und Sammelgruppe pro Channel (gespeichert als Cookies)
+// channelMuted[i] = true → kein Sound/Badge für Channel i
+// channelSammel   = Channel-Index 3-10 der als Sammelgruppe dient (0 = keine)
+// sammelGroups    = Array von Gruppen-Namen-Strings, die in die Sammelgruppe geleitet werden
+var channelMuted  = new Array(11).fill(false);
+var channelSammel = 0;
+var sammelGroups  = [];
+
+function loadChannelFlags() {
+    channelSammel = parseInt(Cookie.get("chSamCol") || "0");
+    for (let i = 1; i <= 10; i++) {
+        channelMuted[i] = Cookie.get("chMute" + i) === "1";
+    }
+    try { sammelGroups = JSON.parse(Cookie.get("chSamGrps") || "[]"); } catch(e) { sammelGroups = []; }
+}
+function saveChannelFlags() {
+    Cookie.set("chSamCol", String(channelSammel));
+    for (let i = 1; i <= 10; i++) {
+        Cookie.set("chMute" + i, channelMuted[i] ? "1" : "0");
+    }
+    Cookie.set("chSamGrps", JSON.stringify(sammelGroups));
+}
+
 // ── Auth-State ────────────────────────────────────────────────────────────────
 var authRequired = false;
 var authNonce    = "";
@@ -182,9 +205,7 @@ function onMessage(event) {
         settings.altTitel = "🚨 " + settings.name + " - " + settings.mycall + " 🚨"
         //UDP Peers
         if (d.settings.udpPeers) {
-            d.settings.udpPeers.forEach(function(p, index) {
-                document.getElementById("settingsUDPPeer" + index).value = p.ip[0] + "." + p.ip[1] + "." + p.ip[2] + "." + p.ip[3];                
-            });
+            renderUdpPeers(d.settings.udpPeers);
         }
 
         // Chip ID + Hardware im Setup anzeigen
@@ -266,6 +287,11 @@ function onMessage(event) {
         if (row) { row.style.display = ''; }
     }
 
+    //Update-Status
+    if (d.updateStatus !== undefined) {
+        msgBox(d.updateStatus);
+    }
+
     //WiFi Scan
     if (d.wifiScan) {
         const select = document.getElementById('settingsSSIDList');
@@ -319,7 +345,7 @@ const LORA_PRESETS = {
         bandwidth:       125,
         spreadingFactor: 7,
         codingRate:      5,
-        outputPower:     22,
+        outputPower:     27,
         preambleLength:  10,
         syncWord:        '12',
     }
@@ -335,6 +361,54 @@ function applyLoraPreset(band) {
     document.getElementById('settingsLoraOutputPower').value     = p.outputPower;
     document.getElementById('settingsLoraPreambleLength').value  = p.preambleLength;
     document.getElementById('settingsLoraSyncWord').value        = p.syncWord;
+    document.getElementById('loraPreset').value                  = band;
+}
+
+function onFrequencyChange() {
+    const newFreq = parseFloat(document.getElementById('settingsLoraFrequency').value);
+    if (isNaN(newFreq) || newFreq === 0) return;
+
+    let newBand = null;
+    if (newFreq >= 430 && newFreq <= 440)        newBand = '433';
+    else if (newFreq >= 869.4 && newFreq <= 869.65) newBand = '868';
+    if (!newBand) return;
+
+    const currentBand = document.getElementById('loraPreset').value;
+    if (newBand !== currentBand) {
+        applyLoraPreset(newBand);
+        // Eingetippte Frequenz beibehalten, nur Restparameter aus Preset laden
+        document.getElementById('settingsLoraFrequency').value = newFreq;
+    }
+}
+
+function renderUdpPeers(peers) {
+    var list = document.getElementById('udpPeerList');
+    if (!list) return;
+    list.innerHTML = '<table class="udpPeerTable">'
+        + '<thead><tr><th>IP</th><th>legacy</th><th>aktiv</th><th></th></tr></thead>'
+        + '<tbody id="udpPeerBody"></tbody></table>';
+    peers.forEach(function(p) {
+        var tbody = document.getElementById('udpPeerBody');
+        var tr = document.createElement('tr');
+        tr.className = 'udpPeerRow';
+        tr.innerHTML = '<td><input class="input-box udpPeerIP" value="' + p.ip.join('.') + '"></td>'
+            + '<td><input type="checkbox" class="udpPeerLegacy"' + (p.legacy ? ' checked' : '') + '></td>'
+            + '<td><input type="checkbox" class="udpPeerEnabled"' + (p.enabled !== false ? ' checked' : '') + '></td>'
+            + '<td><button class="button" onclick="this.closest(\'tr\').remove()">✕</button></td>';
+        tbody.appendChild(tr);
+    });
+}
+
+function addUdpPeer() {
+    var tbody = document.getElementById('udpPeerBody');
+    if (!tbody) { renderUdpPeers([]); tbody = document.getElementById('udpPeerBody'); }
+    var tr = document.createElement('tr');
+    tr.className = 'udpPeerRow';
+    tr.innerHTML = '<td><input class="input-box udpPeerIP" value=""></td>'
+        + '<td><input type="checkbox" class="udpPeerLegacy"></td>'
+        + '<td><input type="checkbox" class="udpPeerEnabled" checked></td>'
+        + '<td><button class="button" onclick="this.closest(\'tr\').remove()">✕</button></td>';
+    tbody.appendChild(tr);
 }
 
 function saveSettings() {
@@ -367,11 +441,10 @@ function saveSettings() {
     s["loraPreambleLength"] = parseInt(document.getElementById("settingsLoraPreambleLength").value);
     s["loraRepeat"] = document.getElementById("settingsLoraRepeat").checked;
     s["udpPeers"] = [];
-    for (var i = 0; i < 5; i++) {
-        var val = document.getElementById("settingsUDPPeer" + i).value;
-        if (!val) val = "0.0.0.0";
-        s["udpPeers"].push({ "ip": val.split('.').map(Number) });
-    }
+    document.querySelectorAll('#udpPeerList .udpPeerRow').forEach(function(row) {
+        var val = row.querySelector('.udpPeerIP').value || "0.0.0.0";
+        s["udpPeers"].push({ "ip": val.split('.').map(Number), "legacy": row.querySelector('.udpPeerLegacy').checked, "enabled": row.querySelector('.udpPeerEnabled').checked });
+    });
     sendWS(JSON.stringify({settings: s}));
 
     // ── Passwort setzen (nur wenn Felder ausgefüllt) ──────────────────────────
@@ -450,10 +523,16 @@ function showMessages(parseAll = false) {
             if ((m.dstGroup == Cookie.get("channel" + i)) && (m.dstCall == "") && (found == false)) {
                 found = true;
                 document.getElementById("channel" + i).innerHTML += msg;
-                if (!parseAll) {channels[i] = true;}
-                sound = 1;
+                if (!parseAll && !channelMuted[i]) { channels[i] = true; sound = 1; }
             }
-        }        
+        }
+
+        //Sammelgruppe: Nachrichten von definierten Gruppen ohne eigenen Tab
+        if (found == false && m.dstGroup && channelSammel > 0 && sammelGroups.includes(m.dstGroup)) {
+            found = true;
+            document.getElementById("channel" + channelSammel).innerHTML += msg;
+            // keine Notification
+        }
 
         //Nachrichten, die ich gesendet habe -> Channel 2
         if ((m.srcCall == document.getElementById("settingsMycall").value) && (m.dstGroup == "") && (found == false)) {
