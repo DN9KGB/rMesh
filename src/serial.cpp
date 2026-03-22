@@ -103,6 +103,22 @@ void checkSerialRX() {
                     checkForUpdates();
                 }
 
+                // Update-Kanal setzen: "uc 0" = Release, "uc 1" = Dev
+                if (strncmp(serialRxBuffer, "uc", 2) == 0 && (serialRxBuffer[2] == ' ' || serialRxBuffer[2] == '\0')) {
+                    if (strlen(parameter) > 0) {
+                        updateChannel = (uint8_t)atoi(parameter);
+                        saveSettings();
+                    }
+                    Serial.printf("updateChannel: %d (%s)\n", updateChannel, updateChannel == 1 ? "dev" : "release");
+                }
+
+                // Force-Install: "updf 0" = Release, "updf 1" = Dev
+                if (strncmp(serialRxBuffer, "updf", 4) == 0) {
+                    pendingForceChannel = (strlen(parameter) > 0) ? (uint8_t)atoi(parameter) : updateChannel;
+                    pendingForceUpdate = true;
+                    Serial.printf("Force-Install gestartet (Kanal: %s)...\n", pendingForceChannel == 1 ? "dev" : "release");
+                }
+
                 //Wifi Scannen
                 if (strncmp(serialRxBuffer, "sc", 2) == 0) {
                     Serial.println("WiFi scan.....");
