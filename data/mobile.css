@@ -114,6 +114,7 @@ input[type="checkbox"]:checked::after {
 td {
     color: #cfcfcf;
     padding: 5px 10px 5px 0;
+    vertical-align: top;
 }
 
 table.list {
@@ -434,3 +435,27 @@ table.list th { text-align: left; }
     border-radius: 4px; 
 }
 ::-webkit-scrollbar-thumb:hover { background: #009eaf; }
+
+.udpPeerTable {
+    border-collapse: collapse;
+    width: 100%;
+}
+.udpPeerTable th {
+    text-align: left;
+    padding: 2px 6px 4px 6px;
+    font-size: 0.82em;
+    opacity: 0.65;
+}
+.udpPeerTable td {
+    padding: 2px 4px;
+    vertical-align: middle;
+    text-align: center;
+}
+.udpPeerTable td:first-child {
+    text-align: left;
+    width: 100%;
+}
+.udpPeerTable .udpPeerIP {
+    width: 100%;
+    min-width: 110px;
+}

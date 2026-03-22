@@ -51,11 +51,10 @@
             <tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td>Subnet</td> <td> <input id='settingsWifiNetMask'> </td> </tr>
             <tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td>Gateway</td> <td> <input id='settingsWifiGateway'> </td> </tr>
             <tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td>DNS</td> <td> <input id='settingsWifiDNS'> </td> </tr>
-            <tr> <td> UDP-Peer 1 </td> <td> <input id='settingsUDPPeer0'> </td> </tr>
-            <tr> <td> UDP-Peer 2 </td> <td> <input id='settingsUDPPeer1'> </td> </tr>
-            <tr> <td> UDP-Peer 3 </td> <td> <input id='settingsUDPPeer2'> </td> </tr>
-            <tr> <td> UDP-Peer 4 </td> <td> <input id='settingsUDPPeer3'> </td> </tr>
-            <tr> <td> UDP-Peer 5 </td> <td> <input id='settingsUDPPeer4'> </td> </tr>
+            <tr> <td> UDP-Peers </td> <td>
+                <div id="udpPeerList"></div>
+                <button onclick="addUdpPeer()">+ Peer</button>
+            </td> </tr>
             <tr class="AP_MODE_ENABLED"> <td>NTP-Server:</td> <td><input id="settingsNTP"></td> </tr>
         </table>
         <button class="button" onclick="saveSettings();">save</button>
@@ -135,6 +134,7 @@
         </table>
         <button class="button" onclick="saveSettings();">save</button>
         <button class="button" onclick="reboot();">reboot</button>
+        <button class="button" onclick="triggerUpdate();">update</button>
         <button class="button" onclick="syncTime();">sync browser time</button>
     </main>
 

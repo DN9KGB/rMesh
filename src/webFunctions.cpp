@@ -163,21 +163,16 @@ void startWebServer() {
         //UDP Peers
         if (json["settings"]["udpPeers"].is<JsonArray>()) {
             JsonArray peers = json["settings"]["udpPeers"];
-            uint8_t count = sizeof(extSettings.udpPeer) / sizeof(extSettings.udpPeer[0]);
-            for (int i = 0; i < count; i++) {
-                if (i < peers.size()) {
-                    JsonVariant v = peers[i]["ip"];
-                    if (v.is<JsonArray>() && v.size() == 4) {
-                        JsonArray ipBytes = v.as<JsonArray>();
-                        extSettings.udpPeer[i] = IPAddress(
-                            ipBytes[0] | 0,
-                            ipBytes[1] | 0,
-                            ipBytes[2] | 0,
-                            ipBytes[3] | 0
-                        );
-                    }
-                } else {
-                    extSettings.udpPeer[i] = IPAddress(0, 0, 0, 0);
+            udpPeers.clear();
+            udpPeerLegacy.clear();
+            udpPeerEnabled.clear();
+            for (JsonObject p : peers) {
+                JsonVariant v = p["ip"];
+                if (v.is<JsonArray>() && v.size() == 4) {
+                    JsonArray ip = v.as<JsonArray>();
+                    udpPeers.push_back(IPAddress(ip[0]|0, ip[1]|0, ip[2]|0, ip[3]|0));
+                    udpPeerLegacy.push_back(p["legacy"] | false);
+                    udpPeerEnabled.push_back(p["enabled"] | true);
                 }
             }
         }
@@ -288,6 +283,12 @@ void startWebServer() {
     if (json["reboot"].is<JsonVariant>()) {
       Serial.println("Reboot");
       rebootTimer = 0;
+    }
+
+    //OTA Update
+    if (json["update"].is<JsonVariant>()) {
+      Serial.println("OTA Update gestartet...");
+      checkForUpdates();
     }
 
   });

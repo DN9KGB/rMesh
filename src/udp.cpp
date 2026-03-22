@@ -28,8 +28,39 @@ bool checkUDP(Frame &f) {
         bool hasSyncword = (packetBuffer[0] == AMATEUR_SYNCWORD || packetBuffer[0] == PUBLIC_SYNCWORD);
         uint8_t pktSyncword = hasSyncword ? packetBuffer[0] : AMATEUR_SYNCWORD;
         if (pktSyncword != settings.loraSyncWord) return false;
+
         f.importBinary(hasSyncword ? packetBuffer + 1 : packetBuffer,
                        hasSyncword ? len - 1 : len);
+
+        // Sender-IP im Peer-Vektor suchen
+        IPAddress senderIP = udp.remoteIP();
+        int peerIdx = -1;
+        for (size_t i = 0; i < udpPeers.size(); i++) {
+            if (udpPeers[i] == senderIP) { peerIdx = (int)i; break; }
+        }
+
+        if (f.frameType == Frame::FrameTypes::ANNOUNCE_FRAME && peerIdx < 0) {
+            // Neuen Peer aus Broadcast-Announce anlegen
+            udpPeers.push_back(senderIP);
+            udpPeerLegacy.push_back(!hasSyncword);
+            udpPeerEnabled.push_back(true);
+            saveUdpPeers();
+            Serial.printf("UDP Peer von Announce eingetragen: %d.%d.%d.%d\n",
+                senderIP[0], senderIP[1], senderIP[2], senderIP[3]);
+        } else if (!hasSyncword) {
+            // Legacy-Node (kein SyncWord-Präfix)
+            if (peerIdx < 0) {
+                udpPeers.push_back(senderIP);
+                udpPeerLegacy.push_back(true);
+                udpPeerEnabled.push_back(true);
+                saveUdpPeers();
+                Serial.printf("UDP Legacy-Peer automatisch eingetragen: %d.%d.%d.%d\n",
+                    senderIP[0], senderIP[1], senderIP[2], senderIP[3]);
+            } else if (!(bool)udpPeerLegacy[peerIdx]) {
+                udpPeerLegacy[peerIdx] = true;
+                saveUdpPeers();
+            }
+        }
         f.tx = false;
         f.timestamp = time(NULL);
         f.rssi = 0;
@@ -56,17 +87,26 @@ void sendUDP(Frame &f) {
     // SyncWord als erstes Byte voranstellen, damit Empfänger fremde Netze ablehnen können
     txBuffer[0] = settings.loraSyncWord;
     txBufferLength = f.exportBinary(txBuffer + 1, sizeof(txBuffer) - 1) + 1;
-    uint8_t count = sizeof(extSettings.udpPeer) / sizeof(extSettings.udpPeer[0]);
     bool udpTX = false;
-    for (int i = 0; i < count; i++) {
-        if ((extSettings.udpPeer[i][0] != 0) && (extSettings.udpPeer[i][1] != 0) && (extSettings.udpPeer[i][2] != 0) && (extSettings.udpPeer[i][3] != 0)){
-            //Serial.printf("UDP TX %i: %d.%d.%d.%d\n", i, extSettings.udpPeer[i][0], extSettings.udpPeer[i][1], extSettings.udpPeer[i][2], extSettings.udpPeer[i][3]);
-            udp.beginPacket(extSettings.udpPeer[i], UDP_PORT);
+    for (size_t i = 0; i < udpPeers.size(); i++) {
+        if (!(bool)udpPeerEnabled[i]) continue;  // Deaktivierte Peers überspringen
+        udp.beginPacket(udpPeers[i], UDP_PORT);
+        if ((bool)udpPeerLegacy[i]) {
+            udp.write(txBuffer + 1, txBufferLength - 1);
+        } else {
             udp.write(txBuffer, txBufferLength);
-            udp.endPacket();
-            udp.flush();
-            udpTX = true;
         }
+        udp.endPacket();
+        udp.flush();
+        udpTX = true;
+    }
+    // Announces immer auch per Broadcast senden (damit neue Nodes erkannt werden)
+    if (f.frameType == Frame::FrameTypes::ANNOUNCE_FRAME) {
+        udp.beginPacket(settings.wifiBrodcast, UDP_PORT);
+        udp.write(txBuffer, txBufferLength);
+        udp.endPacket();
+        udp.flush();
+        udpTX = true;
     }
     //Frame monitoren
     if (udpTX) {

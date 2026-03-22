@@ -205,9 +205,7 @@ function onMessage(event) {
         settings.altTitel = "🚨 " + settings.name + " - " + settings.mycall + " 🚨"
         //UDP Peers
         if (d.settings.udpPeers) {
-            d.settings.udpPeers.forEach(function(p, index) {
-                document.getElementById("settingsUDPPeer" + index).value = p.ip[0] + "." + p.ip[1] + "." + p.ip[2] + "." + p.ip[3];                
-            });
+            renderUdpPeers(d.settings.udpPeers);
         }
 
         // Chip ID + Hardware im Setup anzeigen
@@ -287,6 +285,11 @@ function onMessage(event) {
         }
         var row = document.getElementById("updateRow");
         if (row) { row.style.display = ''; }
+    }
+
+    //Update-Status
+    if (d.updateStatus !== undefined) {
+        msgBox(d.updateStatus);
     }
 
     //WiFi Scan
@@ -378,6 +381,36 @@ function onFrequencyChange() {
     }
 }
 
+function renderUdpPeers(peers) {
+    var list = document.getElementById('udpPeerList');
+    if (!list) return;
+    list.innerHTML = '<table class="udpPeerTable">'
+        + '<thead><tr><th>IP</th><th>legacy</th><th>aktiv</th><th></th></tr></thead>'
+        + '<tbody id="udpPeerBody"></tbody></table>';
+    peers.forEach(function(p) {
+        var tbody = document.getElementById('udpPeerBody');
+        var tr = document.createElement('tr');
+        tr.className = 'udpPeerRow';
+        tr.innerHTML = '<td><input class="input-box udpPeerIP" value="' + p.ip.join('.') + '"></td>'
+            + '<td><input type="checkbox" class="udpPeerLegacy"' + (p.legacy ? ' checked' : '') + '></td>'
+            + '<td><input type="checkbox" class="udpPeerEnabled"' + (p.enabled !== false ? ' checked' : '') + '></td>'
+            + '<td><button class="button" onclick="this.closest(\'tr\').remove()">✕</button></td>';
+        tbody.appendChild(tr);
+    });
+}
+
+function addUdpPeer() {
+    var tbody = document.getElementById('udpPeerBody');
+    if (!tbody) { renderUdpPeers([]); tbody = document.getElementById('udpPeerBody'); }
+    var tr = document.createElement('tr');
+    tr.className = 'udpPeerRow';
+    tr.innerHTML = '<td><input class="input-box udpPeerIP" value=""></td>'
+        + '<td><input type="checkbox" class="udpPeerLegacy"></td>'
+        + '<td><input type="checkbox" class="udpPeerEnabled" checked></td>'
+        + '<td><button class="button" onclick="this.closest(\'tr\').remove()">✕</button></td>';
+    tbody.appendChild(tr);
+}
+
 function saveSettings() {
     // ── Passwort-Felder prüfen ────────────────────────────────────────────────
     var pw1 = document.getElementById("settingsWebPassword").value;
@@ -408,11 +441,10 @@ function saveSettings() {
     s["loraPreambleLength"] = parseInt(document.getElementById("settingsLoraPreambleLength").value);
     s["loraRepeat"] = document.getElementById("settingsLoraRepeat").checked;
     s["udpPeers"] = [];
-    for (var i = 0; i < 5; i++) {
-        var val = document.getElementById("settingsUDPPeer" + i).value;
-        if (!val) val = "0.0.0.0";
-        s["udpPeers"].push({ "ip": val.split('.').map(Number) });
-    }
+    document.querySelectorAll('#udpPeerList .udpPeerRow').forEach(function(row) {
+        var val = row.querySelector('.udpPeerIP').value || "0.0.0.0";
+        s["udpPeers"].push({ "ip": val.split('.').map(Number), "legacy": row.querySelector('.udpPeerLegacy').checked, "enabled": row.querySelector('.udpPeerEnabled').checked });
+    });
     sendWS(JSON.stringify({settings: s}));
 
     // ── Passwort setzen (nur wenn Felder ausgefüllt) ──────────────────────────
