@@ -324,13 +324,21 @@ void startWebServer() {
         if (path == "/") path = "/index.html";
 
         if (xSemaphoreTake(fsMutex, pdMS_TO_TICKS(10000))) {
-            if (LittleFS.exists(path) || LittleFS.exists(path + ".gz")) {
-                // beginResponse sucht automatisch nach path.gz und setzt Content-Encoding: gzip
-                AsyncWebServerResponse *response = request->beginResponse(LittleFS, path, String());
+            bool gzipped = !LittleFS.exists(path) && LittleFS.exists(path + ".gz");
+            String servePath = gzipped ? path + ".gz" : path;
 
-                if (path.endsWith(".json")) {
-                    response->setContentType("application/json");
-                }
+            if (LittleFS.exists(servePath)) {
+                // Content-Type anhand des Original-Pfades bestimmen (ohne .gz)
+                String ct = "";
+                if      (path.endsWith(".html")) ct = "text/html";
+                else if (path.endsWith(".js"))   ct = "application/javascript";
+                else if (path.endsWith(".css"))  ct = "text/css";
+                else if (path.endsWith(".json")) ct = "application/json";
+                else if (path.endsWith(".txt"))  ct = "text/plain";
+
+                AsyncWebServerResponse *response = request->beginResponse(LittleFS, servePath, ct);
+                if (gzipped) response->addHeader("Content-Encoding", "gzip");
+
                 // Kein Caching für alle Dateien (verhindert veraltete JS/HTML im Browser)
                 response->addHeader("Cache-Control", "no-cache, no-store, must-revalidate");
                 response->addHeader("Pragma", "no-cache");
