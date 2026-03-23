@@ -277,7 +277,7 @@ void checkSerialRX() {
 
 
                 // Callsign
-                // "call DG2NBN-1" → Callsign setzen
+                // "call DL1ABC-1" → Callsign setzen
                 if (strncmp(serialRxBuffer, "call", 4) == 0) {
                     if (strlen(parameter) > 0) {
                         strncpy(settings.mycall, parameter, sizeof(settings.mycall) - 1);
