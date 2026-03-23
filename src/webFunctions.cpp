@@ -324,7 +324,8 @@ void startWebServer() {
         if (path == "/") path = "/index.html";
 
         if (xSemaphoreTake(fsMutex, pdMS_TO_TICKS(10000))) {
-            if (LittleFS.exists(path)) {
+            if (LittleFS.exists(path) || LittleFS.exists(path + ".gz")) {
+                // beginResponse sucht automatisch nach path.gz und setzt Content-Encoding: gzip
                 AsyncWebServerResponse *response = request->beginResponse(LittleFS, path, String());
 
                 if (path.endsWith(".json")) {
