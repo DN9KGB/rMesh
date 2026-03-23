@@ -5,6 +5,7 @@
 - NEU: Serielle Konsole – `uc 0` / `uc 1` setzt den Update-Kanal (Release/Dev) und speichert ihn persistent; `updf` / `updf 0` / `updf 1` startet eine Force-Installation aus dem gewählten Kanal
 - NEU: Frisch geflashte Nodes wählen den Update-Kanal automatisch passend zur Firmware: Dev-Builds (`-dev`-Suffix) setzen den Default auf „Dev", Release-Builds auf „Release" – ein bereits gespeicherter Wert im Flash bleibt erhalten
 - FIX: WebUI wurde nach dem LittleFS-Komprimierungs-Update (v1.0.29b) nicht mehr angezeigt – der Webserver suchte `index.html`, im LittleFS lag aber nur noch `index.html.gz`; Exists-Prüfung korrigiert, ESPAsyncWebServer liefert `.gz`-Dateien jetzt transparent aus
+- FIX: Sendeverzögerung ohne UDP-Peers – ohne konfigurierte UDP-Peers wurde vor dem LoRa-Send unnötig ein WiFi-Blind-Frame gepusht; WiFi-Blind-Send wird jetzt nur ausgeführt wenn mindestens ein UDP-Peer konfiguriert ist (Announces werden weiterhin immer per WiFi-Broadcast gesendet)
 
 ## [v1.0.29c]
 
