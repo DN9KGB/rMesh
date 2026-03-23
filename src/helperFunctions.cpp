@@ -71,8 +71,8 @@ void sendFrame(Frame &f) {
             }
         }
 
-        //Wenn keine Peers, Frame ohne Ziel und Retry senden
-        if (availableNodeCount == 0) {
+        //Wenn keine Peers, Frame ohne Ziel und Retry senden (WiFi nur wenn Peers konfiguriert sind)
+        if (availableNodeCount == 0 && !(port == 1 && udpPeers.empty())) {
             f.viaCall[0] = 0;
             f.retry = 1;
             f.initRetry = 1;

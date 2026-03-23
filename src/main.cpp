@@ -313,7 +313,8 @@ void processRxFrame(Frame &f) {
                     }
 
                     //Ports durchlaufen – WiFi zuerst, dann LoRa
-                    for (tf.port = 1; tf.port >= 0; tf.port--) {
+                    for (int _port = 1; _port >= 0; _port--) {
+                        tf.port = (uint8_t)_port;
                         if (tf.port == 0 && routeViaWifi) continue;
 
                         switch (tf.port){
