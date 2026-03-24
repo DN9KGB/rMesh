@@ -55,4 +55,6 @@ extern Preferences prefs;
 extern uint8_t updateChannel; // 0=release (default), 1=dev
 extern bool loraEnabled;      // HF-Sender aktiv (false = LoRa komplett deaktiviert)
 extern bool loraReady;  // true = HF-Modul initialisiert und betriebsbereit
+extern bool batteryEnabled;       // Akkustand anzeigen
+extern float batteryFullVoltage;  // Spannung bei 100 % (V)
 

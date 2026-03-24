@@ -21,6 +21,8 @@ std::vector<String> udpPeerCall;
 
 Preferences prefs;
 bool loraReady = false;
+bool batteryEnabled = true;
+float batteryFullVoltage = 4.2f;
 
 void showSettings() {
     //Einstellungen als Debug-Ausgabe
@@ -165,8 +167,15 @@ void sendSettings() {
     doc["settings"]["maxHopMessage"] = extSettings.maxHopMessage;
     doc["settings"]["maxHopPosition"] = extSettings.maxHopPosition;
     doc["settings"]["maxHopTelemetry"] = extSettings.maxHopTelemetry;
-    doc["settings"]["updateChannel"] = updateChannel;
-    doc["settings"]["loraEnabled"]   = loraEnabled;
+    doc["settings"]["updateChannel"]      = updateChannel;
+    doc["settings"]["loraEnabled"]        = loraEnabled;
+    #ifdef HAS_BATTERY_ADC
+    doc["settings"]["hasBattery"]         = true;
+    #else
+    doc["settings"]["hasBattery"]         = false;
+    #endif
+    doc["settings"]["batteryEnabled"]     = batteryEnabled;
+    doc["settings"]["batteryFullVoltage"] = batteryFullVoltage;
     char* jsonBuffer = (char*)malloc(4096);
     size_t len = serializeJson(doc, jsonBuffer, 4096);
     wsBroadcast(jsonBuffer, len);
@@ -183,8 +192,10 @@ void loadSettings() {
     loadPasswordHash();
     prefs.getBytes("config", &settings, sizeof(settings));
     uint8_t defaultChannel = (strstr(VERSION, "-dev") != nullptr) ? 1 : 0;
-    updateChannel = prefs.getUChar("updateChannel", defaultChannel);
-    loraEnabled   = prefs.getBool("loraEnabled", true);
+    updateChannel      = prefs.getUChar("updateChannel", defaultChannel);
+    loraEnabled        = prefs.getBool("loraEnabled", true);
+    batteryEnabled     = prefs.getBool("batEnabled", true);
+    batteryFullVoltage = prefs.getFloat("batFullV", 4.2f);
     prefs.getBytes("extSettings", &extSettings, sizeof(extSettings));
     size_t storedLen = prefs.getBytesLength("config");
     size_t extSettingsLen = prefs.getBytesLength("extSettings");
@@ -321,6 +332,8 @@ void saveSettings() {
     prefs.putBytes("extSettings", &extSettings, sizeof(extSettings));
     prefs.putUChar("updateChannel", updateChannel);
     prefs.putBool("loraEnabled", loraEnabled);
+    prefs.putBool("batEnabled", batteryEnabled);
+    prefs.putFloat("batFullV", batteryFullVoltage);
     saveUdpPeers();  // speichert Peers + ruft sendSettings()
     initHal();
 }
