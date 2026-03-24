@@ -208,6 +208,7 @@ static void doSaveDisplay();
 static void doSaveSetup();
 static void doReboot();
 static void doUpdate();
+static void doUpdate();
 static void doForceUpdateRelease();
 static void doForceUpdateDev();
 static void doSaveGroups();
