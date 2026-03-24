@@ -25,29 +25,29 @@ bool batteryEnabled = true;
 float batteryFullVoltage = 4.2f;
 
 void showSettings() {
-    //Einstellungen als Debug-Ausgabe
+    // Print settings as debug output
     Serial.println();
-    Serial.println("Einstellungen:");
+    Serial.println("Settings:");
     Serial.printf("WiFi SSID: %s\n", settings.wifiSSID);
-    Serial.printf("WiFi Password: %s\n", settings.wifiPassword);
-    Serial.printf("AP-Mode: %s\n", settings.apMode ? "true" : "false");
+    Serial.printf("WiFi Password set: %s\n", (settings.wifiPassword[0] != '\0') ? "true" : "false");
+    Serial.printf("AP Mode: %s\n", settings.apMode ? "true" : "false");
     Serial.printf("DHCP: %s\n", settings.dhcpActive ? "true" : "false");
     if (!settings.dhcpActive) {
         Serial.printf("IP: %d.%d.%d.%d\n", settings.wifiIP[0], settings.wifiIP[1], settings.wifiIP[2], settings.wifiIP[3]);
-        Serial.printf("NetMask: %d.%d.%d.%d\n", settings.wifiNetMask[0], settings.wifiNetMask[1], settings.wifiNetMask[2], settings.wifiNetMask[3]);
+        Serial.printf("Netmask: %d.%d.%d.%d\n", settings.wifiNetMask[0], settings.wifiNetMask[1], settings.wifiNetMask[2], settings.wifiNetMask[3]);
         Serial.printf("DNS: %d.%d.%d.%d\n", settings.wifiDNS[0], settings.wifiDNS[1], settings.wifiDNS[2], settings.wifiDNS[3]);
         Serial.printf("Gateway: %d.%d.%d.%d\n", settings.wifiGateway[0], settings.wifiGateway[1], settings.wifiGateway[2], settings.wifiGateway[3]);
-        //Serial.printf("Brodcast: %d.%d.%d.%d\n", settings.wifiBrodcast[0], settings.wifiBrodcast[1], settings.wifiBrodcast[2], settings.wifiBrodcast[3]);
+        //Serial.printf("Broadcast: %d.%d.%d.%d\n", settings.wifiBrodcast[0], settings.wifiBrodcast[1], settings.wifiBrodcast[2], settings.wifiBrodcast[3]);
     }
-    Serial.printf("NTP-Server: %s\n", settings.ntpServer);
+    Serial.printf("NTP Server: %s\n", settings.ntpServer);
     if (udpPeers.empty()) {
-        Serial.println("UDP Peers: keine");
+        Serial.println("UDP Peers: none");
     } else {
         for (size_t i = 0; i < udpPeers.size(); i++) {
             Serial.printf("UDP Peer %zu: %d.%d.%d.%d%s%s\n", i + 1,
                 udpPeers[i][0], udpPeers[i][1], udpPeers[i][2], udpPeers[i][3],
                 udpPeerLegacy[i] ? " [legacy]" : "",
-                (bool)udpPeerEnabled[i] ? "" : " [deaktiviert]");
+                (bool)udpPeerEnabled[i] ? "" : " [disabled]");
         }
     }
     Serial.println();
@@ -80,10 +80,10 @@ void showSettings() {
         break;
     case 3:
         Serial.println("WL_CONNECTED");
-        Serial.printf("IP: %d.%d.%d.%d\n", WiFi.localIP()[0], WiFi.localIP()[1], WiFi.localIP()[2], WiFi.localIP()[3]); 
-        Serial.printf("NetMask: %d.%d.%d.%d\n", WiFi.subnetMask()[0], WiFi.subnetMask()[1], WiFi.subnetMask()[2], WiFi.subnetMask()[3]); 
-        Serial.printf("Gateway: %d.%d.%d.%d\n", WiFi.gatewayIP()[0], WiFi.gatewayIP()[1], WiFi.gatewayIP()[2], WiFi.gatewayIP()[3]); 
-        Serial.printf("DNS: %d.%d.%d.%d\n", WiFi.dnsIP()[0], WiFi.dnsIP()[1], WiFi.dnsIP()[2], WiFi.dnsIP()[3]); 
+        Serial.printf("IP: %d.%d.%d.%d\n", WiFi.localIP()[0], WiFi.localIP()[1], WiFi.localIP()[2], WiFi.localIP()[3]);
+        Serial.printf("Netmask: %d.%d.%d.%d\n", WiFi.subnetMask()[0], WiFi.subnetMask()[1], WiFi.subnetMask()[2], WiFi.subnetMask()[3]);
+        Serial.printf("Gateway: %d.%d.%d.%d\n", WiFi.gatewayIP()[0], WiFi.gatewayIP()[1], WiFi.gatewayIP()[2], WiFi.gatewayIP()[3]);
+        Serial.printf("DNS: %d.%d.%d.%d\n", WiFi.dnsIP()[0], WiFi.dnsIP()[1], WiFi.dnsIP()[2], WiFi.dnsIP()[3]);
         break;
     case 4:
         Serial.println("WL_CONNECT_FAILED");
@@ -104,7 +104,7 @@ void showSettings() {
 }
 
 void sendSettings() {
-    //Einstellungen über Websocket senden
+    // Send settings via WebSocket
     JsonDocument doc;
     doc["settings"]["mycall"] = settings.mycall;
     doc["settings"]["position"] = settings.position;
@@ -141,7 +141,7 @@ void sendSettings() {
     doc["settings"]["loraSpreadingFactor"] = settings.loraSpreadingFactor;
     doc["settings"]["loraPreambleLength"] = settings.loraPreambleLength;
     doc["settings"]["version"] = VERSION;
-    doc["settings"]["name"] = NAME; 
+    doc["settings"]["name"] = NAME;
     doc["settings"]["hardware"] = PIO_ENV_NAME;
     doc["settings"]["loraRepeat"] = settings.loraRepeat;
     doc["settings"]["loraMaxMessageLength"] = settings.loraMaxMessageLength;
@@ -181,13 +181,11 @@ void sendSettings() {
     wsBroadcast(jsonBuffer, len);
     free(jsonBuffer);
     jsonBuffer = nullptr;
-
 }
 
-
 void loadSettings() {
-    //Einstellungen aus EEPROM lesen
-    Serial.println("Lade Einstellungen...");
+    // Read settings from EEPROM
+    Serial.println("Loading settings...");
     prefs.begin("custom_settings", false);
     loadPasswordHash();
     prefs.getBytes("config", &settings, sizeof(settings));
@@ -200,16 +198,16 @@ void loadSettings() {
     size_t storedLen = prefs.getBytesLength("config");
     size_t extSettingsLen = prefs.getBytesLength("extSettings");
 
-    //IP-Adressen fixen
+    // Fix IP addresses
     settings.wifiIP       = IPAddress(settings.wifiIP[0], settings.wifiIP[1], settings.wifiIP[2], settings.wifiIP[3]);
     settings.wifiNetMask  = IPAddress(settings.wifiNetMask[0], settings.wifiNetMask[1], settings.wifiNetMask[2], settings.wifiNetMask[3]);
     settings.wifiGateway  = IPAddress(settings.wifiGateway[0], settings.wifiGateway[1], settings.wifiGateway[2], settings.wifiGateway[3]);
     settings.wifiDNS      = IPAddress(settings.wifiDNS[0], settings.wifiDNS[1], settings.wifiDNS[2], settings.wifiDNS[3]);
     settings.wifiBrodcast = IPAddress(settings.wifiBrodcast[0], settings.wifiBrodcast[1], settings.wifiBrodcast[2], settings.wifiBrodcast[3]);
 
-    //Defaults für ext. Settings / Migration alter UDP-Peer-Daten
+    // Load defaults for extended settings / migrate old UDP peer data
     if (extSettingsLen != sizeof(extSettings)) {
-        // Altes Format: 3 maxHop-Bytes + 5×16 IP-Strings + 5 legacy-Flags = 88 Bytes
+        // Old format: 3 maxHop bytes + 5×16 IP strings + 5 legacy flags = 88 bytes
         const size_t OLD_EXT_SIZE = 3 + 5 * 16 + 5;
         size_t existingPeers = prefs.getBytesLength("udpPeers");
         if (extSettingsLen == OLD_EXT_SIZE && existingPeers == 0) {
@@ -243,7 +241,7 @@ void loadSettings() {
         prefs.putBytes("extSettings", &extSettings, sizeof(extSettings));
     }
 
-    // Dynamische UDP-Peers laden
+    // Load dynamic UDP peers
     udpPeers.clear();
     udpPeerLegacy.clear();
     udpPeerEnabled.clear();
@@ -253,7 +251,7 @@ void loadSettings() {
         uint8_t* buf = new uint8_t[peersLen];
         prefs.getBytes("udpPeers", buf, peersLen);
         uint8_t peerCount = buf[0];
-        // Altes Format: 5 Bytes/Peer (ohne enabled), neues Format: 6 Bytes/Peer
+        // Old format: 5 bytes per peer (without enabled), new format: 6 bytes per peer
         bool newFormat = (peersLen == 1 + (size_t)peerCount * 6);
         size_t stride = newFormat ? 6 : 5;
         for (uint8_t i = 0; i < peerCount && 1 + (size_t)i * stride + 4 < peersLen; i++) {
@@ -265,7 +263,7 @@ void loadSettings() {
         delete[] buf;
     }
 
-    //Defaults laden
+    // Load defaults
     if (storedLen != sizeof(settings)) {
         strcpy(settings.wifiSSID, "");
         strcpy(settings.wifiPassword, "");
@@ -279,8 +277,8 @@ void loadSettings() {
         settings.wifiGateway = IPAddress(192,168,33,4);
         settings.wifiDNS = IPAddress(192,168,33,4);
         settings.wifiBrodcast = IPAddress(255,255,255,255);
-        // Keine Default-Frequenz – HF bleibt deaktiviert bis der User
-        // explizit ein Band auswählt (433 MHz AFU oder 868 MHz Public).
+        // No default frequency – RF remains disabled until the user
+        // explicitly selects a band (433 MHz amateur radio or 868 MHz public).
         settings.loraFrequency = 0.0;
         settings.loraOutputPower = LORA_DEFAULT_TX_POWER;
         settings.loraBandwidth = 62.5;
@@ -292,18 +290,18 @@ void loadSettings() {
         prefs.putBytes("config", &settings, sizeof(settings));
     }
 
-    // Band-spezifische Korrekturen nach dem Laden
+    // Band-specific corrections after loading
     if (loraConfigured(settings.loraFrequency)) {
-        // TX-Power auf regulatorisches Maximum begrenzen (Public-Band: 27 dBm)
+        // Enforce regulatory maximum for EU public band
         if (isPublicBand(settings.loraFrequency) && settings.loraOutputPower > PUBLIC_MAX_TX_POWER) {
             settings.loraOutputPower = PUBLIC_MAX_TX_POWER;
         }
     }
 
-    //MAX Nachrichtenlänge berechnen
+    // Calculate maximum message length
     settings.loraMaxMessageLength = 255 - (4 * (MAX_CALLSIGN_LENGTH + 1)) - 8;
 
-    //Hardware neu initialisieren
+    // Reinitialize hardware
     initHal();
 }
 
@@ -326,15 +324,14 @@ void saveUdpPeers() {
 }
 
 void saveSettings() {
-    //Einstellungen im EEPROM speichern
-    Serial.println("Speichere Einstellungen...");
+    // Save settings to EEPROM
+    Serial.println("Saving settings...");
     prefs.putBytes("config", &settings, sizeof(settings));
     prefs.putBytes("extSettings", &extSettings, sizeof(extSettings));
     prefs.putUChar("updateChannel", updateChannel);
     prefs.putBool("loraEnabled", loraEnabled);
     prefs.putBool("batEnabled", batteryEnabled);
     prefs.putFloat("batFullV", batteryFullVoltage);
-    saveUdpPeers();  // speichert Peers + ruft sendSettings()
+    saveUdpPeers();  // Saves peers and calls sendSettings()
     initHal();
 }
-
