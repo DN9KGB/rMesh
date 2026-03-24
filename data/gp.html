@@ -323,6 +323,8 @@
             </div>
         </div>
 
+        <div id="toast-container"></div>
+
         <script>
             var ui = ""   
             var activeChannel = 0;      
@@ -527,19 +529,45 @@
             
             
             function msgBox(title) {
-                return new Promise(resolve => {
-                    const overlay = document.getElementById("overlay");
-                    const input = document.getElementById("modalInput");
-                    const titleElem = document.getElementById("modalTitle");
-                    const okBtn = document.getElementById("modalOk");
-                    titleElem.textContent = title;
-                    input.style.display = "none";
-                    overlay.style.display = "flex";
-                    function onOk() {
-                        overlay.style.display = "none";
-                        okBtn.removeEventListener("click", onOk);
-                    }
-                    okBtn.addEventListener("click", onOk);
+                showToast(title);
+            }
+
+            function showToast(message) {
+                const container = document.getElementById("toast-container");
+                const toast = document.createElement("div");
+                toast.className = "toast";
+                toast.textContent = message;
+
+                let timer;
+                const startTimer = () => {
+                    timer = setTimeout(() => {
+                        removeToast(toast);
+                    }, 3000);
+                };
+
+                startTimer();
+
+                toast.onmouseenter = () => {
+                    clearTimeout(timer);
+                };
+
+                toast.onmouseleave = () => {
+                    startTimer();
+                };
+
+                toast.onclick = () => {
+                    clearTimeout(timer);
+                    removeToast(toast);
+                };
+
+                container.appendChild(toast);
+            }
+
+            function removeToast(toast) {
+                if (toast.classList.contains("fade-out")) return;
+                toast.classList.add("fade-out");
+                toast.addEventListener("animationend", () => {
+                    toast.remove();
                 });
             }
 
