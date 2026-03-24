@@ -562,6 +562,9 @@ void loop() {
         doc["status"]["txBufferCount"] = txBuffer.size();
         doc["status"]["retry"] = currentRetry;
         doc["status"]["heap"] = ESP.getFreeHeap();
+        #ifdef HAS_BATTERY_ADC
+        if (batteryEnabled) doc["status"]["battery"] = getBatteryVoltage();
+        #endif
         char* jsonBuffer = (char*)malloc(1024);
         size_t len = serializeJson(doc, jsonBuffer, 1024);
         ws.textAll(jsonBuffer, len);  // sendet direkt den Puffer
