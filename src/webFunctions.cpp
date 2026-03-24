@@ -203,6 +203,8 @@ void startWebServer() {
       if (json["settings"]["maxHopTelemetry"].is<JsonVariant>()) { extSettings.maxHopTelemetry = json["settings"]["maxHopTelemetry"].as<uint8_t>(); }
       if (json["settings"]["updateChannel"].is<JsonVariant>()) { updateChannel = json["settings"]["updateChannel"].as<uint8_t>(); }
       if (json["settings"]["loraEnabled"].is<JsonVariant>()) { loraEnabled = json["settings"]["loraEnabled"].as<bool>(); }
+      if (json["settings"]["batteryEnabled"].is<JsonVariant>()) { batteryEnabled = json["settings"]["batteryEnabled"].as<bool>(); }
+      if (json["settings"]["batteryFullVoltage"].is<JsonVariant>()) { batteryFullVoltage = json["settings"]["batteryFullVoltage"].as<float>(); }
       saveSettings();
     }
 

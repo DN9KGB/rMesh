@@ -388,6 +388,18 @@ function onMessage(event) {
         document.getElementById("settingsLoraRepeat").checked = d.settings.loraRepeat;
         document.getElementById("settingsLoraEnabled").checked = d.settings.loraEnabled !== false;
         document.getElementById("settingsUpdateChannel").value = d.settings.updateChannel || 0;
+        // Akku-Einstellungen
+        var hasBat = d.settings.hasBattery === true;
+        var batEnabled = d.settings.batteryEnabled !== false;
+        ["batterySettingsHeader","batterySettingsEnabled","batterySettingsVoltage"].forEach(function(id) {
+            var el = document.getElementById(id); if (el) el.style.display = hasBat ? "" : "none";
+        });
+        var batStatusRow = document.getElementById("batteryStatusRow");
+        if (batStatusRow) batStatusRow.style.display = (hasBat && batEnabled) ? "" : "none";
+        var batEnabledEl = document.getElementById("settingsBatteryEnabled");
+        if (batEnabledEl) batEnabledEl.checked = batEnabled;
+        var batVoltEl = document.getElementById("settingsBatteryFullVoltage");
+        if (batVoltEl) batVoltEl.value = d.settings.batteryFullVoltage || 4.2;
         document.getElementById("settingsLoraMaxMessageLength").innerHTML = d.settings.loraMaxMessageLength + " characters";
         const pwStatus = document.getElementById("settingsWebPasswordStatus");
         if (pwStatus) {
@@ -445,9 +457,16 @@ function onMessage(event) {
         } else {
             setAntennaColor("#afaf00");
         }
-        document.getElementById("txBuffer").innerHTML = d.status.txBufferCount; 
-        document.getElementById("retry").innerHTML = d.status.retry; 
-        document.getElementById("heap").innerHTML = d.status.heap; 
+        document.getElementById("txBuffer").innerHTML = d.status.txBufferCount;
+        document.getElementById("retry").innerHTML = d.status.retry;
+        document.getElementById("heap").innerHTML = d.status.heap;
+        if (d.status.battery != null) {
+            var bv = d.status.battery;
+            var fullV = (settings && settings.batteryFullVoltage) || 4.2;
+            var pct = Math.round(Math.min(100, Math.max(0, (bv - 3.0) / (fullV - 3.0) * 100)));
+            var el = document.getElementById("battery");
+            if (el) el.innerHTML = bv.toFixed(2) + " V (" + pct + "%)";
+        }
         const time = new Date(d.status.time * 1000);
         document.getElementById("time").innerHTML = time.toLocaleString("de-DE", {day: "2-digit",  month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" }).replace(",", "");
 
@@ -601,6 +620,10 @@ function saveSettings() {
     settings["loraRepeat"] = document.getElementById("settingsLoraRepeat").checked;
     settings["loraEnabled"] = document.getElementById("settingsLoraEnabled").checked;
     settings["updateChannel"] = parseInt(document.getElementById("settingsUpdateChannel").value);
+    var batEnabledEl = document.getElementById("settingsBatteryEnabled");
+    if (batEnabledEl) settings["batteryEnabled"] = batEnabledEl.checked;
+    var batVoltEl = document.getElementById("settingsBatteryFullVoltage");
+    if (batVoltEl) settings["batteryFullVoltage"] = parseFloat(batVoltEl.value);
     settings["udpPeers"] = [];
     document.querySelectorAll('#udpPeerList .udpPeerRow').forEach(function(row) {
         var val = row.querySelector('.udpPeerIP').value || "0.0.0.0";
