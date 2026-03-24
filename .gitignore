@@ -1,10 +1,9 @@
 .pio
 .vscode
 .vs
+.idea
 src/version.h
 
-# Zugangsdaten – niemals ins Git
-website/.env
 *.bak
 
 # Auto-generated gzip-compressed web assets

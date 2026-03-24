@@ -51,6 +51,13 @@ void initHal() {
     pinMode(LORA_RX_ENA, OUTPUT); 
     digitalWrite(LORA_RX_ENA, 1); 
 
+    // HF-Modul nur initialisieren wenn Frequenz konfiguriert ist
+    if (!loraConfigured(settings.loraFrequency)) {
+        Serial.println("[LoRa] Keine Frequenz konfiguriert – HF deaktiviert.");
+        loraReady = false;
+        return;
+    }
+
     //Flags zurücksetzen
     int state;
 

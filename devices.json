@@ -52,5 +52,11 @@
     "chip": "ESP32-S3",
     "lfs_offset": 4259840,
     "image": "seeed-sensecap-indicator.svg"
+  },
+  {
+    "name": "SEEED_XIAO_ESP32S3_Wio_SX1262",
+    "chip": "ESP32-S3",
+    "lfs_offset": 4259840,
+    "image": "seeed_xiao_esp32s3_wio_sx1262.svg"
   }
 ]
