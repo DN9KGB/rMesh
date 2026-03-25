@@ -46,6 +46,10 @@
 #include "hal_SEEED_SenseCAP_Indicator.h"
 #endif
 
+#if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM)
+#include "display_SSD1306_status.h"
+#endif
+
 
 // ── Global state ──────────────────────────────────────────────────────────────
 
@@ -309,6 +313,15 @@ void processRxFrame(Frame &f) {
                 displayMonitorFrame(f);
                 #endif
 
+                // Show last message on SSD1306 status display
+                #if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM)
+                if (f.messageType == Frame::MessageTypes::TEXT_MESSAGE) {
+                    char textBuf[261] = {0};
+                    memcpy(textBuf, f.message, f.messageLength);
+                    onStatusDisplayMessage(f.srcCall, textBuf, f.dstGroup, f.dstCall);
+                }
+                #endif
+
                 // TRACE echo: if we are the destination, append our callsign + time and reply
                 if ((strcmp(f.dstCall, settings.mycall) == 0) && (f.messageType == Frame::MessageTypes::TRACE_MESSAGE) && (strstr((char*)f.message, "ECHO") == NULL)) {
                         char message[512];
@@ -506,6 +519,11 @@ void setup() {
     // Initialise LoRa radio and any board-specific peripherals
     initHal();
 
+    // Initialise SSD1306 status display (if present)
+    #if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM)
+    initStatusDisplay();
+    #endif
+
     // Connect to WiFi (AP or STA mode depending on settings)
     wifiInit();
 
@@ -551,6 +569,15 @@ void loop() {
     #endif
     #ifdef SEEED_SENSECAP_INDICATOR
     displayUpdateLoop();
+    #endif
+    #if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM)
+    {
+        static uint32_t oledRefreshTimer = 0;
+        if (oledEnabled && millis() > oledRefreshTimer) {
+            oledRefreshTimer = millis() + 5000;
+            updateStatusDisplay();
+        }
+    }
     #endif
 
     // ── 4. ANNOUNCE beacon ────────────────────────────────────────────────────

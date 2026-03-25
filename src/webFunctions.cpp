@@ -5,11 +5,16 @@
 
 #include "config.h"
 #include "settings.h"
+#include "wifiFunctions.h"
 #include "main.h"
 #include "helperFunctions.h"
 #include "peer.h"
 #include "routing.h"
 #include "auth.h"
+
+#if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM)
+#include "display_SSD1306_status.h"
+#endif
 
 AsyncWebServer webServer(80);
 AsyncWebSocketMessageHandler wsHandler;
@@ -147,6 +152,27 @@ void startWebServer() {
             if (json["settings"]["apMode"].is<JsonVariant>()) {
                 settings.apMode = json["settings"]["apMode"].as<bool>();
             }
+            if (json["settings"]["apName"].is<JsonVariant>()) {
+                apName = json["settings"]["apName"].as<String>();
+            }
+            if (json["settings"]["apPassword"].is<JsonVariant>()) {
+                apPassword = json["settings"]["apPassword"].as<String>();
+            }
+            // Update WiFi network list
+            if (json["settings"]["wifiNetworks"].is<JsonArray>()) {
+                JsonArray nets = json["settings"]["wifiNetworks"];
+                wifiNetworks.clear();
+                for (JsonObject n : nets) {
+                    WifiNetwork net;
+                    memset(&net, 0, sizeof(net));
+                    strlcpy(net.ssid,     n["ssid"] | "",     sizeof(net.ssid));
+                    strlcpy(net.password, n["password"] | "",  sizeof(net.password));
+                    net.favorite = n["favorite"] | false;
+                    if (net.ssid[0] != '\0') {
+                        wifiNetworks.push_back(net);
+                    }
+                }
+            }
             if (json["settings"]["wifiIP"].is<JsonVariant>()) {
                 JsonArray ipArray = json["settings"]["wifiIP"];
                 for (int i = 0; i < 4; i++) { settings.wifiIP[i] = ipArray[i] | 0; }
@@ -239,7 +265,19 @@ void startWebServer() {
             if (json["settings"]["batteryFullVoltage"].is<JsonVariant>()) {
                 batteryFullVoltage = json["settings"]["batteryFullVoltage"].as<float>();
             }
+            if (json["settings"]["oledEnabled"].is<JsonVariant>()) {
+                oledEnabled = json["settings"]["oledEnabled"].as<bool>();
+            }
+            if (json["settings"]["oledDisplayGroup"].is<JsonVariant>()) {
+                strlcpy(oledDisplayGroup, json["settings"]["oledDisplayGroup"] | "", sizeof(oledDisplayGroup));
+            }
             saveSettings();
+            #if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM)
+            if (hasStatusDisplay()) {
+                if (oledEnabled) updateStatusDisplay();
+                else disableStatusDisplay();
+            }
+            #endif
         }
 
         // Send raw frame
@@ -309,6 +347,7 @@ void startWebServer() {
 
         if (json["scanWifi"].is<JsonVariant>()) {
             Serial.println("WiFi scan...");
+            pendingReconnectScan = false;  // Don't treat this as a reconnect scan
             WiFi.scanNetworks(true);
         }
 

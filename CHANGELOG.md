@@ -1,6 +1,39 @@
 # Changelog
 
-## [dev-next]
+## [v1.0.31-dev]
+
+### OLED Status-Display
+- NEU: SSD1306-OLED-Support für HELTEC WiFi LoRa 32 V3, LILYGO T3 LoRa32 V1.6.1 und LILYGO T-Beam – Display zeigt Callsign, Akkustand, WiFi-Modus, IP-Adresse, SSID und letzte empfangene Nachricht
+- NEU: Boot-Button-Steuerung – kurzer Druck schaltet Display ein/aus, langer Druck (≥2 s) wechselt zwischen AP- und Client-Modus mit anschließendem Reboot
+- NEU: Display-Einstellung persistent – Zustand überlebt Neustart; Synchronisation zwischen Hardware-Button und WebUI-Toggle in beide Richtungen
+- NEU: Nachrichten-Gruppe für Display konfigurierbar – Dropdown in den Settings mit allen eingerichteten Gruppen (all, direct, Gruppen 3–10); letzte Nachricht aus gewählter Gruppe wird auf dem Display angezeigt
+- NEU: Automatische Display-Erkennung per I2C-Probe beim T-Beam – wenn kein Display angeschlossen ist, wird die Funktionalität deaktiviert
+- NEU: Vext-Steuerung (GPIO 36) für HELTEC V3 – OLED-Stromversorgung wird automatisch aktiviert
+
+### Web UI
+- NEU: Mobile und Desktop UI in ein einziges responsives Interface zusammengeführt
+- NEU: Mehrsprachigkeit (i18n) mit Sprachumschaltung Deutsch/Englisch über `i18n`
+- NEU: Digitale Uhr als Widget, altes Debug-Panel entfernt
+- NEU: Einheitliches Stylesheet
+- NEU: SVG-Icons (`announce.svg`, `logo.svg`) ersetzen PNG-Versionen
+- NEU: Einklappbare Settings-Bereiche und verbesserte Tabellen-Layouts
+- FIX: Eingabefeld wird nach dem Senden automatisch geleert
+- CLEANUP: Obsolete Dateien entfernt
+
+### WiFi & Netzwerk
+- NEU: Erweiterte WiFi- und AP-Verwaltung mit neuen seriellen Befehlen
+- NEU: Verbesserte WiFi-Client/AP-Tabelle in der WebUI
+- NEU: WebSocket-Kommunikation überarbeitet
+
+### System
+- NEU: Erweitertes serielles Kommando-Interface
+- NEU: Erweiterte Settings-Verwaltung
+
+## [v1.0.30a-dev]
+
+- FIX: OTA-Update schlug auf langsamen Verbindungen mit „HTTP error: read Timeout" fehl – TCP-Read-Timeout für LittleFS- und Firmware-Download von 30 s auf 120 s erhöht; betrifft sowohl automatische als auch manuelle Updates
+
+## [v1.0.30-dev]
 
 - NEU: Support für Seeed XIAO ESP32-S3 + Wio-SX1262 – neues HAL (`hal_SEEED_XIAO_ESP32S3_Wio_SX1262`) für das Seeed XIAO ESP32-S3 Board mit aufgestecktem Wio-SX1262 LoRa-Modul (B2B-Stecker); Build-Konfiguration in PlatformIO, Eintrag in `devices.json` für das Web-Flash-Tool
 - NEU: Manueller Firmware-Upload über die WebUI – neuer `/ota`-Endpunkt im Webserver zum direkten Flashen eigener Firmware- und LittleFS-Binaries ohne OTA-Server; Desktop- und Mobile-Interface erhalten einen „Upload & Flash"-Button, der beide Dateien sequenziell hochlädt und die Node danach neu startet
