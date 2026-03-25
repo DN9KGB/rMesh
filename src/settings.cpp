@@ -27,6 +27,8 @@ Preferences prefs;
 bool loraReady = false;
 bool batteryEnabled = true;
 float batteryFullVoltage = 4.2f;
+bool oledEnabled = false;
+char oledDisplayGroup[17] = {0};
 
 void showSettings() {
     // Print settings as debug output
@@ -216,6 +218,8 @@ void sendSettings() {
     #endif
     doc["settings"]["batteryEnabled"]     = batteryEnabled;
     doc["settings"]["batteryFullVoltage"] = batteryFullVoltage;
+    doc["settings"]["oledEnabled"]        = oledEnabled;
+    doc["settings"]["oledDisplayGroup"]   = oledDisplayGroup;
     size_t bufSize = 4096 + wifiNetworks.size() * 160;
     char* jsonBuffer = (char*)malloc(bufSize);
     size_t len = serializeJson(doc, jsonBuffer, bufSize);
@@ -235,6 +239,11 @@ void loadSettings() {
     loraEnabled        = prefs.getBool("loraEnabled", true);
     batteryEnabled     = prefs.getBool("batEnabled", true);
     batteryFullVoltage = prefs.getFloat("batFullV", 4.2f);
+    oledEnabled        = prefs.getBool("oledEnabled", false);
+    {
+        String grp = prefs.getString("oledGroup", "");
+        strlcpy(oledDisplayGroup, grp.c_str(), sizeof(oledDisplayGroup));
+    }
     prefs.getBytes("extSettings", &extSettings, sizeof(extSettings));
     size_t storedLen = prefs.getBytesLength("config");
     size_t extSettingsLen = prefs.getBytesLength("extSettings");
@@ -421,6 +430,11 @@ void saveUdpPeers() {
     sendSettings();
 }
 
+void saveOledSettings() {
+    prefs.putBool("oledEnabled", oledEnabled);
+    prefs.putString("oledGroup", oledDisplayGroup);
+}
+
 void saveSettings() {
     Serial.println("Saving settings...");
 
@@ -473,6 +487,7 @@ void saveSettings() {
     prefs.putBool("loraEnabled", loraEnabled);
     prefs.putBool("batEnabled", batteryEnabled);
     prefs.putFloat("batFullV", batteryFullVoltage);
+    saveOledSettings();
     saveWifiNetworks();  // Saves WiFi networks + AP settings + calls sendSettings()
     saveUdpPeers();      // Saves peers (sendSettings() already called above, but ok)
     initHal();

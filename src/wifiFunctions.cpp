@@ -14,6 +14,10 @@
 #include "main.h"
 #include "esp_wifi.h"
 
+#if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM)
+#include "display_SSD1306_status.h"
+#endif
+
 
 uint64_t ledTimer = 0;
 uint64_t reconnectTimer = 0;
@@ -185,21 +189,62 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
 }
 
 void showWiFiStatus() {
-    //AP-Mode umschalten
-    if (getKeyApMode() != apModeKey) {
-        delay(100);
-        apModeKey = getKeyApMode();
-        if (apModeKey == 1) {
-            if (settings.apMode == false) {
-                settings.apMode = true;
-            } else {
-                settings.apMode = false;
-            }
+
+#if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM)
+    // Long press (>=2s): toggle AP/Client mode + reboot
+    // Short press (<2s): toggle status display on/off
+    static bool buttonPressed = false;
+    static uint32_t buttonPressTime = 0;
+    static bool longPressHandled = false;
+
+    bool currentButton = getKeyApMode();
+
+    if (currentButton && !buttonPressed) {
+        // Button just pressed
+        buttonPressed = true;
+        buttonPressTime = millis();
+        longPressHandled = false;
+    }
+
+    if (currentButton && buttonPressed && !longPressHandled) {
+        // Button still held – check for long press
+        if (millis() - buttonPressTime >= 2000) {
+            longPressHandled = true;
+            settings.apMode = !settings.apMode;
             saveSettings();
             rebootTimer = 0;
             delay(500);
         }
     }
+
+    if (!currentButton && buttonPressed) {
+        // Button released
+        buttonPressed = false;
+        if (!longPressHandled && (millis() - buttonPressTime >= 50)) {
+            // Short press – toggle status display (persisted setting)
+            if (hasStatusDisplay()) {
+                if (oledEnabled) {
+                    disableStatusDisplay();
+                } else {
+                    enableStatusDisplay();
+                }
+            }
+        }
+    }
+
+#else
+    // Original behaviour: simple press toggles AP mode
+    if (getKeyApMode() != apModeKey) {
+        delay(100);
+        apModeKey = getKeyApMode();
+        if (apModeKey == 1) {
+            settings.apMode = !settings.apMode;
+            saveSettings();
+            rebootTimer = 0;
+            delay(500);
+        }
+    }
+#endif
 
     //Status-LED
     if (settings.apMode) {

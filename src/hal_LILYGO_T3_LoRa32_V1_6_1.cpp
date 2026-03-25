@@ -30,7 +30,7 @@ void setWiFiLED(bool value) {
 }
 
 bool getKeyApMode() {
-    return false;
+    return !digitalRead(PIN_AP_MODE_SWITCH);
 }
 
 
@@ -41,9 +41,12 @@ void initHal() {
     //SPI Init
     SPI.begin(SPI_SCK, SPI_MISO, SPI_MOSI, SPI_SS);
 
-    //Ausgäne
-    pinMode(PIN_WIFI_LED, OUTPUT); 
-    digitalWrite(PIN_WIFI_LED, 0); 
+    //Outputs
+    pinMode(PIN_WIFI_LED, OUTPUT);
+    digitalWrite(PIN_WIFI_LED, 0);
+
+    //Inputs
+    pinMode(PIN_AP_MODE_SWITCH, INPUT_PULLUP);
 
     // HF-Modul nur initialisieren wenn Frequenz konfiguriert ist
     if (!loraConfigured(settings.loraFrequency)) {

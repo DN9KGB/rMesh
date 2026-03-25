@@ -16,7 +16,7 @@
 #define LORA_DEFAULT_TX_POWER 20
 
 //#define PIN_WIFI_LED 25      //LED WiFi-Status (ein = AP-Mode, blinken = Client-Mode, aus = nicht verbunden)
-//#define PIN_AP_MODE_SWITCH 0     //Taster Umschaltung WiFi CLient/AP
+#define PIN_AP_MODE_SWITCH 0     //Boot button for WiFi mode switch (long press) and display toggle (short press)
 
 
 void setWiFiLED(bool value);

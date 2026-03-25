@@ -332,6 +332,18 @@ select.input-box {
     text-shadow: 0 0 4px rgba(255, 68, 68, 0.3);
 }
 
+.mesh-table .suppressed {
+    color: #888888;
+    text-shadow: none;
+    font-style: italic;
+}
+
+.badge-preferred {
+    color: #ffd700;
+    font-size: 1em;
+    text-shadow: 0 0 4px rgba(255, 215, 0, 0.4);
+}
+
 .mesh-badge {
     display: inline-block;
     padding: 2px 8px;

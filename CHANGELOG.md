@@ -2,6 +2,14 @@
 
 ## [v1.0.31-dev]
 
+### OLED Status-Display
+- NEU: SSD1306-OLED-Support für HELTEC WiFi LoRa 32 V3, LILYGO T3 LoRa32 V1.6.1 und LILYGO T-Beam – Display zeigt Callsign, Akkustand, WiFi-Modus, IP-Adresse, SSID und letzte empfangene Nachricht
+- NEU: Boot-Button-Steuerung – kurzer Druck schaltet Display ein/aus, langer Druck (≥2 s) wechselt zwischen AP- und Client-Modus mit anschließendem Reboot
+- NEU: Display-Einstellung persistent – Zustand überlebt Neustart; Synchronisation zwischen Hardware-Button und WebUI-Toggle in beide Richtungen
+- NEU: Nachrichten-Gruppe für Display konfigurierbar – Dropdown in den Settings mit allen eingerichteten Gruppen (all, direct, Gruppen 3–10); letzte Nachricht aus gewählter Gruppe wird auf dem Display angezeigt
+- NEU: Automatische Display-Erkennung per I2C-Probe beim T-Beam – wenn kein Display angeschlossen ist, wird die Funktionalität deaktiviert
+- NEU: Vext-Steuerung (GPIO 36) für HELTEC V3 – OLED-Stromversorgung wird automatisch aktiviert
+
 ### Web UI
 - NEU: Mobile und Desktop UI in ein einziges responsives Interface zusammengeführt
 - NEU: Mehrsprachigkeit (i18n) mit Sprachumschaltung Deutsch/Englisch über `i18n`

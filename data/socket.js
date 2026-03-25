@@ -156,10 +156,11 @@ function onMessage(event) {
 				if (p.port == 0) {port = "LoRa";} else {port = "Wifi";}
                 const lastRX = new Date(p.timestamp * 1000);
                 peers += "<tr>";
-                peers += "<td><span class='mesh-badge" + (p.port == 0 ? " badge-lora" : " badge-wifi") + "'>" + port + "</span></td>";
-                peers += "<td";
-                if (p.available == true) { peers += " class='green' "} else { peers += " class='red' "}
-                peers += ">" + p.call + "</td>";
+                peers += "<td><span class='mesh-badge" + (p.port == 0 ? " badge-lora" : " badge-wifi") + "'>" + port + "</span>";
+                if (p.preferred === true) peers += " <span class='badge-preferred' title='" + t('peer.preferred') + "'>&#9733;</span>";
+                peers += "</td>";
+                var cls = p.available ? 'green' : (p.preferred === false ? 'suppressed' : 'red');
+                peers += "<td class='" + cls + "'>" + p.call + "</td>";
                 peers += "<td>" + lastRX.toLocaleString("de-DE", {day: "2-digit",  month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).replace(",", "")  + "</td>";
                 peers += "<td>" + p.rssi + "</td>";
                 peers += "<td>" + p.snr + "</td>";
@@ -573,6 +574,36 @@ function fillSettingsForm(s) {
     if (batEnabledEl) batEnabledEl.checked = s.batteryEnabled !== false;
     const batVoltEl = document.getElementById("settingsBatteryFullVoltage");
     if (batVoltEl) batVoltEl.value = s.batteryFullVoltage || 4.2;
+
+    // OLED display settings
+    var oledEnabledEl = document.getElementById("settingsOledEnabled");
+    if (oledEnabledEl) oledEnabledEl.checked = s.oledEnabled === true;
+    var oledGroupEl = document.getElementById("settingsOledDisplayGroup");
+    if (oledGroupEl) {
+        var saved = s.oledDisplayGroup || "";
+        oledGroupEl.innerHTML = '<option value="">---</option>';
+        var allOpt = document.createElement("option");
+        allOpt.value = "*";
+        allOpt.textContent = "1: all";
+        if (saved === "*") allOpt.selected = true;
+        oledGroupEl.appendChild(allOpt);
+        var dmOpt = document.createElement("option");
+        dmOpt.value = "@DM";
+        dmOpt.textContent = "2: direct";
+        if (saved === "@DM") dmOpt.selected = true;
+        oledGroupEl.appendChild(dmOpt);
+        for (var i = 3; i <= 10; i++) {
+            var grp = Cookie.get("channel" + i);
+            if (grp) {
+                var opt = document.createElement("option");
+                opt.value = grp;
+                opt.textContent = i + ": " + grp;
+                if (grp === saved) opt.selected = true;
+                oledGroupEl.appendChild(opt);
+            }
+        }
+    }
+
     settingsVisibility();
 }
 
@@ -621,6 +652,10 @@ function saveSettings() {
     if (batEnabledEl) s["batteryEnabled"] = batEnabledEl.checked;
     var batVoltEl = document.getElementById("settingsBatteryFullVoltage");
     if (batVoltEl) s["batteryFullVoltage"] = parseFloat(batVoltEl.value);
+    var oledEnabledEl = document.getElementById("settingsOledEnabled");
+    if (oledEnabledEl) s["oledEnabled"] = oledEnabledEl.checked;
+    var oledGroupEl = document.getElementById("settingsOledDisplayGroup");
+    if (oledGroupEl) s["oledDisplayGroup"] = oledGroupEl.value;
     s["udpPeers"] = [];
     document.querySelectorAll('#udpPeerList .udpPeerRow').forEach(function(row) {
         var val = row.querySelector('.udpPeerIP').value || "0.0.0.0";

@@ -76,3 +76,8 @@ extern bool loraReady;  // true = HF-Modul initialisiert und betriebsbereit
 extern bool batteryEnabled;       // Akkustand anzeigen
 extern float batteryFullVoltage;  // Spannung bei 100 % (V)
 
+// OLED status display settings (boards with SSD1306)
+extern bool oledEnabled;                // Display on/off (persisted, survives reboot)
+extern char oledDisplayGroup[17];       // Group to show last message from
+void saveOledSettings();                // Persist oledEnabled + oledDisplayGroup to NVS
+

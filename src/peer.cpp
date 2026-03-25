@@ -117,6 +117,16 @@ void sendPeerList() {
     JsonDocument doc;
     doc["peerlist"]["peers"] = JsonArray();
     for (int i = 0; i < peerList.size(); i++) {
+        // Check if same callsign exists on a different port (dual-path node)
+        bool dualPath = false;
+        for (int j = 0; j < peerList.size(); j++) {
+            if (i != j && strcmp(peerList[i].nodeCall, peerList[j].nodeCall) == 0
+                       && peerList[i].port != peerList[j].port) {
+                dualPath = true;
+                break;
+            }
+        }
+
         JsonObject peer = doc["peerlist"]["peers"].add<JsonObject>();
         peer["port"] = peerList[i].port;
         peer["call"] = peerList[i].nodeCall;
@@ -125,6 +135,9 @@ void sendPeerList() {
         peer["snr"] = peerList[i].snr;
         peer["frqError"] = peerList[i].frqError;
         peer["available"] = peerList[i].available;
+        if (dualPath) {
+            peer["preferred"] = peerList[i].available;
+        }
     }
     
     char* jsonBuffer = (char*)malloc(measureJson(doc) + 1);

@@ -12,6 +12,10 @@
 #include "routing.h"
 #include "auth.h"
 
+#if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM)
+#include "display_SSD1306_status.h"
+#endif
+
 AsyncWebServer webServer(80);
 AsyncWebSocketMessageHandler wsHandler;
 AsyncWebSocket ws("/socket", wsHandler.eventHandler());
@@ -261,7 +265,19 @@ void startWebServer() {
             if (json["settings"]["batteryFullVoltage"].is<JsonVariant>()) {
                 batteryFullVoltage = json["settings"]["batteryFullVoltage"].as<float>();
             }
+            if (json["settings"]["oledEnabled"].is<JsonVariant>()) {
+                oledEnabled = json["settings"]["oledEnabled"].as<bool>();
+            }
+            if (json["settings"]["oledDisplayGroup"].is<JsonVariant>()) {
+                strlcpy(oledDisplayGroup, json["settings"]["oledDisplayGroup"] | "", sizeof(oledDisplayGroup));
+            }
             saveSettings();
+            #if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM)
+            if (hasStatusDisplay()) {
+                if (oledEnabled) updateStatusDisplay();
+                else disableStatusDisplay();
+            }
+            #endif
         }
 
         // Send raw frame
