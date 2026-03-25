@@ -53,6 +53,10 @@ select.input-box {
     font-size: inherit;
     padding: 3px 8px;
     margin: 3px 3px 3px 0;
+    height: 28px;
+    line-height: 20px;
+    vertical-align: middle;
+    box-sizing: border-box;
     box-shadow: inset 1px 1px 1px rgba(255, 255, 255, 0.15);
 }
 
@@ -179,13 +183,12 @@ select.input-box {
     cursor: pointer;
     font-family: inherit;
     font-size: 14px;
-    padding: 4px;
+    padding: 2px 4px;
     margin: 2px;
     display: flex;
     flex-direction: column;
-    justify-content: flex-end;
-    align-items: flex-end;
-    position: relative;
+    justify-content: center;
+    align-items: center;
     overflow: hidden;
     height: calc(100% - 4px);
     box-shadow: inset 1px 1px 1px rgba(255, 255, 255, 0.1), 0 2px 4px rgba(0, 0, 0, 0.4);
@@ -194,20 +197,14 @@ select.input-box {
 
 .button-icon {
     image-rendering: pixelated;
-    position: absolute;
-    top: 50%;
-    left: 2px;
-    transform: translateY(-50%);
-    height: 80%;
+    height: 55%;
     width: auto;
-    max-width: 48%;
     object-fit: contain;
     pointer-events: none;
 }
 
 .button-text {
     line-height: 1;
-    z-index: 1;
 }
 
 .main-button:active, .main-button.selected {
@@ -274,6 +271,118 @@ select.input-box {
 .udpPeerTable .udpPeerIP {
     width: 11em;
     min-width: 11em;
+}
+
+/* ===== MESH TABLE (peers & routing) ===== */
+.mesh-table {
+    width: 95%;
+    max-width: 800px;
+    border-collapse: separate;
+    border-spacing: 0;
+    border: 1px solid #555;
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 0 auto;
+    font-size: 0.9em;
+}
+
+.mesh-table thead th {
+    background: #3a3a3a;
+    color: #ddd;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-size: 0.75em;
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 2px solid #00aaaa;
+}
+
+.mesh-table tbody td {
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    vertical-align: middle;
+    color: #e0e0e0;
+}
+
+.mesh-table tbody tr {
+    background: rgba(0, 0, 0, 0.15);
+    transition: background 0.15s;
+}
+
+.mesh-table tbody tr:nth-child(even) {
+    background: rgba(0, 0, 0, 0.25);
+}
+
+.mesh-table tbody tr:hover {
+    background: rgba(0, 170, 170, 0.12);
+}
+
+.mesh-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.mesh-table .green {
+    color: #33ff33;
+    text-shadow: 0 0 4px rgba(51, 255, 51, 0.3);
+}
+
+.mesh-table .red {
+    color: #ff4444;
+    text-shadow: 0 0 4px rgba(255, 68, 68, 0.3);
+}
+
+.mesh-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 0.8em;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+}
+
+.badge-lora {
+    background: #2a4a6a;
+    color: #6ab7ff;
+    border: 1px solid #4a7aaa;
+}
+
+.badge-wifi {
+    background: #2a5a2a;
+    color: #6aff6a;
+    border: 1px solid #4a8a4a;
+}
+
+/* ===== WIFI NETWORK TABLE ===== */
+.wifiNetTable {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: separate;
+    border-spacing: 4px 2px;
+}
+
+.wifiNetTable th,
+.wifiNetTable td {
+    padding: 0;
+    vertical-align: middle;
+    text-align: left;
+    overflow: hidden;
+}
+
+.wifiNetTable th {
+    font-size: 0.8em;
+    opacity: 0.65;
+}
+
+.wifiNetTable col.col-ssid    { width: 30%; }
+.wifiNetTable col.col-pw      { width: 35%; }
+.wifiNetTable col.col-fav     { width: 57px; }
+.wifiNetTable col.col-del     { width: 30px; }
+
+.wifiNetTable .wifiNetSSID,
+.wifiNetTable .wifiNetPW {
+    width: 100%;
+    box-sizing: border-box;
 }
 
 /* ===== SETTINGS PANELS ===== */
@@ -469,6 +578,12 @@ select.input-box {
         flex: 1;
     }
 
+    .text-input:disabled {
+        background: #333;
+        color: #888;
+        cursor: not-allowed;
+    }
+
     .channel-switch {
         background: #aa1f1f;
         width: 100%;
@@ -509,6 +624,10 @@ select.input-box {
         display: flex;
         flex-direction: column;
         align-items: stretch;
+    }
+
+    .desk-top-right-spacer {
+        flex: 1;
     }
 
     /* Content panels */
@@ -563,8 +682,8 @@ select.input-box {
         left: 0;
         right: 0;
         height: calc(90% - 170px);
-        background: #808080;
-        color: #000;
+        background: #4a4a4a;
+        color: #e0e0e0;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -968,5 +1087,20 @@ select.input-box {
 
     #toast-container {
         bottom: 60px;
+    }
+
+    /* Responsive mesh table on mobile */
+    .mesh-table {
+        width: 100%;
+        font-size: 0.8em;
+    }
+
+    .mesh-table thead th {
+        padding: 8px 6px;
+        font-size: 0.7em;
+    }
+
+    .mesh-table tbody td {
+        padding: 6px;
     }
 }

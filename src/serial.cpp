@@ -114,31 +114,155 @@ void checkSerialRX() {
                 //Wifi Scannen
                 if (strncmp(serialRxBuffer, "sc", 2) == 0) {
                     Serial.println("WiFi scan.....");
+                    pendingReconnectScan = false;
                     WiFi.scanNetworks(true);
                 }
 
-                //Wifi SSID
-                if (strncmp(serialRxBuffer, "ss", 2) == 0) {
+                // WiFi network management
+                // "wifi"                    → list all networks
+                // "wifi add <SSID>"         → add open network
+                // "wifi add <SSID> <PW>"    → add network with password
+                // "wifi del <N>"            → delete network N (1-based)
+                // "wifi fav <N>"            → set network N as favorite
+                // "wifi pw <N> <PASSWORD>"  → set password for network N
+                // "wifi clear"              → delete all networks
+                if (strncmp(serialRxBuffer, "wifi", 4) == 0 && (serialRxBuffer[4] == ' ' || serialRxBuffer[4] == '\0')) {
+                    if (parameter[0] == '\0') {
+                        // List all networks
+                        if (wifiNetworks.empty()) {
+                            Serial.println("WiFi networks: none");
+                        } else {
+                            for (size_t i = 0; i < wifiNetworks.size(); i++) {
+                                Serial.printf("WiFi %zu: %s%s (pw: %s)\n", i + 1,
+                                    wifiNetworks[i].ssid,
+                                    wifiNetworks[i].favorite ? " [favorite]" : "",
+                                    (wifiNetworks[i].password[0] != '\0') ? "set" : "none");
+                            }
+                        }
+                    } else if (strncmp(parameter, "clear", 5) == 0) {
+                        wifiNetworks.clear();
+                        settings.wifiSSID[0] = '\0';
+                        settings.wifiPassword[0] = '\0';
+                        saveWifiNetworks();
+                        Serial.println("All WiFi networks deleted.");
+                    } else if (strncmp(parameter, "add ", 4) == 0) {
+                        const char* rest = parameter + 4;
+                        // SSID = first word, password = rest (or empty)
+                        WifiNetwork net;
+                        memset(&net, 0, sizeof(net));
+                        net.favorite = wifiNetworks.empty(); // First network is favorite
+                        const char* sp = strchr(rest, ' ');
+                        if (sp) {
+                            size_t ssidLen = sp - rest;
+                            if (ssidLen >= sizeof(net.ssid)) ssidLen = sizeof(net.ssid) - 1;
+                            strncpy(net.ssid, rest, ssidLen);
+                            net.ssid[ssidLen] = '\0';
+                            strlcpy(net.password, sp + 1, sizeof(net.password));
+                        } else {
+                            strlcpy(net.ssid, rest, sizeof(net.ssid));
+                        }
+                        wifiNetworks.push_back(net);
+                        saveSettings();
+                        wifiInit();
+                        Serial.printf("WiFi %zu added: %s%s\n", wifiNetworks.size(),
+                            net.ssid, net.favorite ? " [favorite]" : "");
+                    } else if (strncmp(parameter, "del ", 4) == 0) {
+                        int idx = atoi(parameter + 4) - 1;
+                        if (idx >= 0 && (size_t)idx < wifiNetworks.size()) {
+                            Serial.printf("WiFi %d deleted: %s\n", idx + 1, wifiNetworks[idx].ssid);
+                            wifiNetworks.erase(wifiNetworks.begin() + idx);
+                            saveSettings();
+                            wifiInit();
+                        } else {
+                            Serial.printf("Error: index 1-%zu expected!\n", wifiNetworks.size());
+                        }
+                    } else if (strncmp(parameter, "fav ", 4) == 0) {
+                        int idx = atoi(parameter + 4) - 1;
+                        if (idx >= 0 && (size_t)idx < wifiNetworks.size()) {
+                            for (auto& n : wifiNetworks) n.favorite = false;
+                            wifiNetworks[idx].favorite = true;
+                            saveSettings();
+                            wifiInit();
+                            Serial.printf("WiFi %d set as favorite: %s\n", idx + 1, wifiNetworks[idx].ssid);
+                        } else {
+                            Serial.printf("Error: index 1-%zu expected!\n", wifiNetworks.size());
+                        }
+                    } else if (strncmp(parameter, "pw ", 3) == 0) {
+                        const char* rest = parameter + 3;
+                        char* sp = strchr((char*)rest, ' ');
+                        if (sp) {
+                            int idx = atoi(rest) - 1;
+                            if (idx >= 0 && (size_t)idx < wifiNetworks.size()) {
+                                strlcpy(wifiNetworks[idx].password, sp + 1, sizeof(wifiNetworks[idx].password));
+                                saveSettings();
+                                Serial.printf("WiFi %d password updated.\n", idx + 1);
+                            } else {
+                                Serial.printf("Error: index 1-%zu expected!\n", wifiNetworks.size());
+                            }
+                        } else {
+                            Serial.println("Usage: wifi pw <N> <PASSWORD>");
+                        }
+                    } else {
+                        Serial.println("Commands: wifi | wifi add <SSID> [<PW>] | wifi del <N> | wifi fav <N> | wifi pw <N> <PW> | wifi clear");
+                    }
+                }
+
+                // AP settings
+                // "ap"               → show AP settings
+                // "ap name <NAME>"   → set AP name
+                // "ap pw <PASSWORD>" → set AP password
+                // "ap pw -"          → clear AP password
+                if (strncmp(serialRxBuffer, "ap", 2) == 0 && (serialRxBuffer[2] == ' ' || serialRxBuffer[2] == '\0')) {
+                    if (parameter[0] == '\0') {
+                        Serial.printf("AP Name: %s\n", apName.c_str());
+                        Serial.printf("AP Password: %s\n", apPassword.isEmpty() ? "(none)" : "set");
+                    } else if (strncmp(parameter, "name ", 5) == 0) {
+                        apName = String(parameter + 5);
+                        saveSettings();
+                        if (settings.apMode) wifiInit();
+                        Serial.printf("AP Name: %s\n", apName.c_str());
+                    } else if (strncmp(parameter, "pw ", 3) == 0) {
+                        const char* pw = parameter + 3;
+                        if (strcmp(pw, "-") == 0) {
+                            apPassword = "";
+                            Serial.println("AP password cleared.");
+                            saveSettings();
+                            if (settings.apMode) wifiInit();
+                        } else if (strlen(pw) < 8) {
+                            Serial.println("Error: AP password must be at least 8 characters!");
+                        } else {
+                            apPassword = String(pw);
+                            Serial.println("AP password set.");
+                            saveSettings();
+                            if (settings.apMode) wifiInit();
+                        }
+                    } else {
+                        Serial.println("Commands: ap | ap name <NAME> | ap pw <PASSWORD> | ap pw -");
+                    }
+                }
+
+                // Legacy: WiFi SSID (still works, adds to network list)
+                if (strncmp(serialRxBuffer, "ss", 2) == 0 && serialRxBuffer[2] == ' ') {
                     if (strlen(parameter) > 0) {
                         strncpy(settings.wifiSSID, parameter, sizeof(settings.wifiSSID) - 1);
-                        settings.wifiSSID[sizeof(settings.wifiSSID) - 1] = '\0'; 
+                        settings.wifiSSID[sizeof(settings.wifiSSID) - 1] = '\0';
                         settings.apMode = false;
                         saveSettings();
                         wifiInit();
                     }
                     Serial.printf("WiFi SSID: %s\n", settings.wifiSSID);
-                }    
-                
-                //Wifi Password
-                if (strncmp(serialRxBuffer, "pa", 2) == 0) {
+                }
+
+                // Legacy: WiFi Password (still works, updates network in list)
+                if (strncmp(serialRxBuffer, "pa", 2) == 0 && serialRxBuffer[2] == ' ') {
                     if (strlen(parameter) > 0) {
                         strncpy(settings.wifiPassword, parameter, sizeof(settings.wifiPassword) - 1);
-                        settings.wifiPassword[sizeof(settings.wifiPassword) - 1] = '\0'; 
+                        settings.wifiPassword[sizeof(settings.wifiPassword) - 1] = '\0';
                         settings.apMode = false;
                         saveSettings();
                         wifiInit();
                     }
-                    Serial.printf("WiFi Passwort: %s\n", settings.wifiPassword);
+                    Serial.printf("WiFi Password: %s\n", (settings.wifiPassword[0] != '\0') ? "set" : "none");
                 }            
                 
                 //IP-Adresse
@@ -201,8 +325,8 @@ void checkSerialRX() {
                     Serial.printf("Netmask: %d.%d.%d.%d\n", settings.wifiNetMask[0], settings.wifiNetMask[1], settings.wifiNetMask[2], settings.wifiNetMask[3]);
                 }
 
-                //AP-Mode
-                if (strncmp(serialRxBuffer, "a", 1) == 0) {
+                //AP-Mode toggle (legacy: "a 1" / "a 0")
+                if (serialRxBuffer[0] == 'a' && (serialRxBuffer[1] == ' ' || serialRxBuffer[1] == '\0')) {
                     if (strlen(parameter) > 0) {
                         bool value = false;
                         if (parameter[0] == '1') value = true;

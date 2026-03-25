@@ -222,12 +222,12 @@ body, button {
             top: 25%;
             width: 100%;
             height: 65%;
-            background: #808080;
-            color: #000000;
+            background: #4a4a4a;
+            color: #e0e0e0;
             display: flex;
-            flex-direction: column;    /* Stapelt Elemente untereinander */
-            justify-content: flex-start; 
-            align-items: center;       
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
             padding-top: 15px;
             box-sizing: border-box;
 			overflow: auto;
@@ -238,12 +238,12 @@ body, button {
             top: 25%;
             width: 100%;
             height: 65%;
-            background: #808080;
-            color: #000000;
+            background: #4a4a4a;
+            color: #e0e0e0;
             display: flex;
-            flex-direction: column;    /* Stapelt Elemente untereinander */
-            justify-content: flex-start; 
-            align-items: center;       
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
             padding-top: 15px;
             box-sizing: border-box;
 			overflow: auto;
@@ -431,47 +431,37 @@ body, button {
     color: #000000;
     margin: 2px;
     height: calc(100% - 4px);
-    
+
     display: flex;
     flex-direction: column;
-    justify-content: flex-end; /* Schiebt den Text nach unten */
-    padding: 4px;
-    
+    justify-content: center;
+    align-items: center;
+    padding: 2px 4px;
+
     border: 1px solid #222;
     border-radius: 0px;
     cursor: pointer;
     font-family: inherit;
     font-size: inherit;
     outline: none;
-    
-    /* WICHTIG: Erlaubt absoluten Kindern, sich an diesem Button auszurichten */
-    position: relative; 
-    overflow: hidden; /* Verhindert, dass das Bild über den Button-Rand ragt */
 
-    box-shadow: 
+    overflow: hidden;
+
+    box-shadow:
         inset 1px 1px 1px rgba(255, 255, 255, 0.1),
         0px 2px 4px rgba(0, 0, 0, 0.4);
 }
 
-/* Das Bild oben links */
 .button-icon {
     image-rendering: pixelated;
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    left: 0px; 
-    height: 90%; 
+    height: 55%;
     width: auto;
-    z-index: 0;
     object-fit: contain;
     pointer-events: none;
 }
 
-/* Der Text unten rechts */
 .button-text {
-    align-self: flex-end;   /* Explizit rechts */
     line-height: 1;
-    z-index: 50;         /* Hinter dem Text */
 }
 
 /* Drück-Effekt */
@@ -504,6 +494,28 @@ body, button {
     width: 100%;
     min-width: 110px;
 }
+
+/* ===== WIFI NETWORK TABLE ===== */
+.wifiNetTable {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: separate;
+    border-spacing: 4px 2px;
+}
+.wifiNetTable th,
+.wifiNetTable td {
+    padding: 0;
+    vertical-align: middle;
+    text-align: left;
+    overflow: hidden;
+}
+.wifiNetTable th { font-size: 0.8em; opacity: 0.65; }
+.wifiNetTable col.col-ssid { width: 30%; }
+.wifiNetTable col.col-pw   { width: 35%; }
+.wifiNetTable col.col-fav  { width: 57px; }
+.wifiNetTable col.col-del  { width: 30px; }
+.wifiNetTable .wifiNetSSID,
+.wifiNetTable .wifiNetPW { width: 100%; box-sizing: border-box; }
 
 /* Toast Container */
 #toast-container {

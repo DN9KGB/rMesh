@@ -459,3 +459,25 @@ table.list th { text-align: left; }
     width: 100%;
     min-width: 110px;
 }
+
+/* ===== WIFI NETWORK TABLE ===== */
+.wifiNetTable {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: separate;
+    border-spacing: 4px 2px;
+}
+.wifiNetTable th,
+.wifiNetTable td {
+    padding: 0;
+    vertical-align: middle;
+    text-align: left;
+    overflow: hidden;
+}
+.wifiNetTable th { font-size: 0.8em; opacity: 0.65; }
+.wifiNetTable col.col-ssid { width: 30%; }
+.wifiNetTable col.col-pw   { width: 35%; }
+.wifiNetTable col.col-fav  { width: 57px; }
+.wifiNetTable col.col-del  { width: 30px; }
+.wifiNetTable .wifiNetSSID,
+.wifiNetTable .wifiNetPW { width: 100%; box-sizing: border-box; }

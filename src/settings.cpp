@@ -19,6 +19,10 @@ std::vector<bool> udpPeerLegacy;
 std::vector<bool> udpPeerEnabled;
 std::vector<String> udpPeerCall;
 
+std::vector<WifiNetwork> wifiNetworks;
+String apName = "rMesh";
+String apPassword = "";
+
 Preferences prefs;
 bool loraReady = false;
 bool batteryEnabled = true;
@@ -28,9 +32,19 @@ void showSettings() {
     // Print settings as debug output
     Serial.println();
     Serial.println("Settings:");
-    Serial.printf("WiFi SSID: %s\n", settings.wifiSSID);
-    Serial.printf("WiFi Password set: %s\n", (settings.wifiPassword[0] != '\0') ? "true" : "false");
     Serial.printf("AP Mode: %s\n", settings.apMode ? "true" : "false");
+    Serial.printf("AP Name: %s\n", apName.c_str());
+    Serial.printf("AP Password set: %s\n", apPassword.isEmpty() ? "false" : "true");
+    if (wifiNetworks.empty()) {
+        Serial.println("WiFi Networks: none");
+    } else {
+        for (size_t i = 0; i < wifiNetworks.size(); i++) {
+            Serial.printf("WiFi %zu: %s%s (pw: %s)\n", i + 1,
+                wifiNetworks[i].ssid,
+                wifiNetworks[i].favorite ? " [favorite]" : "",
+                (wifiNetworks[i].password[0] != '\0') ? "set" : "none");
+        }
+    }
     Serial.printf("DHCP: %s\n", settings.dhcpActive ? "true" : "false");
     if (!settings.dhcpActive) {
         Serial.printf("IP: %d.%d.%d.%d\n", settings.wifiIP[0], settings.wifiIP[1], settings.wifiIP[2], settings.wifiIP[3]);
@@ -113,6 +127,14 @@ void sendSettings() {
     doc["settings"]["wifiSSID"] = settings.wifiSSID;
     doc["settings"]["wifiPassword"] = settings.wifiPassword;
     doc["settings"]["apMode"] = settings.apMode;
+    doc["settings"]["apName"] = apName;
+    doc["settings"]["apPassword"] = apPassword;
+    for (size_t i = 0; i < wifiNetworks.size(); i++) {
+        JsonObject net = doc["settings"]["wifiNetworks"].add<JsonObject>();
+        net["ssid"]     = wifiNetworks[i].ssid;
+        net["password"] = wifiNetworks[i].password;
+        net["favorite"] = wifiNetworks[i].favorite;
+    }
     doc["settings"]["wifiIP"][0] = settings.wifiIP[0];
     doc["settings"]["wifiIP"][1] = settings.wifiIP[1];
     doc["settings"]["wifiIP"][2] = settings.wifiIP[2];
@@ -194,8 +216,9 @@ void sendSettings() {
     #endif
     doc["settings"]["batteryEnabled"]     = batteryEnabled;
     doc["settings"]["batteryFullVoltage"] = batteryFullVoltage;
-    char* jsonBuffer = (char*)malloc(4096);
-    size_t len = serializeJson(doc, jsonBuffer, 4096);
+    size_t bufSize = 4096 + wifiNetworks.size() * 160;
+    char* jsonBuffer = (char*)malloc(bufSize);
+    size_t len = serializeJson(doc, jsonBuffer, bufSize);
     wsBroadcast(jsonBuffer, len);
     free(jsonBuffer);
     jsonBuffer = nullptr;
@@ -259,6 +282,32 @@ void loadSettings() {
         prefs.putBytes("extSettings", &extSettings, sizeof(extSettings));
     }
 
+    // Load AP settings
+    apName     = prefs.getString("apName",     "rMesh");
+    apPassword = prefs.getString("apPassword", "");
+
+    // Load WiFi network list
+    wifiNetworks.clear();
+    {
+        size_t wifiNetLen = prefs.getBytesLength("wifiNetworks");
+        const size_t WNET_STRIDE = WIFI_NETWORK_SSID_LEN + WIFI_NETWORK_PW_LEN + 1; // 129 bytes
+        if (wifiNetLen >= 1) {
+            uint8_t* buf = new uint8_t[wifiNetLen];
+            prefs.getBytes("wifiNetworks", buf, wifiNetLen);
+            uint8_t count = buf[0];
+            for (uint8_t i = 0; i < count && 1 + (size_t)i * WNET_STRIDE + WNET_STRIDE <= wifiNetLen; i++) {
+                WifiNetwork net;
+                const uint8_t* entry = buf + 1 + i * WNET_STRIDE;
+                memset(&net, 0, sizeof(net));
+                strlcpy(net.ssid,     (const char*)(entry),                              WIFI_NETWORK_SSID_LEN);
+                strlcpy(net.password, (const char*)(entry + WIFI_NETWORK_SSID_LEN),      WIFI_NETWORK_PW_LEN);
+                net.favorite = entry[WIFI_NETWORK_SSID_LEN + WIFI_NETWORK_PW_LEN] != 0;
+                wifiNetworks.push_back(net);
+            }
+            delete[] buf;
+        }
+    }
+
     // Load dynamic UDP peers
     udpPeers.clear();
     udpPeerLegacy.clear();
@@ -319,8 +368,39 @@ void loadSettings() {
     // Calculate maximum message length
     settings.loraMaxMessageLength = 255 - (4 * (MAX_CALLSIGN_LENGTH + 1)) - 8;
 
+    // Migrate legacy single WiFi to network list
+    if (wifiNetworks.empty() && settings.wifiSSID[0] != '\0') {
+        WifiNetwork net;
+        memset(&net, 0, sizeof(net));
+        strlcpy(net.ssid,     settings.wifiSSID,     sizeof(net.ssid));
+        strlcpy(net.password, settings.wifiPassword,  sizeof(net.password));
+        net.favorite = true;
+        wifiNetworks.push_back(net);
+        saveWifiNetworks();
+    }
+
     // Reinitialize hardware
     initHal();
+}
+
+void saveWifiNetworks() {
+    uint8_t count = (uint8_t)wifiNetworks.size();
+    const size_t WNET_STRIDE = WIFI_NETWORK_SSID_LEN + WIFI_NETWORK_PW_LEN + 1;
+    size_t bufLen = 1 + (size_t)count * WNET_STRIDE;
+    uint8_t* buf = new uint8_t[bufLen];
+    memset(buf, 0, bufLen);
+    buf[0] = count;
+    for (uint8_t i = 0; i < count; i++) {
+        uint8_t* entry = buf + 1 + i * WNET_STRIDE;
+        strlcpy((char*)entry,                              wifiNetworks[i].ssid,     WIFI_NETWORK_SSID_LEN);
+        strlcpy((char*)(entry + WIFI_NETWORK_SSID_LEN),    wifiNetworks[i].password, WIFI_NETWORK_PW_LEN);
+        entry[WIFI_NETWORK_SSID_LEN + WIFI_NETWORK_PW_LEN] = wifiNetworks[i].favorite ? 1 : 0;
+    }
+    prefs.putBytes("wifiNetworks", buf, bufLen);
+    delete[] buf;
+    prefs.putString("apName",     apName);
+    prefs.putString("apPassword", apPassword);
+    sendSettings();
 }
 
 void saveUdpPeers() {
@@ -342,14 +422,58 @@ void saveUdpPeers() {
 }
 
 void saveSettings() {
-    // Save settings to EEPROM
     Serial.println("Saving settings...");
+
+    // Sync settings.wifiSSID ↔ wifiNetworks (for display-device compatibility)
+    if (!wifiNetworks.empty()) {
+        // Check if display device changed wifiSSID (differs from current favorite)
+        int favIdx = 0;
+        for (size_t i = 0; i < wifiNetworks.size(); i++) {
+            if (wifiNetworks[i].favorite) { favIdx = (int)i; break; }
+        }
+        if (settings.wifiSSID[0] != '\0' && strcmp(wifiNetworks[favIdx].ssid, settings.wifiSSID) != 0) {
+            // Display changed SSID -> sync into wifiNetworks
+            bool found = false;
+            for (size_t i = 0; i < wifiNetworks.size(); i++) {
+                if (strcmp(wifiNetworks[i].ssid, settings.wifiSSID) == 0) {
+                    strlcpy(wifiNetworks[i].password, settings.wifiPassword, sizeof(wifiNetworks[i].password));
+                    for (auto& n : wifiNetworks) n.favorite = false;
+                    wifiNetworks[i].favorite = true;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                WifiNetwork net;
+                memset(&net, 0, sizeof(net));
+                strlcpy(net.ssid,     settings.wifiSSID,    sizeof(net.ssid));
+                strlcpy(net.password, settings.wifiPassword, sizeof(net.password));
+                net.favorite = true;
+                for (auto& n : wifiNetworks) n.favorite = false;
+                wifiNetworks.push_back(net);
+            }
+        } else {
+            // Normal save: sync wifiSSID from wifiNetworks favorite
+            strlcpy(settings.wifiSSID,     wifiNetworks[favIdx].ssid,     sizeof(settings.wifiSSID));
+            strlcpy(settings.wifiPassword, wifiNetworks[favIdx].password, sizeof(settings.wifiPassword));
+        }
+    } else if (settings.wifiSSID[0] != '\0') {
+        // No networks in list, add current SSID as favorite
+        WifiNetwork net;
+        memset(&net, 0, sizeof(net));
+        strlcpy(net.ssid,     settings.wifiSSID,    sizeof(net.ssid));
+        strlcpy(net.password, settings.wifiPassword, sizeof(net.password));
+        net.favorite = true;
+        wifiNetworks.push_back(net);
+    }
+
     prefs.putBytes("config", &settings, sizeof(settings));
     prefs.putBytes("extSettings", &extSettings, sizeof(extSettings));
     prefs.putUChar("updateChannel", updateChannel);
     prefs.putBool("loraEnabled", loraEnabled);
     prefs.putBool("batEnabled", batteryEnabled);
     prefs.putFloat("batFullV", batteryFullVoltage);
-    saveUdpPeers();  // Saves peers and calls sendSettings()
+    saveWifiNetworks();  // Saves WiFi networks + AP settings + calls sendSettings()
+    saveUdpPeers();      // Saves peers (sendSettings() already called above, but ok)
     initHal();
 }

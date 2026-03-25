@@ -20,6 +20,7 @@ uint64_t reconnectTimer = 0;
 byte wifiStatus = 0xff;
 bool wiFiLED = false;
 bool apModeKey = false;
+bool pendingReconnectScan = false;
 
 static void sendOtaLog(const char* event, const char* versionFrom, const char* versionTo, const char* errorMsg) {
     WiFiClientSecure logClient;
@@ -231,11 +232,17 @@ void showWiFiStatus() {
                 setWiFiLED(wiFiLED);
             }
         } else {
-            //Nicht Verbunden -> LED aus + Reconnect versuchen
+            // Not connected -> LED off + attempt reconnect
             setWiFiLED(false);
-            if (millis() > reconnectTimer) {
+            if (millis() > reconnectTimer && WiFi.scanComplete() != WIFI_SCAN_RUNNING) {
                 reconnectTimer = millis() + 30000;
-                WiFi.reconnect();
+                if (wifiNetworks.size() > 1) {
+                    // Multiple networks: scan and connect to best available
+                    pendingReconnectScan = true;
+                    WiFi.scanNetworks(true);
+                } else {
+                    WiFi.reconnect();
+                }
             }
         }
     }
@@ -243,6 +250,48 @@ void showWiFiStatus() {
 
 void onWiFiScanDone(WiFiEvent_t event, WiFiEventInfo_t info) {
     int n = WiFi.scanComplete();
+
+    // Multi-network reconnect: pick best available network from list
+    if (pendingReconnectScan && n > 0) {
+        pendingReconnectScan = false;
+        int bestIdx = -1;
+        int bestRSSI = -200;
+
+        // Favorites first
+        for (size_t i = 0; i < wifiNetworks.size(); i++) {
+            if (!wifiNetworks[i].favorite) continue;
+            for (int j = 0; j < n; j++) {
+                if (strcmp(WiFi.SSID(j).c_str(), wifiNetworks[i].ssid) == 0 && WiFi.RSSI(j) > bestRSSI) {
+                    bestRSSI = WiFi.RSSI(j);
+                    bestIdx = (int)i;
+                }
+            }
+        }
+        // If no favorite found, try any network from list
+        if (bestIdx < 0) {
+            bestRSSI = -200;
+            for (size_t i = 0; i < wifiNetworks.size(); i++) {
+                for (int j = 0; j < n; j++) {
+                    if (strcmp(WiFi.SSID(j).c_str(), wifiNetworks[i].ssid) == 0 && WiFi.RSSI(j) > bestRSSI) {
+                        bestRSSI = WiFi.RSSI(j);
+                        bestIdx = (int)i;
+                    }
+                }
+            }
+        }
+        if (bestIdx >= 0) {
+            Serial.printf("Reconnecting to %s (RSSI: %d)\n", wifiNetworks[bestIdx].ssid, bestRSSI);
+            WiFi.disconnect();
+            if (!settings.dhcpActive) {
+                WiFi.config(settings.wifiIP, settings.wifiGateway, settings.wifiNetMask, settings.wifiDNS);
+            }
+            WiFi.begin(wifiNetworks[bestIdx].ssid, wifiNetworks[bestIdx].password);
+        }
+    } else {
+        pendingReconnectScan = false;
+    }
+
+    // Send scan results to WebUI
     JsonDocument doc;
     for (int i = 0; i < n; ++i) {
         doc["wifiScan"][i]["ssid"] = WiFi.SSID(i).c_str();
@@ -268,29 +317,49 @@ void onWiFiScanDone(WiFiEvent_t event, WiFiEventInfo_t info) {
 
 
 void wifiInit() {
-    //Wifi Init
     WiFi.mode(WIFI_STA);
     if (settings.apMode) {
-        //AP-Mode
-        //Serial.println("Starte WiFi AP-Mode");
+        // Access Point mode
         WiFi.mode(WIFI_AP);
         esp_wifi_set_bandwidth(WIFI_IF_AP, WIFI_BW_HT20);
         WiFi.softAPConfig(IPAddress(192,168,1,1), IPAddress(192,168,1,1), IPAddress(255,255,255,0));
-        WiFi.softAP("rMesh");
+        const char* ssid = apName.isEmpty() ? "rMesh" : apName.c_str();
+        // WiFi AP password must be >= 8 chars; empty or short = open network
+        if (apPassword.length() >= 8) {
+            WiFi.softAP(ssid, apPassword.c_str());
+        } else {
+            WiFi.softAP(ssid);
+        }
     } else {
-        //Serial.println("Starte WiFi Client-Mode");
+        // Station mode: connect to favorite or first network from list
         WiFi.disconnect();
         WiFi.mode(WIFI_STA);
         if (!settings.dhcpActive) {
-            //Feste IP
             WiFi.config(settings.wifiIP, settings.wifiGateway, settings.wifiNetMask, settings.wifiDNS);
         }
-        WiFi.begin(settings.wifiSSID, settings.wifiPassword);
-        WiFi.setAutoReconnect(true);
+        const char* connectSsid = nullptr;
+        const char* connectPw   = nullptr;
+        if (!wifiNetworks.empty()) {
+            int idx = 0;
+            for (size_t i = 0; i < wifiNetworks.size(); i++) {
+                if (wifiNetworks[i].favorite) { idx = (int)i; break; }
+            }
+            connectSsid = wifiNetworks[idx].ssid;
+            connectPw   = wifiNetworks[idx].password;
+        } else if (settings.wifiSSID[0] != '\0') {
+            // Fallback to legacy single SSID
+            connectSsid = settings.wifiSSID;
+            connectPw   = settings.wifiPassword;
+        }
+        if (connectSsid && connectSsid[0] != '\0') {
+            WiFi.begin(connectSsid, connectPw);
+        }
+        // Only auto-reconnect when single network; multi-network uses scan-based reconnect
+        WiFi.setAutoReconnect(wifiNetworks.size() <= 1);
     }
     WiFi.setSleep(false);
     WiFi.setHostname(settings.mycall);
-    WiFi.setTxPower(WIFI_POWER_19_5dBm);  
-    WiFi.onEvent(onWiFiScanDone, ARDUINO_EVENT_WIFI_SCAN_DONE);  
+    WiFi.setTxPower(WIFI_POWER_19_5dBm);
+    WiFi.onEvent(onWiFiScanDone, ARDUINO_EVENT_WIFI_SCAN_DONE);
 }
 

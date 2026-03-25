@@ -5,6 +5,7 @@
 
 #include "config.h"
 #include "settings.h"
+#include "wifiFunctions.h"
 #include "main.h"
 #include "helperFunctions.h"
 #include "peer.h"
@@ -146,6 +147,27 @@ void startWebServer() {
             }
             if (json["settings"]["apMode"].is<JsonVariant>()) {
                 settings.apMode = json["settings"]["apMode"].as<bool>();
+            }
+            if (json["settings"]["apName"].is<JsonVariant>()) {
+                apName = json["settings"]["apName"].as<String>();
+            }
+            if (json["settings"]["apPassword"].is<JsonVariant>()) {
+                apPassword = json["settings"]["apPassword"].as<String>();
+            }
+            // Update WiFi network list
+            if (json["settings"]["wifiNetworks"].is<JsonArray>()) {
+                JsonArray nets = json["settings"]["wifiNetworks"];
+                wifiNetworks.clear();
+                for (JsonObject n : nets) {
+                    WifiNetwork net;
+                    memset(&net, 0, sizeof(net));
+                    strlcpy(net.ssid,     n["ssid"] | "",     sizeof(net.ssid));
+                    strlcpy(net.password, n["password"] | "",  sizeof(net.password));
+                    net.favorite = n["favorite"] | false;
+                    if (net.ssid[0] != '\0') {
+                        wifiNetworks.push_back(net);
+                    }
+                }
             }
             if (json["settings"]["wifiIP"].is<JsonVariant>()) {
                 JsonArray ipArray = json["settings"]["wifiIP"];
@@ -309,6 +331,7 @@ void startWebServer() {
 
         if (json["scanWifi"].is<JsonVariant>()) {
             Serial.println("WiFi scan...");
+            pendingReconnectScan = false;  // Don't treat this as a reconnect scan
             WiFi.scanNetworks(true);
         }
 

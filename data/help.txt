@@ -3,13 +3,21 @@ Befehlsübersicht:
   h                    Hilfe
   settings             Einstellungen anzeigen
   scan                 Wifi scannen
-  ssid <ssid>          WiFi SSID setzen
-  password <passwort>  WiFi Passwort setzen
+  wifi                 Alle WLAN-Netzwerke anzeigen
+  wifi add <SSID> [<PW>]  Netzwerk hinzufuegen (PW optional)
+  wifi del <N>         Netzwerk N loeschen (1-basiert)
+  wifi fav <N>         Netzwerk N als Favorit setzen
+  wifi pw <N> <PW>     Passwort von Netzwerk N aendern
+  wifi clear           Alle Netzwerke loeschen
+  ap                   AP-Einstellungen anzeigen
+  ap name <NAME>       AP-Name setzen
+  ap pw <PASSWORT>     AP-Passwort setzen (min. 8 Zeichen)
+  ap pw -              AP-Passwort loeschen
+  a <1/0>              AP-Mode ein/aus
   ip <ip>              WiFi IP setzen
   dns <ip>             WiFi DNS setzen
   gateway <ip>         WiFi Gateway setzen
   netmask <maske>      WiFi Netzmaske setzen
-  ap <1/0>             AP-Mode ein/aus
   dhcp <1/0>           DHCP-Client ein/aus
   reboot               Neustart
   update               OTA-Update starten

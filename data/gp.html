@@ -51,13 +51,14 @@
       </div>
     </div>
     <div class="desk-top-right">
-      <div id="version" class="info-box">rMesh</div>
+      <div id="appName" class="info-box">rMesh</div>
+      <div id="version" class="info-box"></div>
       <div id="updateInfo" class="info-box update" style="display:none;"></div>
+      <div class="desk-top-right-spacer"></div>
       <div id="date" class="info-box"></div>
       <div id="clock" class="digital-clock">00:00:00</div>
     </div>
   </div>
-
 
   <!-- ===== MOBILE HEADER ===== -->
   <div class="mob-header">
@@ -113,7 +114,6 @@
   </nav>
 
   <!-- ===== CONTENT PANELS ===== -->
-
   <div id="channel1"  class="middle" style="display:none;"></div>
   <div id="channel2"  class="middle" style="display:none;"></div>
   <div id="channel3"  class="middle" style="display:none;"></div>
@@ -279,26 +279,21 @@
     </div>
 
     <div class="settings-section">
-      <div class="section-header" data-i18n="setup.section_system">System</div>
+      <div class="section-header" data-i18n="setup.section_battery">Akku</div>
       <div class="section-body">
         <table>
           <tr>
-            <td data-i18n="setup.language">Sprache:</td>
+            <td data-i18n="setup.bat_show">Akkustand anzeigen:</td>
             <td>
-              <select id="langSelect" class="input-box" onchange="setLanguage(this.value)">
-                <option value="de">Deutsch</option>
-                <option value="en">English</option>
-              </select>
+              <label class="toggle-switch">
+                <input type="checkbox" id="settingsBatteryEnabled">
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+              </label>
             </td>
           </tr>
           <tr>
-            <td></td>
-            <td>
-              <button class="button" id="settingsDeleteMessages" data-i18n="btn.delete_messages">Nachrichten löschen</button>
-              <button class="button" id="statusSyncTime" data-i18n="btn.sync_time">Browserzeit sync.</button>
-              <button class="button" id="settingsReboot" data-i18n="btn.reboot">Neustart</button>
-              <button class="button" id="settingsShutdown" data-i18n="btn.shutdown">Herunterfahren</button>
-            </td>
+            <td data-i18n="setup.bat_full">Spannung bei 100%:</td>
+            <td><input class="input-box" id="settingsBatteryFullVoltage" type="number" step="0.05" min="3.5" max="4.4" style="width:5em"> V</td>
           </tr>
         </table>
       </div>
@@ -377,21 +372,25 @@
     </div>
 
     <div class="settings-section">
-      <div class="section-header" data-i18n="setup.section_battery">Akku</div>
+      <div class="section-header" data-i18n="setup.section_system">System</div>
       <div class="section-body">
         <table>
           <tr>
-            <td data-i18n="setup.bat_show">Akkustand anzeigen:</td>
+            <td data-i18n="setup.language">Sprache:</td>
             <td>
-              <label class="toggle-switch">
-                <input type="checkbox" id="settingsBatteryEnabled">
-                <span class="toggle-track"><span class="toggle-thumb"></span></span>
-              </label>
+              <select id="langSelect" class="input-box" onchange="setLanguage(this.value)">
+                <option value="de">Deutsch</option>
+                <option value="en">English</option>
+              </select>
             </td>
           </tr>
           <tr>
-            <td data-i18n="setup.bat_full">Spannung bei 100%:</td>
-            <td><input class="input-box" id="settingsBatteryFullVoltage" type="number" step="0.05" min="3.5" max="4.4" style="width:5em"> V</td>
+            <td colspan="2">
+              <button class="button" id="settingsDeleteMessages" data-i18n="btn.delete_messages">Nachrichten löschen</button>
+              <button class="button" id="statusSyncTime" data-i18n="btn.sync_time">Browserzeit sync.</button>
+              <button class="button" id="settingsReboot" title="Neustart" data-i18n-title="btn.reboot">&#x21BB;</button>
+              <button class="button" id="settingsShutdown" title="Herunterfahren" data-i18n-title="btn.shutdown">&#x23FB;</button>
+            </td>
           </tr>
         </table>
       </div>
@@ -416,21 +415,16 @@
               </label>
             </td>
           </tr>
-          <tr class="AP_MODE_ENABLED">
-            <td data-i18n="net.networks">WLAN-Netzwerke:</td>
-            <td>
-              <select class="input-box" id="settingsSSIDList"></select>
-              <button class="button" id="settingsScanWifi" data-i18n="btn.scan">Suchen</button>
-            </td>
+          <!-- AP settings (visible when AP mode is ON) -->
+          <tr class="AP_ONLY" style="display:none">
+            <td data-i18n="net.ap_name">AP-Name:</td>
+            <td><input class="input-box" id="settingsApName" maxlength="32"></td>
           </tr>
-          <tr class="AP_MODE_ENABLED">
-            <td data-i18n="net.ssid">SSID:</td>
-            <td><input class="input-box" id="settingsSSID"></td>
+          <tr class="AP_ONLY" style="display:none">
+            <td data-i18n="net.ap_password">AP-Passwort:</td>
+            <td><input class="input-box" type="password" id="settingsApPassword" placeholder="min. 8 chars"></td>
           </tr>
-          <tr class="AP_MODE_ENABLED">
-            <td data-i18n="net.password">Passwort:</td>
-            <td><input class="input-box" type="password" id="settingsPassword"></td>
-          </tr>
+          <!-- Client mode settings (visible when AP mode is OFF) -->
           <tr class="AP_MODE_ENABLED">
             <td data-i18n="net.dhcp">DHCP:</td>
             <td>
@@ -487,6 +481,20 @@
         <button class="button" onclick="addUdpPeer()" data-i18n="btn.add_peer">+ Peer</button>
       </div>
     </div>
+
+    <!-- WiFi Networks (visible when AP mode is OFF) -->
+    <div class="settings-section AP_MODE_ENABLED">
+      <div class="section-header" data-i18n="net.wifi_networks">WLAN-Netzwerke</div>
+      <div class="section-body">
+        <div style="margin-bottom:8px;">
+          <select class="input-box" id="settingsSSIDList" style="width:60%;min-width:200px;"></select>
+          <button class="button" id="settingsScanWifi" data-i18n="btn.scan">Suchen</button>
+          <button class="button" onclick="addWifiNetworkFromScan()" data-i18n="btn.add_from_scan">+ Hinzufügen</button>
+        </div>
+        <div id="wifiNetworkList"></div>
+        <button class="button" onclick="addWifiNetwork()" data-i18n="btn.add_wifi">+ Netzwerk</button>
+      </div>
+    </div>
   </div>
 
   <!-- ===== ABOUT PANEL ===== -->
@@ -541,7 +549,7 @@
       <span class="button-text" data-i18n="nav.tune">Tune</span>
     </button>
     <button id="announceButton" class="main-button">
-      <img src="announce.png" class="button-icon" alt="">
+      <img src="announce.svg" class="button-icon" alt="">
       <span class="button-text" data-i18n="nav.announce">Announce</span>
     </button>
     <button id="loraButton" class="main-button" onclick="setUI('lora')">
@@ -557,7 +565,7 @@
       <span class="button-text" data-i18n="nav.network">Network</span>
     </button>
     <button id="aboutButton" class="main-button" onclick="setUI('about')">
-      <img src="setup.png" class="button-icon" alt="">
+      <img src="192.png" class="button-icon" alt="">
       <span class="button-text" data-i18n="nav.about">About</span>
     </button>
   </div>
@@ -932,10 +940,6 @@
 
     document.getElementById("settingsDeleteMessages").addEventListener("click", function() {
       sendWS(JSON.stringify({deleteMessages: true}));
-    });
-
-    document.getElementById("settingsSSIDList").addEventListener("click", function() {
-      document.getElementById("settingsSSID").value = document.getElementById("settingsSSIDList").value;
     });
 
     document.getElementById("settingsApMode").addEventListener("change", function() {

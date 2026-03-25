@@ -5,27 +5,51 @@ var baseURL = "";
 var gateway = "";
 var init = false;
 
-// Mute und Sammelgruppe pro Channel (gespeichert als Cookies)
-// channelMuted[i] = true → kein Sound/Badge für Channel i
-// channelSammel   = Channel-Index 3-10 der als Sammelgruppe dient (0 = keine)
-// sammelGroups    = Array von Gruppen-Namen-Strings, die in die Sammelgruppe geleitet werden
-var channelMuted  = new Array(11).fill(false);
-var channelSammel = 0;
-var sammelGroups  = [];
+// Mute and collection group per channel (stored as cookies)
+// channelMuted[i]  = true → no sound/badge for channel i
+// channelSammel[i] = true → channel i is a collection group (receive-only)
+// sammelGroups[i]  = array of group name strings routed to collection group i
+// sammelNames[i]   = display name for collection group i
+var channelMuted   = new Array(11).fill(false);
+var channelSammel  = new Array(11).fill(false);
+var sammelGroups   = {};
+var sammelNames    = {};
 
 function loadChannelFlags() {
-    channelSammel = parseInt(Cookie.get("chSamCol") || "0");
     for (let i = 1; i <= 10; i++) {
         channelMuted[i] = Cookie.get("chMute" + i) === "1";
     }
-    try { sammelGroups = JSON.parse(Cookie.get("chSamGrps") || "[]"); } catch(e) { sammelGroups = []; }
+    // Migrate old single-Sammelgruppe format
+    var oldCol = Cookie.get("chSamCol");
+    var oldGrps = Cookie.get("chSamGrps");
+    if (oldCol && oldCol !== "0" && !Cookie.get("chSamFlags")) {
+        var idx = parseInt(oldCol);
+        if (idx >= 3 && idx <= 10) {
+            channelSammel[idx] = true;
+            try { sammelGroups[idx] = JSON.parse(oldGrps || "[]"); } catch(e) { sammelGroups[idx] = []; }
+            sammelNames[idx] = "";
+        }
+        saveChannelFlags();
+        Cookie.set("chSamCol", "0");
+        Cookie.set("chSamGrps", "[]");
+        return;
+    }
+    try {
+        var flags = JSON.parse(Cookie.get("chSamFlags") || "{}");
+        for (var k in flags) channelSammel[parseInt(k)] = !!flags[k];
+    } catch(e) {}
+    try { sammelGroups = JSON.parse(Cookie.get("chSamGrpsM") || "{}"); } catch(e) { sammelGroups = {}; }
+    try { sammelNames  = JSON.parse(Cookie.get("chSamNames") || "{}"); } catch(e) { sammelNames = {}; }
 }
 function saveChannelFlags() {
-    Cookie.set("chSamCol", String(channelSammel));
     for (let i = 1; i <= 10; i++) {
         Cookie.set("chMute" + i, channelMuted[i] ? "1" : "0");
     }
-    Cookie.set("chSamGrps", JSON.stringify(sammelGroups));
+    var flags = {};
+    for (let i = 3; i <= 10; i++) { if (channelSammel[i]) flags[i] = true; }
+    Cookie.set("chSamFlags", JSON.stringify(flags));
+    Cookie.set("chSamGrpsM", JSON.stringify(sammelGroups));
+    Cookie.set("chSamNames", JSON.stringify(sammelNames));
 }
 
 // ── Auth-State ────────────────────────────────────────────────────────────────
@@ -124,14 +148,15 @@ function onMessage(event) {
     //Peers
     if (d.peerlist) {
         var peers = "";
-        peers += "<table>";
-        peers += "<tr> <td>" + t('peer.port') + "</td> <td>" + t('peer.call') + "</td> <td>" + t('peer.last_rx') + "</td> <td>" + t('peer.rssi') + "</td> <td>" + t('peer.snr') + "</td> <td>" + t('peer.frq_err') + "</td> </tr>";
+        peers += "<table class='mesh-table'>";
+        peers += "<thead><tr><th>" + t('peer.port') + "</th><th>" + t('peer.call') + "</th><th>" + t('peer.last_rx') + "</th><th>" + t('peer.rssi') + "</th><th>" + t('peer.snr') + "</th><th>" + t('peer.frq_err') + "</th></tr></thead>";
+        peers += "<tbody>";
         if (d.peerlist.peers) {
             d.peerlist.peers.forEach(function(p, index) {
 				if (p.port == 0) {port = "LoRa";} else {port = "Wifi";}
                 const lastRX = new Date(p.timestamp * 1000);
                 peers += "<tr>";
-                peers += "<td>" + port + "</td>";
+                peers += "<td><span class='mesh-badge" + (p.port == 0 ? " badge-lora" : " badge-wifi") + "'>" + port + "</span></td>";
                 peers += "<td";
                 if (p.available == true) { peers += " class='green' "} else { peers += " class='red' "}
                 peers += ">" + p.call + "</td>";
@@ -142,15 +167,16 @@ function onMessage(event) {
                 peers += "</tr>";
             });
         }
-        peers += "</table>";
+        peers += "</tbody></table>";
         document.getElementById("peer").innerHTML = peers;
     }
 
     //Routing Liste
     if (d.routingList) {
         var routing = "";
-        routing += "<table>";
-        routing += "<tr> <td>" + t('route.call') + "</td> <td>" + t('route.node') + "</td> <td>" + t('route.hops') + "</td> <td>" + t('route.last_rx') + "</td> </tr>";
+        routing += "<table class='mesh-table'>";
+        routing += "<thead><tr><th>" + t('route.call') + "</th><th>" + t('route.node') + "</th><th>" + t('route.hops') + "</th><th>" + t('route.last_rx') + "</th></tr></thead>";
+        routing += "<tbody>";
         if (d.routingList.routes) {
             d.routingList.routes.forEach(function(r, index) {
                 const lastRX = new Date(r.timestamp * 1000);
@@ -162,7 +188,7 @@ function onMessage(event) {
                 routing += "</tr>";
             });
         }
-        routing += "</table>";
+        routing += "</tbody></table>";
         document.getElementById("routing").innerHTML = routing;
     }    
 
@@ -171,7 +197,8 @@ function onMessage(event) {
         settings = d.settings;
         function fmtIP(a) { return (a && a[0] !== undefined) ? a[0]+'.'+a[1]+'.'+a[2]+'.'+a[3] : '-'; }
         fillSettingsForm(settings);
-        document.getElementById("version").innerHTML = d.settings.name + " " + d.settings.version;
+        document.getElementById("appName").innerHTML = d.settings.name;
+        document.getElementById("version").innerHTML = d.settings.version;
         document.getElementById("myCall").innerHTML = d.settings.mycall;
         document.getElementById("settingsLoraMaxMessageLength").innerHTML = d.settings.loraMaxMessageLength + " characters";
         settings.titel = settings.name + " - " + settings.mycall;
@@ -228,9 +255,11 @@ function onMessage(event) {
             //messages.json laden (geht erst jetzt, weil sonst mycall nicht bekannt)
             fetch(baseURL + "messages.json?" + Math.random())
                 .then(function(response) {
+                    if (!response.ok) return "";
                     return response.text();
                 })
                 .then(function(text) {
+                    if (!text) { showMessages(true); for (let i=0;i<=10;i++){channels[i]=false;} setUI(ui); return; }
                     var lines = text.split(/\r?\n/);
                     lines.forEach(function(line) {
                         if (line.trim().length === 0) return;
@@ -307,6 +336,8 @@ function onMessage(event) {
 
 //Nachricht senden
 async function sendMessage(text, channel) {
+    // Collection groups are receive-only
+    if (channel >= 3 && channelSammel[channel]) return;
     //Zielrufzeichen zusammenbasteln
     var dstCall = document.getElementById('dstCall').innerHTML;
     if (channel == 2) {
@@ -427,18 +458,99 @@ function addUdpPeer() {
     tbody.appendChild(tr);
 }
 
+// ── WiFi Network Management ──────────────────────────────────────────────────
+function wifiFavRadio(checked) {
+    return '<label class="toggle-switch">'
+        + '<input type="checkbox"' + (checked ? ' checked' : '') + ' onchange="onWifiFavChange(this)">'
+        + '<span class="toggle-track"><span class="toggle-thumb"></span></span>'
+        + '</label>';
+}
+
+function onWifiFavChange(el) {
+    // Only one favorite at a time: uncheck all others
+    if (el.checked) {
+        document.querySelectorAll('#wifiNetworkList .wifiNetFav input').forEach(function(cb) {
+            if (cb !== el) cb.checked = false;
+        });
+    }
+}
+
+function renderWifiNetworks(nets) {
+    var list = document.getElementById('wifiNetworkList');
+    if (!list) return;
+    list.innerHTML = '<table class="wifiNetTable">'
+        + '<colgroup><col class="col-ssid"><col class="col-pw"><col class="col-fav"><col class="col-del"></colgroup>'
+        + '<thead><tr>'
+        + '<th>SSID</th>'
+        + '<th>' + t('net.password') + '</th>'
+        + '<th>' + t('net.favorite') + '</th>'
+        + '<th></th>'
+        + '</tr></thead>'
+        + '<tbody id="wifiNetBody"></tbody></table>';
+    nets.forEach(function(n) {
+        var tbody = document.getElementById('wifiNetBody');
+        var tr = document.createElement('tr');
+        tr.className = 'wifiNetRow';
+        tr.innerHTML = '<td><input class="input-box wifiNetSSID" value="' + (n.ssid || '') + '"></td>'
+            + '<td><input class="input-box wifiNetPW" type="password" value="' + (n.password || '') + '"></td>'
+            + '<td class="wifiNetFav">' + wifiFavRadio(!!n.favorite) + '</td>'
+            + '<td><button class="button button-danger" onclick="this.closest(\'tr\').remove()" title="' + t('btn.remove_peer') + '">&#128465;</button></td>';
+        tbody.appendChild(tr);
+    });
+}
+
+function addWifiNetwork() {
+    var tbody = document.getElementById('wifiNetBody');
+    if (!tbody) { renderWifiNetworks([]); tbody = document.getElementById('wifiNetBody'); }
+    var tr = document.createElement('tr');
+    tr.className = 'wifiNetRow';
+    var isFav = (tbody.querySelectorAll('.wifiNetRow').length === 0);
+    tr.innerHTML = '<td><input class="input-box wifiNetSSID" value=""></td>'
+        + '<td><input class="input-box wifiNetPW" type="password" value=""></td>'
+        + '<td class="wifiNetFav">' + wifiFavRadio(isFav) + '</td>'
+        + '<td><button class="button button-danger" onclick="this.closest(\'tr\').remove()" title="' + t('btn.remove_peer') + '">&#128465;</button></td>';
+    tbody.appendChild(tr);
+    tr.querySelector('.wifiNetSSID').focus();
+}
+
+function addWifiNetworkFromScan() {
+    var select = document.getElementById('settingsSSIDList');
+    if (!select || !select.value) return;
+    var tbody = document.getElementById('wifiNetBody');
+    if (!tbody) { renderWifiNetworks([]); tbody = document.getElementById('wifiNetBody'); }
+    // Check if SSID already exists in list
+    var exists = false;
+    tbody.querySelectorAll('.wifiNetSSID').forEach(function(input) {
+        if (input.value === select.value) exists = true;
+    });
+    if (exists) return;
+    var tr = document.createElement('tr');
+    tr.className = 'wifiNetRow';
+    var isFav = (tbody.querySelectorAll('.wifiNetRow').length === 0);
+    tr.innerHTML = '<td><input class="input-box wifiNetSSID" value="' + select.value + '"></td>'
+        + '<td><input class="input-box wifiNetPW" type="password" value=""></td>'
+        + '<td class="wifiNetFav">' + wifiFavRadio(isFav) + '</td>'
+        + '<td><button class="button button-danger" onclick="this.closest(\'tr\').remove()" title="' + t('btn.remove_peer') + '">&#128465;</button></td>';
+    tbody.appendChild(tr);
+    tr.querySelector('.wifiNetPW').focus();
+}
+
 function fillSettingsForm(s) {
     document.getElementById("settingsMycall").value = s.mycall;
     document.getElementById("settingsPosition").value = s.position || "";
     document.getElementById("settingsNTP").value = s.ntp;
-    document.getElementById("settingsSSID").value = s.wifiSSID;
-    document.getElementById("settingsPassword").value = s.wifiPassword;
     document.getElementById("settingsWiFiIP").value = s.wifiIP[0] + "." + s.wifiIP[1] + "." + s.wifiIP[2] + "." + s.wifiIP[3];
     document.getElementById("settingsWifiNetMask").value = s.wifiNetMask[0] + "." + s.wifiNetMask[1] + "." + s.wifiNetMask[2] + "." + s.wifiNetMask[3];
     document.getElementById("settingsWifiGateway").value = s.wifiGateway[0] + "." + s.wifiGateway[1] + "." + s.wifiGateway[2] + "." + s.wifiGateway[3];
     document.getElementById("settingsWifiDNS").value = s.wifiDNS[0] + "." + s.wifiDNS[1] + "." + s.wifiDNS[2] + "." + s.wifiDNS[3];
     document.getElementById("settingsDHCP").checked = s.dhcpActive;
     document.getElementById("settingsApMode").checked = s.apMode;
+    document.getElementById("settingsApName").value = s.apName || "rMesh";
+    document.getElementById("settingsApPassword").value = s.apPassword || "";
+    // WiFi network list
+    if (s.wifiNetworks) {
+        renderWifiNetworks(s.wifiNetworks);
+    }
     document.getElementById("settingsLoraFrequency").value = s.loraFrequency;
     document.getElementById("settingsLoraOutputPower").value = s.loraOutputPower;
     document.getElementById("settingsLoraBandwidth").value = s.loraBandwidth;
@@ -477,9 +589,19 @@ function saveSettings() {
     s["position"] = document.getElementById("settingsPosition").value;
     s["ntp"] = document.getElementById("settingsNTP").value;
     s["dhcpActive"] = document.getElementById("settingsDHCP").checked;
-    s["wifiSSID"] = document.getElementById("settingsSSID").value;
-    s["wifiPassword"] = document.getElementById("settingsPassword").value;
     s["apMode"] = document.getElementById("settingsApMode").checked;
+    s["apName"] = document.getElementById("settingsApName").value;
+    s["apPassword"] = document.getElementById("settingsApPassword").value;
+    // Collect WiFi networks from table
+    s["wifiNetworks"] = [];
+    document.querySelectorAll('#wifiNetworkList .wifiNetRow').forEach(function(row) {
+        var ssid = row.querySelector('.wifiNetSSID').value || "";
+        var pw   = row.querySelector('.wifiNetPW').value || "";
+        var fav  = row.querySelector('.wifiNetFav input').checked;
+        if (ssid !== "") {
+            s["wifiNetworks"].push({ "ssid": ssid, "password": pw, "favorite": fav });
+        }
+    });
     s["wifiIP"] = document.getElementById("settingsWiFiIP").value.split('.').map(Number);
     s["wifiNetMask"] = document.getElementById("settingsWifiNetMask").value.split('.').map(Number);
     s["wifiGateway"] = document.getElementById("settingsWifiGateway").value.split('.').map(Number);
@@ -587,11 +709,15 @@ function showMessages(parseAll = false) {
             }
         }
 
-        //Sammelgruppe: Nachrichten von definierten Gruppen ohne eigenen Tab
-        if (found == false && m.dstGroup && channelSammel > 0 && sammelGroups.includes(m.dstGroup)) {
-            found = true;
-            document.getElementById("channel" + channelSammel).innerHTML += msg;
-            // keine Notification
+        // Collection groups: route messages from configured groups without own tab
+        if (found == false && m.dstGroup) {
+            for (let s = 3; s <= 10; s++) {
+                if (channelSammel[s] && sammelGroups[s] && sammelGroups[s].includes(m.dstGroup)) {
+                    found = true;
+                    document.getElementById("channel" + s).innerHTML += msg;
+                    break;
+                }
+            }
         }
 
         //Nachrichten, die ich gesendet habe -> Channel 2
