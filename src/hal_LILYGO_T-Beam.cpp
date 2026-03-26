@@ -34,7 +34,7 @@ void initHal() {
     SPI.begin(SPI_SCK, SPI_MISO, SPI_MOSI, SPI_SS);
 
     //Inputs
-    pinMode(PIN_AP_MODE_SWITCH, INPUT_PULLUP);
+    pinMode(PIN_AP_MODE_SWITCH, INPUT);  // GPIO38 has external pull-up on T-Beam
 
     // HF-Modul nur initialisieren wenn Frequenz konfiguriert ist
     if (!loraConfigured(settings.loraFrequency)) {

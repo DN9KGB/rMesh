@@ -15,8 +15,14 @@
 #include "main.h"
 #include "esp_wifi.h"
 
-#if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM)
-#include "display_SSD1306_status.h"
+#ifdef HELTEC_WIFI_LORA_32_V3
+#include "display_HELTEC_WiFi_LoRa_32_V3.h"
+#endif
+#ifdef LILYGO_T3_LORA32_V1_6_1
+#include "display_LILYGO_T3_LoRa32_V1_6_1.h"
+#endif
+#ifdef LILYGO_T_BEAM
+#include "display_LILYGO_T-Beam.h"
 #endif
 
 
