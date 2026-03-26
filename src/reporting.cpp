@@ -85,8 +85,8 @@ void reportTopology() {
 
 // Muss regelmäßig aus dem main loop aufgerufen werden
 void reportTopologyIfChanged() {
-    if (topologyChanged && millis() > changeDebounceTimer) {
-        changeDebounceTimer = 0xFFFFFFFF;
+    if (topologyChanged && (int32_t)(millis() - changeDebounceTimer) >= 0) {
+        changeDebounceTimer = millis() + 0x7FFFFFFF; // effectively disabled
         reportTopology();
     }
 }

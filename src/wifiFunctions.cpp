@@ -218,7 +218,7 @@ void showWiFiStatus() {
             longPressHandled = true;
             settings.apMode = !settings.apMode;
             saveSettings();
-            rebootTimer = 0;
+            rebootTimer = millis(); rebootRequested = true;
             delay(500);
         }
     }
@@ -246,7 +246,7 @@ void showWiFiStatus() {
         if (apModeKey == 1) {
             settings.apMode = !settings.apMode;
             saveSettings();
-            rebootTimer = 0;
+            rebootTimer = millis(); rebootRequested = true;
             delay(500);
         }
     }
