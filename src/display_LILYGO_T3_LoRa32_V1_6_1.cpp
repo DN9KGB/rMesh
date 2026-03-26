@@ -1,59 +1,31 @@
-#if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM)
+#ifdef LILYGO_T3_LORA32_V1_6_1
 
 #include <Arduino.h>
 #include <Wire.h>
 #include <U8g2lib.h>
 #include <WiFi.h>
 
-#include "display_SSD1306_status.h"
+#include "display_LILYGO_T3_LoRa32_V1_6_1.h"
 #include "settings.h"
 #include "hal.h"
 #include "webFunctions.h"
 
-// ── OLED pin definitions per board ───────────────────────────────────────────
-#if defined(HELTEC_WIFI_LORA_32_V3)
-    #define OLED_SDA  17
-    #define OLED_SCL  18
-    #define OLED_RST  21
-    #define OLED_VEXT 36  // Vext controls OLED power (LOW = on)
-#elif defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM)
-    #define OLED_SDA  21
-    #define OLED_SCL  22
-    #define OLED_RST  16
-#endif
-
+// ── OLED pin definitions ────────────────────────────────────────────────────
+#define OLED_SDA  21
+#define OLED_SCL  22
+#define OLED_RST  16
 #define OLED_I2C_ADDR 0x3C
 
 static U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, OLED_RST, OLED_SCL, OLED_SDA);
 
 static bool displayDetected = false;
 
-// Last received message buffer (from matching group)
 static char lastMsgSrc[17] = {0};
 static char lastMsgText[128] = {0};
 
-// ── Battery helper ───────────────────────────────────────────────────────────
-#ifdef HAS_BATTERY_ADC
-static int getBatteryPercent() {
-    float v = getBatteryVoltage();
-    const float vEmpty = 3.0f;
-    int pct = (int)((v - vEmpty) / (batteryFullVoltage - vEmpty) * 100.0f);
-    if (pct < 0) pct = 0;
-    if (pct > 100) pct = 100;
-    return pct;
-}
-#endif
-
-// ── Public API ───────────────────────────────────────────────────────────────
+// ── Public API ──────────────────────────────────────────────────────────────
 
 bool initStatusDisplay() {
-    // Enable OLED power supply (Vext) if available
-    #ifdef OLED_VEXT
-    pinMode(OLED_VEXT, OUTPUT);
-    digitalWrite(OLED_VEXT, LOW);  // LOW = power on
-    delay(50);
-    #endif
-
     // Reset OLED
     pinMode(OLED_RST, OUTPUT);
     digitalWrite(OLED_RST, LOW);
@@ -61,7 +33,7 @@ bool initStatusDisplay() {
     digitalWrite(OLED_RST, HIGH);
     delay(20);
 
-    // Probe I2C for SSD1306
+    // Probe I2C
     Wire.begin(OLED_SDA, OLED_SCL);
     Wire.beginTransmission(OLED_I2C_ADDR);
     if (Wire.endTransmission() != 0) {
@@ -72,7 +44,7 @@ bool initStatusDisplay() {
 
     u8g2.begin();
     displayDetected = true;
-    Serial.println("[OLED] SSD1306 detected");
+    Serial.println("[OLED] SSD1306 detected (T3 LoRa32 V1.6.1)");
 
     if (oledEnabled) {
         updateStatusDisplay();
@@ -88,19 +60,9 @@ void updateStatusDisplay() {
     u8g2.setPowerSave(0);
     u8g2.clearBuffer();
 
-    // ── Line 1 (y=10): Callsign + battery ──────────────────────────────────
+    // ── Line 1 (y=10): Callsign ────────────────────────────────────────────
     u8g2.setFont(u8g2_font_6x10_tf);
     u8g2.drawStr(0, 10, settings.mycall);
-
-    #ifdef HAS_BATTERY_ADC
-    if (batteryEnabled) {
-        char batStr[12];
-        snprintf(batStr, sizeof(batStr), "BAT:%d%%", getBatteryPercent());
-        // Right-align
-        int w = u8g2.getStrWidth(batStr);
-        u8g2.drawStr(128 - w, 10, batStr);
-    }
-    #endif
 
     // ── Line 2 (y=22): Mode + IP ───────────────────────────────────────────
     char line2[32];
@@ -131,11 +93,9 @@ void updateStatusDisplay() {
     // ── Lines 4-6 (y=48..64): Last message ──────────────────────────────────
     if (lastMsgSrc[0] != '\0') {
         u8g2.setFont(u8g2_font_5x7_tf);
-        // Sender line
         char sender[28];
         snprintf(sender, sizeof(sender), "<%s>", lastMsgSrc);
         u8g2.drawStr(0, 48, sender);
-        // Message text (up to 2 lines of ~25 chars)
         char msgLine1[27] = {0};
         char msgLine2[27] = {0};
         strlcpy(msgLine1, lastMsgText, sizeof(msgLine1));
@@ -154,7 +114,7 @@ void enableStatusDisplay() {
     oledEnabled = true;
     saveOledSettings();
     updateStatusDisplay();
-    sendSettings();  // Notify WebUI
+    sendSettings();
 }
 
 void disableStatusDisplay() {
@@ -164,7 +124,7 @@ void disableStatusDisplay() {
     u8g2.clearBuffer();
     u8g2.sendBuffer();
     u8g2.setPowerSave(1);
-    sendSettings();  // Notify WebUI
+    sendSettings();
 }
 
 bool hasStatusDisplay() {
@@ -176,13 +136,10 @@ void onStatusDisplayMessage(const char* srcCall, const char* text, const char* d
 
     bool match = false;
     if (strcmp(oledDisplayGroup, "*") == 0) {
-        // "all" channel: messages without group and without specific destination
         match = (dstGroup[0] == '\0' && dstCall[0] == '\0');
     } else if (strcmp(oledDisplayGroup, "@DM") == 0) {
-        // Direct messages addressed to this node
         match = (strcmp(dstCall, settings.mycall) == 0);
     } else {
-        // Specific group
         match = (strcmp(dstGroup, oledDisplayGroup) == 0);
     }
     if (!match) return;
@@ -190,7 +147,6 @@ void onStatusDisplayMessage(const char* srcCall, const char* text, const char* d
     strlcpy(lastMsgSrc, srcCall, sizeof(lastMsgSrc));
     strlcpy(lastMsgText, text, sizeof(lastMsgText));
 
-    // Refresh display if currently on
     updateStatusDisplay();
 }
 
