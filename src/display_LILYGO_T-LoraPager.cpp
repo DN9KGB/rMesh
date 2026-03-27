@@ -1243,13 +1243,15 @@ static void doSave() {
 }
 static void doSaveDisplay() {
     instance.setBrightness((uint8_t)dispBrightness);
-    prefs.putFloat("dispBright",  dispBrightness);
+    displayBrightness = (uint8_t)dispBrightness;
+    prefs.putUChar("dispBrightW", displayBrightness);
     prefs.putFloat("dispTxtSize", dispTextSize);
     uiMode = UI_CHAT; needRedraw = true;
 }
 static void doSaveSetup() {
     instance.setBrightness((uint8_t)dispBrightness);
-    prefs.putFloat("dispBright",  dispBrightness);
+    displayBrightness = (uint8_t)dispBrightness;
+    prefs.putUChar("dispBrightW", displayBrightness);
     prefs.putFloat("dispTxtSize", dispTextSize);
     saveSettings();
     uiMode = UI_CHAT; needRedraw = true;
@@ -1552,7 +1554,7 @@ void initDisplay() {
     Serial.printf("[disp] instance.begin() done, probe=0x%08X\n", probe);
     Serial.flush();
 
-    dispBrightness = prefs.getFloat("dispBright",  200.0f);
+    dispBrightness = (float)displayBrightness;
     if (dispBrightness < 5.0f) dispBrightness = 5.0f;
     if (dispBrightness > 255.0f) dispBrightness = 255.0f;
     dispTextSize   = prefs.getFloat("dispTxtSize", 1.0f);

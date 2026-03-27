@@ -14,6 +14,7 @@
 #define SPI_SS          18
 
 #define LORA_DEFAULT_TX_POWER 20
+#define WIFI_MAX_TX_POWER_DBM 20
 
 //#define PIN_WIFI_LED 25      //LED WiFi-Status (ein = AP-Mode, blinken = Client-Mode, aus = nicht verbunden)
 #define PIN_AP_MODE_SWITCH 38    //User button (GPIO38) for WiFi mode switch (long press) and display toggle (short press)

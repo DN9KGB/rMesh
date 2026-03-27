@@ -316,6 +316,13 @@
             <td data-i18n="setup.oled_group">Message group:</td>
             <td><select class="input-box" id="settingsOledDisplayGroup" style="width:10em"></select></td>
           </tr>
+          <tr>
+            <td data-i18n="setup.disp_brightness">Helligkeit:</td>
+            <td>
+              <input type="range" id="settingsDisplayBrightness" class="input-box" min="5" max="255" step="5" value="200" oninput="updateDispBrightnessLabel(parseInt(this.value))">
+              <span id="settingsDisplayBrightnessValue">200</span>
+            </td>
+          </tr>
         </table>
       </div>
     </div>
@@ -504,6 +511,13 @@
           <tr class="AP_MODE_ENABLED">
             <td data-i18n="net.ntp">NTP-Server:</td>
             <td><input class="input-box" id="settingsNTP"></td>
+          </tr>
+          <tr>
+            <td data-i18n="net.wifi_tx_power">WiFi Sendeleistung:</td>
+            <td>
+              <input type="range" id="settingsWifiTxPower" class="input-box" min="2" max="20" step="1" value="20" oninput="updateWifiTxPowerLabel(parseInt(this.value))">
+              <span id="settingsWifiTxPowerValue">20 dBm</span>
+            </td>
           </tr>
         </table>
       </div>

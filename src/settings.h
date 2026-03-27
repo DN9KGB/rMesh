@@ -77,6 +77,12 @@ extern bool loraReady;  // true = HF-Modul initialisiert und betriebsbereit
 extern bool batteryEnabled;       // Akkustand anzeigen
 extern float batteryFullVoltage;  // Spannung bei 100 % (V)
 
+// WiFi TX power (dBm, persisted, clamped to WIFI_MAX_TX_POWER_DBM per HAL)
+extern int8_t wifiTxPower;
+
+// Display brightness (0-255, persisted, applied to LCD/OLED where supported)
+extern uint8_t displayBrightness;
+
 // OLED status display settings (boards with SSD1306)
 extern bool oledEnabled;                // Display on/off (persisted, survives reboot)
 extern char oledDisplayGroup[17];       // Group to show last message from

@@ -20,6 +20,16 @@ function updateMinSnrLabel(v) {
     if (label) label.textContent = (v <= -20) ? t('lora.snr_off') : v + " dB";
 }
 
+function updateWifiTxPowerLabel(v) {
+    var label = document.getElementById("settingsWifiTxPowerValue");
+    if (label) label.textContent = v + " dBm";
+}
+
+function updateDispBrightnessLabel(v) {
+    var label = document.getElementById("settingsDisplayBrightnessValue");
+    if (label) label.textContent = v;
+}
+
 function loadChannelFlags() {
     for (let i = 1; i <= 10; i++) {
         channelMuted[i] = Cookie.get("chMute" + i) === "1";
@@ -619,6 +629,22 @@ function fillSettingsForm(s) {
     const batVoltEl = document.getElementById("settingsBatteryFullVoltage");
     if (batVoltEl) batVoltEl.value = s.batteryFullVoltage || 4.2;
 
+    // WiFi TX power
+    var wifiTxEl = document.getElementById("settingsWifiTxPower");
+    if (wifiTxEl) {
+        var maxPow = s.wifiMaxTxPower || 20;
+        wifiTxEl.max = maxPow;
+        wifiTxEl.value = s.wifiTxPower || maxPow;
+        updateWifiTxPowerLabel(parseInt(wifiTxEl.value));
+    }
+
+    // Display brightness
+    var dispBrEl = document.getElementById("settingsDisplayBrightness");
+    if (dispBrEl) {
+        dispBrEl.value = s.displayBrightness || 200;
+        updateDispBrightnessLabel(parseInt(dispBrEl.value));
+    }
+
     // OLED display settings
     var oledEnabledEl = document.getElementById("settingsOledEnabled");
     if (oledEnabledEl) oledEnabledEl.checked = s.oledEnabled === true;
@@ -698,6 +724,10 @@ function saveSettings() {
     if (batEnabledEl) s["batteryEnabled"] = batEnabledEl.checked;
     var batVoltEl = document.getElementById("settingsBatteryFullVoltage");
     if (batVoltEl) s["batteryFullVoltage"] = parseFloat(batVoltEl.value);
+    var wifiTxEl = document.getElementById("settingsWifiTxPower");
+    if (wifiTxEl) s["wifiTxPower"] = parseInt(wifiTxEl.value);
+    var dispBrEl = document.getElementById("settingsDisplayBrightness");
+    if (dispBrEl) s["displayBrightness"] = parseInt(dispBrEl.value);
     var oledEnabledEl = document.getElementById("settingsOledEnabled");
     if (oledEnabledEl) s["oledEnabled"] = oledEnabledEl.checked;
     var oledGroupEl = document.getElementById("settingsOledDisplayGroup");

@@ -51,6 +51,7 @@ void updateStatusDisplay() {
     if (!displayDetected || !oledEnabled) return;
 
     display.displayOn();
+    display.setBrightness(displayBrightness);
     display.clear();
 
     // ── Line 1 (y=0): Callsign ─────────────────────────────────────────────

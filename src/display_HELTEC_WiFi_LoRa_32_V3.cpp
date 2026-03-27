@@ -76,6 +76,7 @@ void updateStatusDisplay() {
     if (!displayDetected || !oledEnabled) return;
 
     u8g2.setPowerSave(0);
+    u8g2.setContrast(displayBrightness);
     u8g2.clearBuffer();
 
     // ── Line 1 (y=10): Callsign + battery ──────────────────────────────────

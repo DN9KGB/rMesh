@@ -570,8 +570,8 @@ void setup() {
     while (!Serial) {}
     #endif
 
-    // Lock CPU to 240 MHz (recommended for reliable SPI timing)
-    setCpuFrequencyMhz(240);
+    // Start at 80 MHz to save power; boost to 240 MHz only during LoRa TX
+    setCpuFrequencyMhz(80);
     // Suppress verbose ESP-IDF log output for noisy subsystems
     esp_log_level_set("NetworkUdp", ESP_LOG_NONE);
     esp_log_level_set("vfs", ESP_LOG_NONE);
@@ -709,6 +709,10 @@ void loop() {
 
     // ── 5. TX-buffer draining ─────────────────────────────────────────────────
     // Only transmit when no LoRa TX/RX is already in progress
+    // Boost CPU to 240 MHz during TX processing for reliable SPI timing
+    if ((txFlag == false) && (rxFlag == false) && txBuffer.size() > 0) {
+        setCpuFrequencyMhz(240);
+    }
     if ((txFlag == false) && (rxFlag == false)) {
 
         // Synchronous frames (retry > 1) must be sent one at a time per port.
@@ -819,6 +823,11 @@ void loop() {
                 break;
             }
         }
+    }
+
+    // Drop CPU back to 80 MHz when TX buffer is empty
+    if (txBuffer.size() == 0 && getCpuFrequencyMhz() > 80) {
+        setCpuFrequencyMhz(80);
     }
 
     // ── 6. Receive dispatch ───────────────────────────────────────────────────

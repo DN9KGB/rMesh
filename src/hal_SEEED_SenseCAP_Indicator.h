@@ -11,6 +11,7 @@
 // No onboard LoRa — runs as WiFi gateway / relay (loraReady = false)
 
 #define LORA_DEFAULT_TX_POWER 22
+#define WIFI_MAX_TX_POWER_DBM 20
 
 // ── SPI-Pins für SX1262 (direkt am ESP32-S3, geteilt mit Display-Init-SPI) ──
 #define LORA_SCK    41

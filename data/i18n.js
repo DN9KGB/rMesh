@@ -50,6 +50,8 @@ const I18N = {
         'net.subnet': 'Subnet:', 'net.gateway': 'Gateway:',
         'net.dns': 'DNS:', 'net.udp_peers': 'UDP Peers:',
         'net.ntp': 'NTP Server:',
+        'net.wifi_tx_power': 'WiFi TX Power:',
+        'setup.disp_brightness': 'Brightness:',
         // Buttons
         'btn.save': 'save', 'btn.reboot': 'reboot', 'btn.shutdown': 'shutdown',
         'btn.delete_messages': 'delete messages', 'btn.sync_time': 'sync browser time',
@@ -120,6 +122,8 @@ const I18N = {
         'net.subnet': 'Subnetz:', 'net.gateway': 'Gateway:',
         'net.dns': 'DNS:', 'net.udp_peers': 'UDP-Peers:',
         'net.ntp': 'NTP-Server:',
+        'net.wifi_tx_power': 'WiFi Sendeleistung:',
+        'setup.disp_brightness': 'Helligkeit:',
         'btn.save': 'Speichern', 'btn.reboot': 'Neustart', 'btn.shutdown': 'Herunterfahren',
         'btn.delete_messages': 'Nachrichten löschen', 'btn.sync_time': 'Browserzeit sync.',
         'btn.scan': 'Suchen', 'btn.add_from_scan': '+ Hinzufügen', 'btn.add_wifi': '+ Netzwerk',

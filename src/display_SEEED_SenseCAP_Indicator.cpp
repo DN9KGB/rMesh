@@ -1770,7 +1770,7 @@ void initDisplay() {
 
     lcd.init();
     lcd.setRotation(2);
-    lcd.setBrightness(200);
+    lcd.setBrightness(displayBrightness);
 
     pinMode(LCD_BL_PIN, OUTPUT);
     digitalWrite(LCD_BL_PIN, HIGH);
