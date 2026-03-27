@@ -30,6 +30,26 @@ float batteryFullVoltage = 4.2f;
 bool oledEnabled = false;
 char oledDisplayGroup[17] = {0};
 
+char groupNames[MAX_CHANNELS + 1][MAX_GROUP_NAME_LEN] = {0};  // index 1-10
+
+void saveGroupNames() {
+    for (int i = 3; i <= MAX_CHANNELS; i++) {
+        char key[10];
+        snprintf(key, sizeof(key), "grpName%d", i);
+        prefs.putString(key, groupNames[i]);
+    }
+}
+
+void loadGroupNames() {
+    memset(groupNames, 0, sizeof(groupNames));
+    for (int i = 3; i <= MAX_CHANNELS; i++) {
+        char key[10];
+        snprintf(key, sizeof(key), "grpName%d", i);
+        String name = prefs.getString(key, "");
+        strlcpy(groupNames[i], name.c_str(), MAX_GROUP_NAME_LEN);
+    }
+}
+
 void showSettings() {
     // Print settings as debug output
     Serial.println();
@@ -222,6 +242,9 @@ void sendSettings() {
     doc["settings"]["batteryFullVoltage"] = batteryFullVoltage;
     doc["settings"]["oledEnabled"]        = oledEnabled;
     doc["settings"]["oledDisplayGroup"]   = oledDisplayGroup;
+    for (int i = 3; i <= MAX_CHANNELS; i++) {
+        doc["settings"]["groupNames"][String(i)] = groupNames[i];
+    }
     size_t bufSize = 4096 + wifiNetworks.size() * 160;
     char* jsonBuffer = (char*)malloc(bufSize);
     if (jsonBuffer == nullptr) {
@@ -250,6 +273,7 @@ void loadSettings() {
         String grp = prefs.getString("oledGroup", "");
         strlcpy(oledDisplayGroup, grp.c_str(), sizeof(oledDisplayGroup));
     }
+    loadGroupNames();
     prefs.getBytes("extSettings", &extSettings, sizeof(extSettings));
     size_t storedLen = prefs.getBytesLength("config");
     size_t extSettingsLen = prefs.getBytesLength("extSettings");

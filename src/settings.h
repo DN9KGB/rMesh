@@ -82,3 +82,10 @@ extern bool oledEnabled;                // Display on/off (persisted, survives r
 extern char oledDisplayGroup[17];       // Group to show last message from
 void saveOledSettings();                // Persist oledEnabled + oledDisplayGroup to NVS
 
+// Channel/group names (persisted on device, shared across all clients)
+#define MAX_CHANNELS 10
+#define MAX_GROUP_NAME_LEN 17
+extern char groupNames[MAX_CHANNELS + 1][MAX_GROUP_NAME_LEN];  // index 1-10
+void saveGroupNames();
+void loadGroupNames();
+

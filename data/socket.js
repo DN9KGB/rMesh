@@ -254,6 +254,27 @@ function onMessage(event) {
             }
         }
 
+        // Sync group names between device and browser
+        if (d.settings.groupNames) {
+            var pushToDevice = {};
+            var needsPush = false;
+            for (var i = 3; i <= 10; i++) {
+                var deviceName = d.settings.groupNames[String(i)] || "";
+                var cookieName = Cookie.get("channel" + i) || "";
+                if (deviceName) {
+                    // Device has a name → use it
+                    Cookie.set("channel" + i, deviceName);
+                } else if (cookieName && cookieName !== "........") {
+                    // Device empty but browser has a name → push to device
+                    pushToDevice[String(i)] = cookieName;
+                    needsPush = true;
+                }
+            }
+            if (needsPush) {
+                sendWS(JSON.stringify({settings: {groupNames: pushToDevice}}));
+            }
+        }
+
         if (init == false) {
             init = true;
             //for (let i = 0; i <= 10; i++) {channels[i] = false;}

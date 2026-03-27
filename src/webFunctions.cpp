@@ -280,6 +280,16 @@ void startWebServer() {
             if (json["settings"]["oledDisplayGroup"].is<JsonVariant>()) {
                 strlcpy(oledDisplayGroup, json["settings"]["oledDisplayGroup"] | "", sizeof(oledDisplayGroup));
             }
+            if (json["settings"]["groupNames"].is<JsonObject>()) {
+                JsonObject gn = json["settings"]["groupNames"];
+                for (int i = 3; i <= MAX_CHANNELS; i++) {
+                    String key = String(i);
+                    if (gn[key].is<const char*>()) {
+                        strlcpy(groupNames[i], gn[key] | "", MAX_GROUP_NAME_LEN);
+                    }
+                }
+                saveGroupNames();
+            }
             saveSettings();
             #if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM)
             if (hasStatusDisplay()) {

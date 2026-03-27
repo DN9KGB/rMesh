@@ -398,8 +398,10 @@ function showChannelSettings(channelIdx) {
     setTimeout(() => dialog.querySelector('#chsName').focus(), 10);
 
     function confirm() {
+        var newName = "";
         if (!localIsSammel) {
-            Cookie.set("channel" + channelIdx, dialog.querySelector('#chsName').value);
+            newName = dialog.querySelector('#chsName').value;
+            Cookie.set("channel" + channelIdx, newName);
         } else {
             Cookie.set("channel" + channelIdx, "");
         }
@@ -412,6 +414,12 @@ function showChannelSettings(channelIdx) {
             delete sammelNames[channelIdx];
         }
         saveChannelFlags();
+        // Persist group name to device
+        if (channelIdx >= 3) {
+            var gn = {};
+            gn[String(channelIdx)] = newName;
+            sendWS(JSON.stringify({settings: {groupNames: gn}}));
+        }
         overlay.remove();
         showMessages(true);
         setUI(ui);
