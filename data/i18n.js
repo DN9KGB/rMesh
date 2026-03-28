@@ -8,6 +8,7 @@ const I18N = {
         'nav.messaging': 'Messaging',
         'nav.section_nav': 'Navigation', 'nav.section_settings': 'Settings',
         'about.version': 'Version:', 'about.changelog': 'Changelog', 'about.uptime': 'Uptime:',
+        'about.cpu_freq': 'CPU Frequency:',
         'lora.section_freq': 'Frequency & Power', 'lora.section_mod': 'Modulation', 'lora.section_msg': 'Messages',
         // Status
         'status.dstcall': 'Dst:', 'status.mycall': 'My Call:', 'status.heap': 'Heap:',
@@ -50,6 +51,8 @@ const I18N = {
         'net.subnet': 'Subnet:', 'net.gateway': 'Gateway:',
         'net.dns': 'DNS:', 'net.udp_peers': 'UDP Peers:',
         'net.ntp': 'NTP Server:',
+        'net.wifi_tx_power': 'WiFi TX Power:',
+        'setup.disp_brightness': 'Brightness:',
         // Buttons
         'btn.save': 'save', 'btn.reboot': 'reboot', 'btn.shutdown': 'shutdown',
         'btn.delete_messages': 'delete messages', 'btn.sync_time': 'sync browser time',
@@ -82,6 +85,7 @@ const I18N = {
         'nav.messaging': 'Messaging',
         'nav.section_nav': 'Navigation', 'nav.section_settings': 'Einstellungen',
         'about.version': 'Version:', 'about.changelog': 'Changelog', 'about.uptime': 'Uptime:',
+        'about.cpu_freq': 'CPU-Frequenz:',
         'lora.section_freq': 'Frequenz & Leistung', 'lora.section_mod': 'Modulation', 'lora.section_msg': 'Nachrichten',
         'status.dstcall': 'Ziel:', 'status.mycall': 'Mein Rufzeichen:', 'status.heap': 'Heap:',
         'status.battery': 'Akku:', 'status.trx': 'TRX:', 'status.txbuf': 'TX-Puf:', 'status.retry': 'Retry:',
@@ -120,6 +124,8 @@ const I18N = {
         'net.subnet': 'Subnetz:', 'net.gateway': 'Gateway:',
         'net.dns': 'DNS:', 'net.udp_peers': 'UDP-Peers:',
         'net.ntp': 'NTP-Server:',
+        'net.wifi_tx_power': 'WiFi Sendeleistung:',
+        'setup.disp_brightness': 'Helligkeit:',
         'btn.save': 'Speichern', 'btn.reboot': 'Neustart', 'btn.shutdown': 'Herunterfahren',
         'btn.delete_messages': 'Nachrichten löschen', 'btn.sync_time': 'Browserzeit sync.',
         'btn.scan': 'Suchen', 'btn.add_from_scan': '+ Hinzufügen', 'btn.add_wifi': '+ Netzwerk',

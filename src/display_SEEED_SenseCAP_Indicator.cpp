@@ -274,7 +274,6 @@ static int  monHead  = 0;
 static int  monCount = 0;
 
 // Gruppen
-static char groupNames[MAX_GROUPS][MAX_CALLSIGN_LENGTH + 1];
 static int  groupCount  = 0;
 static int  groupUnread[MAX_GROUPS]  = {0};
 static bool groupMute[MAX_GROUPS]    = {false};
@@ -1770,7 +1769,7 @@ void initDisplay() {
 
     lcd.init();
     lcd.setRotation(2);
-    lcd.setBrightness(200);
+    lcd.setBrightness(displayBrightness);
 
     pinMode(LCD_BL_PIN, OUTPUT);
     digitalWrite(LCD_BL_PIN, HIGH);

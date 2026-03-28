@@ -20,6 +20,7 @@
 #define PIN_HW_DEBUG 34
 
 #define LORA_DEFAULT_TX_POWER 22
+#define WIFI_MAX_TX_POWER_DBM 20
 
 
 

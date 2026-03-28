@@ -316,6 +316,13 @@
             <td data-i18n="setup.oled_group">Message group:</td>
             <td><select class="input-box" id="settingsOledDisplayGroup" style="width:10em"></select></td>
           </tr>
+          <tr>
+            <td data-i18n="setup.disp_brightness">Helligkeit:</td>
+            <td>
+              <input type="range" id="settingsDisplayBrightness" class="input-box" min="5" max="255" step="5" value="200" oninput="updateDispBrightnessLabel(parseInt(this.value))">
+              <span id="settingsDisplayBrightnessValue">200</span>
+            </td>
+          </tr>
         </table>
       </div>
     </div>
@@ -505,6 +512,13 @@
             <td data-i18n="net.ntp">NTP-Server:</td>
             <td><input class="input-box" id="settingsNTP"></td>
           </tr>
+          <tr>
+            <td data-i18n="net.wifi_tx_power">WiFi Sendeleistung:</td>
+            <td>
+              <input type="range" id="settingsWifiTxPower" class="input-box" min="2" max="20" step="1" value="20" oninput="updateWifiTxPowerLabel(parseInt(this.value))">
+              <span id="settingsWifiTxPowerValue">20 dBm</span>
+            </td>
+          </tr>
         </table>
       </div>
     </div>
@@ -557,6 +571,17 @@
         </table>
       </div>
     </div>
+    <div class="settings-section">
+      <div class="section-header">CPU</div>
+      <div class="section-body">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
+          <span style="color:#aaa;font-size:0.85rem;" data-i18n="about.cpu_freq">CPU-Frequenz:</span>
+          <span id="aboutCpuFreq" style="font-weight:bold;">–</span>
+        </div>
+        <canvas id="cpuFreqChart" width="480" height="120" style="width:100%;max-width:480px;height:120px;background:#1a1a2e;border-radius:4px;"></canvas>
+      </div>
+    </div>
+
     <div class="settings-section">
       <div class="section-header" data-i18n="about.changelog">Changelog</div>
       <div class="section-body">
