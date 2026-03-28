@@ -33,6 +33,8 @@ Preferences prefs;
 bool loraReady = false;
 bool batteryEnabled = true;
 float batteryFullVoltage = 4.2f;
+int8_t wifiTxPower = WIFI_MAX_TX_POWER_DBM;
+uint8_t displayBrightness = 200;
 bool oledEnabled = false;
 char oledDisplayGroup[17] = {0};
 
@@ -238,6 +240,9 @@ void sendSettings() {
     #endif
     doc["settings"]["batteryEnabled"]     = batteryEnabled;
     doc["settings"]["batteryFullVoltage"] = batteryFullVoltage;
+    doc["settings"]["wifiTxPower"]        = wifiTxPower;
+    doc["settings"]["wifiMaxTxPower"]     = WIFI_MAX_TX_POWER_DBM;
+    doc["settings"]["displayBrightness"]  = displayBrightness;
     doc["settings"]["oledEnabled"]        = oledEnabled;
     doc["settings"]["oledDisplayGroup"]   = oledDisplayGroup;
     for (int i = 3; i <= MAX_CHANNELS; i++) {
@@ -271,6 +276,10 @@ void loadSettings() {
     loraEnabled        = prefs.getBool("loraEnabled", true);
     batteryEnabled     = prefs.getBool("batEnabled", true);
     batteryFullVoltage = prefs.getFloat("batFullV", 4.2f);
+    wifiTxPower        = prefs.getChar("wifiTxPow", WIFI_MAX_TX_POWER_DBM);
+    if (wifiTxPower < 2) wifiTxPower = 2;
+    if (wifiTxPower > WIFI_MAX_TX_POWER_DBM) wifiTxPower = WIFI_MAX_TX_POWER_DBM;
+    displayBrightness  = prefs.getUChar("dispBrightW", 200);
     oledEnabled        = prefs.getBool("oledEnabled", false);
     {
         String grp = prefs.getString("oledGroup", "");
@@ -549,6 +558,8 @@ void saveSettings() {
     prefs.putBool("loraEnabled", loraEnabled);
     prefs.putBool("batEnabled", batteryEnabled);
     prefs.putFloat("batFullV", batteryFullVoltage);
+    prefs.putChar("wifiTxPow", wifiTxPower);
+    prefs.putUChar("dispBrightW", displayBrightness);
     saveOledSettings();
 #ifdef HAS_WIFI
     saveWifiNetworks();

@@ -6,6 +6,7 @@
 
 #include "config.h"
 #include "settings.h"
+#include "hal.h"
 #include "wifiFunctions.h"
 #include "main.h"
 #include "helperFunctions.h"
@@ -277,6 +278,15 @@ void startWebServer() {
             }
             if (json["settings"]["batteryFullVoltage"].is<JsonVariant>()) {
                 batteryFullVoltage = json["settings"]["batteryFullVoltage"].as<float>();
+            }
+            if (json["settings"]["wifiTxPower"].is<JsonVariant>()) {
+                wifiTxPower = json["settings"]["wifiTxPower"].as<int8_t>();
+                if (wifiTxPower < 2) wifiTxPower = 2;
+                if (wifiTxPower > WIFI_MAX_TX_POWER_DBM) wifiTxPower = WIFI_MAX_TX_POWER_DBM;
+            }
+            if (json["settings"]["displayBrightness"].is<JsonVariant>()) {
+                displayBrightness = json["settings"]["displayBrightness"].as<uint8_t>();
+                if (displayBrightness < 5) displayBrightness = 5;
             }
             if (json["settings"]["oledEnabled"].is<JsonVariant>()) {
                 oledEnabled = json["settings"]["oledEnabled"].as<bool>();

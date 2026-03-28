@@ -435,8 +435,7 @@ void wifiInit() {
     String mdnsName = String(settings.mycall) + "-rmesh";
     mdnsName.toLowerCase();
     WiFi.setHostname(mdnsName.c_str());
-    WiFi.setTxPower(WIFI_POWER_19_5dBm);
-    WiFi.onEvent(onWiFiScanDone, ARDUINO_EVENT_WIFI_SCAN_DONE);
+    WiFi.setTxPower((wifi_power_t)(wifiTxPower * 4));
     if (MDNS.begin(mdnsName.c_str())) {
         MDNS.addService("http", "tcp", 80);
     }

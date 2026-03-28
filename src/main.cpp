@@ -597,6 +597,8 @@ void setup() {
     while (!Serial) {}
     #endif
 
+    // Start at 80 MHz to save power; boost to 240 MHz only during LoRa TX
+    setCpuFrequencyMhz(80);
     #ifndef NRF52_PLATFORM
     // Lock CPU to 240 MHz (recommended for reliable SPI timing)
     setCpuFrequencyMhz(240);
@@ -659,6 +661,8 @@ void setup() {
     #endif
 
     #ifdef HAS_WIFI
+    // Register WiFi scan handler once (before wifiInit, which may be called repeatedly)
+    WiFi.onEvent(onWiFiScanDone, ARDUINO_EVENT_WIFI_SCAN_DONE);
     // Connect to WiFi (AP or STA mode depending on settings)
     wifiInit();
     #endif
@@ -751,6 +755,12 @@ void loop() {
 
     // ── 5. TX-buffer draining ─────────────────────────────────────────────────
     // Only transmit when no LoRa TX/RX is already in progress
+    // Boost CPU to 240 MHz during TX processing, hold for 2 s cooldown
+    static uint32_t cpuBoostUntil = 0;
+    if ((txFlag == false) && (rxFlag == false) && txBuffer.size() > 0) {
+        setCpuFrequencyMhz(240);
+        cpuBoostUntil = millis() + 1000;
+    }
     if ((txFlag == false) && (rxFlag == false)) {
 
         // Synchronous frames (retry > 1) must be sent one at a time per port.
@@ -863,6 +873,11 @@ void loop() {
         }
     }
 
+    // Drop CPU back to 80 MHz after cooldown
+    if (getCpuFrequencyMhz() > 80 && timerExpired(cpuBoostUntil)) {
+        setCpuFrequencyMhz(80);
+    }
+
     // ── 6. Receive dispatch ───────────────────────────────────────────────────
     Frame f;
     if (checkReceive(f)) { processRxFrame(f); }   // LoRa
@@ -882,6 +897,7 @@ void loop() {
         doc["status"]["retry"]        = currentRetry;
         doc["status"]["heap"]         = ESP.getFreeHeap();
         doc["status"]["uptime"]       = millis() / 1000;
+        doc["status"]["cpuFreq"]      = getCpuFrequencyMhz();
         #ifdef HAS_BATTERY_ADC
         if (batteryEnabled) doc["status"]["battery"] = getBatteryVoltage();
         #endif
