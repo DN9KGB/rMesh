@@ -5,6 +5,9 @@
 ### Build
 - FIX: Kompilierfehler bei LILYGO T-LoraPager und SEEED SenseCAP Indicator behoben – lokale `groupNames`-Deklaration in den Display-Dateien kollidierte mit der globalen aus `settings.h` (unterschiedliche Array-Dimensionen); doppelte Deklaration entfernt, beide Targets nutzen jetzt die gemeinsame globale Variable
 
+### Neue Hardware
+- NEU: Heltec HT-Tracker V1.2 (Wireless Tracker) Support – ESP32-S3 + SX1262 + ST7735 TFT-Farbdisplay (160x80, Landscape); zeigt Callsign, Akkustand, WiFi-Modus, IP, SSID und letzte Nachricht in Farbe; Display-Treiber via LovyanGFX; Boot-Button (GPIO 0) für Display-Toggle (kurz) und AP/Client-Umschaltung (lang ≥2 s)
+
 ### Flash-Persistenz
 - NEU: Routing-Tabelle wird im Flash gespeichert (`/routes.bin`) – nach Reboot sofort routingfähig ohne Route-Discovery; Kapazität von 100 auf 1000 Routen erhöht
 - NEU: Peer-Liste wird im Flash gespeichert (`/peers.bin`) – bekannte Peers sind nach Reboot sofort verfügbar mit 2-Minuten Grace-Timeout

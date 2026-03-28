@@ -1,3 +1,4 @@
+#ifdef HAS_WIFI
 #include <Arduino.h>
 #include <WiFi.h>
 #include <ESPmDNS.h>
@@ -17,6 +18,9 @@
 
 #ifdef HELTEC_WIFI_LORA_32_V3
 #include "display_HELTEC_WiFi_LoRa_32_V3.h"
+#endif
+#ifdef HELTEC_HT_TRACKER_V1_2
+#include "display_HELTEC_HT-Tracker_V1_2.h"
 #endif
 #ifdef LILYGO_T3_LORA32_V1_6_1
 #include "display_LILYGO_T3_LoRa32_V1_6_1.h"
@@ -202,7 +206,7 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
 
 void showWiFiStatus() {
 
-#if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM)
+#if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM) || defined(HELTEC_HT_TRACKER_V1_2)
     // Long press (>=2s): toggle AP/Client mode + reboot
     // Short press (<2s): toggle status display on/off
     //
@@ -437,3 +441,5 @@ void wifiInit() {
     }
 }
 
+
+#endif // HAS_WIFI
