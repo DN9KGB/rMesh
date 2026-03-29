@@ -2,83 +2,51 @@
 
 ## [v1.0.31-dev]
 
-### Build
-- FIX: Kompilierfehler bei LILYGO T-LoraPager und SEEED SenseCAP Indicator behoben – lokale `groupNames`-Deklaration in den Display-Dateien kollidierte mit der globalen aus `settings.h` (unterschiedliche Array-Dimensionen); doppelte Deklaration entfernt, beide Targets nutzen jetzt die gemeinsame globale Variable
+## [v1.0.31-dev]
 
-### Neue Hardware
-- NEU: Heltec HT-Tracker V1.2 (Wireless Tracker) Support – ESP32-S3 + SX1262 + ST7735 TFT-Farbdisplay (160x80, Landscape); zeigt Callsign, Akkustand, WiFi-Modus, IP, SSID und letzte Nachricht in Farbe; Display-Treiber via LovyanGFX; Boot-Button (GPIO 0) für Display-Toggle (kurz) und AP/Client-Umschaltung (lang ≥2 s)
+- FIX: Build-Problem bei LILYGO T-LoraPager und SEEED SenseCAP Indicator durch doppelte `groupNames`-Deklaration behoben
 
-### Flash-Persistenz
-- NEU: Routing-Tabelle wird im Flash gespeichert (`/routes.bin`) – nach Reboot sofort routingfähig ohne Route-Discovery; Kapazität von 100 auf 1000 Routen erhöht
-- NEU: Peer-Liste wird im Flash gespeichert (`/peers.bin`) – bekannte Peers sind nach Reboot sofort verfügbar mit 2-Minuten Grace-Timeout
-- NEU: Intelligente Speicher-Trigger – Flash-Write nur bei strukturellen Änderungen (neuer Peer/Route, Hop-Wechsel, Peer-Removal), nicht bei RSSI/SNR-Updates; periodischer 5-Minuten-Save-Timer für Dirty-Flags
-
-### Web UI
-- NEU: Uptime-Anzeige im About-Panel – zeigt die Laufzeit seit letztem Reboot (Tage, Stunden, Minuten, Sekunden), wird sekündlich aktualisiert
-
-### Test Framework
-- NEU: Automatisierte Hardware-in-the-Loop Test Suite (`test/`) mit pytest + pyserial – flasht Firmware, konfiguriert Nodes und testet Funktionalität und Kommunikation
-- NEU: Node-Konfiguration via YAML-Datei (`nodes.yaml`) – Board-Typ, COM-Port, Callsign, Frequenz-Preset, optional WiFi; beliebig viele Nodes
-- NEU: Serial Debug-Modus (`dbg 1/0`) – strukturierte JSON-Events über Serial für RX, TX, ACK, Peer-Änderungen und Boot-Ready
-- NEU: Serial-Befehle für Tests – `msg`, `xgrp`, `xtrace`, `announce`, `peers`, `routes`, `acks`, `xtxbuf`
-- NEU: Automatischer Build, Flash, Board-Verifikation und Reboot vor den Tests; `--no-flash` zum Überspringen
-- NEU: Peer Discovery vor Teststart – gegenseitige Announces stellen sicher, dass Nodes sich kennen
-- NEU: Tests für Einzel-Node (Boot, Settings, LoRa-Parameter), Messaging (Direct, Group, Trace, ACK), Peer Discovery und Routing
-- FIX: TX-Buffer Cleanup löschte versehentlich wartende Frames – One-Shot-Frames (ACKs, retry=1) entfernen beim Aufräumen nicht mehr andere Frames zum selben Peer; behebt fehlende Trace-Echos und potenziell verlorene Nachrichten
-
-### Stabilität & Effizienz
-- FIX: WiFi/UDP-Nachrichten an fremde Callsigns wurden an alle Nodes angezeigt – private Nachrichten mit `dstCall` ungleich dem eigenen Call werden jetzt nur noch weitergeleitet (Relay), aber nicht mehr in der WebUI angezeigt oder gespeichert (#9)
-- FIX: Guru Meditation Error (StoreProhibited) bei DNS-Fehler behoben – `http.begin()`-Rückgabewert wird jetzt in Topology-Reporting und Update-Check geprüft; WiFi-Status-Guard in `checkForUpdates()` verhindert Aufrufe ohne Verbindung; OTA-Log-Timeout auf 5 s begrenzt
-- FIX: Sichere malloc/new-Prüfungen – alle Heap-Allokationen in `helperFunctions.cpp`, `main.cpp` und `settings.cpp` werden auf `nullptr` geprüft; bei Fehlschlag wird sauber abgebrochen und ein `[OOM]`-Log geschrieben statt Absturz
-- FIX: Doppelte Nachrichten (Duplikate) werden jetzt sofort aus dem TX-Buffer entfernt, wenn die Deduplikation im Ring-Buffer einen bereits bekannten Frame erkennt – verhindert unnötige Sendewiederholungen
-- FIX: TX-Buffer-Verstopfung bei unerreichbarem Peer behoben – wenn alle Retries für einen Peer aufgebraucht sind, werden jetzt alle weiteren Frames an diesen viaCall aus dem txBuffer entfernt (nicht nur der aktuelle Frame)
-- FIX: Overflow-sichere Timer – alle `millis()`-Vergleiche nutzen jetzt `timerExpired()` mit signed-Arithmetik; verhindert Timer-Ausfälle nach ~49 Tagen Uptime
-- FIX: Reboot-Timer Race Condition behoben – neues `rebootRequested`-Flag verhindert unbeabsichtigten Sofort-Reboot bei `millis()`-Overflow
-- FIX: Buffer-Overflow in `Frame::exportBinary()` – Bounds-Checking vor jedem Header-Write verhindert Schreibzugriffe über den Puffer hinaus
-- FIX: TRACE-Echo Buffer-Overflow – Bounds-Prüfung beim Zusammenbauen der TRACE-Nachricht; TRACE-Pfad wird nur einmal angehängt statt pro Port-Iteration
-- FIX: `messageLength` in `sendMessage()`/`sendGroup()` wird jetzt nach `safeUtf8Copy()` gemessen – vorher konnte die Länge größer als der tatsächlich kopierte Inhalt sein
-- FIX: Auth-Session Eviction – wenn alle Slots voll sind, wird der erste unauthentifizierte Slot verdrängt statt den neuen Client stillschweigend abzuweisen; Hash-Längen-Validierung in `verifyAuthResponse()`
-- FIX: File-Handle-Leak in `trimFileTask` – Dateien werden jetzt auch im Fehlerfall korrekt geschlossen
-- FIX: `getTOA()` Parametertyp von `uint8_t` auf `uint16_t` erweitert – verhindert stille Abschneidung bei Frames mit Payload + Header > 255 Bytes
-- NEU: Flux Guard – nach jeder LoRa-Sendung wird eine Pause von 1× ACK-TOA eingehalten, damit Empfänger sicher in den RX-Modus zurückkehren können; verbessert die effektive Reichweite
-- NEU: Duty-Cycle-Enforcement für das öffentliche SRD-Band (869,4–869,65 MHz) – rollendes 60-s-Fenster mit max. 10 % Sendezeit; Frames werden bei erschöpftem Budget um 5 s verschoben statt verworfen
-- NEU: Kapazitätslimits für Peer-Liste, Routing-Tabelle und UDP-Peer-Liste – verhindert unkontrolliertes Wachstum bei vielen Nodes im Mesh
-- CHANGE: ACK-Timing auf 20× ACK-TOA erhöht (vorher 15×) – größeres Zeitfenster reduziert Kollisionen bei vielen Peers
-- CHANGE: Retry-Timing auf 20× ACK-TOA + 0–5× max. Frame-TOA angepasst (vorher 10× ACK + 0–6× Frame) – besser abgestimmt auf reale Mesh-Topologien
-- NEU: Konfigurierbarer minimaler SNR-Schwellwert für die Peer-Liste – LoRa-Peers unterhalb des eingestellten SNR-Werts werden automatisch als nicht verfügbar markiert; einstellbar in den LoRa-Einstellungen der WebUI (Aus, -20 bis +10 dB); Default: deaktiviert (-30 dB)
-- CLEANUP: Doppelte `#include`- und `esp_log_level_set`-Einträge entfernt; doppelte `measureJson()`/`strlen()`-Aufrufe vermieden
-
-### OLED Status-Display
-- NEU: SSD1306-OLED-Support für HELTEC WiFi LoRa 32 V3, LILYGO T3 LoRa32 V1.6.1 und LILYGO T-Beam – Display zeigt Callsign, Akkustand, WiFi-Modus, IP-Adresse, SSID und letzte empfangene Nachricht
-- NEU: Jedes Board hat eigene Display-HAL-Dateien – `display_LILYGO_T-Beam.cpp`, `display_LILYGO_T3_LoRa32_V1_6_1.cpp`, `display_HELTEC_WiFi_LoRa_32_V3.cpp` statt einer gemeinsamen Datei; vereinfacht Board-spezifische Anpassungen
-- FIX: T-Beam Display-Treiber auf ThingPulse SSD1306Wire-Library umgestellt – behebt falsche Proportionen und Pixel-Artefakte die mit U8g2 auftraten; `flipScreenVertically()` korrigiert die Bildausrichtung
-- FIX: T-Beam OLED-Reset-Pin entfernt – GPIO 16 ist am T-Beam nicht mit dem OLED verbunden (kein Hardware-Reset vorhanden)
-- FIX: T-Beam User-Button von GPIO 0 (Boot) auf GPIO 38 (User-Button) umgestellt – Display-Toggle und WiFi-Umschaltung funktionieren jetzt über den mittleren Taster
-- NEU: Boot-Button-Steuerung – kurzer Druck schaltet Display ein/aus, langer Druck (≥2 s) wechselt zwischen AP- und Client-Modus mit anschließendem Reboot
-- NEU: Display-Einstellung persistent – Zustand überlebt Neustart; Synchronisation zwischen Hardware-Button und WebUI-Toggle in beide Richtungen
-- NEU: Nachrichten-Gruppe für Display konfigurierbar – Dropdown in den Settings mit allen eingerichteten Gruppen (all, direct, Gruppen 3–10); letzte Nachricht aus gewählter Gruppe wird auf dem Display angezeigt
-- NEU: Automatische Display-Erkennung per I2C-Probe beim T-Beam – wenn kein Display angeschlossen ist, wird die Funktionalität deaktiviert
-- NEU: Vext-Steuerung (GPIO 36) für HELTEC V3 – OLED-Stromversorgung wird automatisch aktiviert
-
-### Web UI
-- NEU: Mobile und Desktop UI in ein einziges responsives Interface zusammengeführt
-- NEU: Mehrsprachigkeit (i18n) mit Sprachumschaltung Deutsch/Englisch über `i18n`
-- NEU: Digitale Uhr als Widget, altes Debug-Panel entfernt
-- NEU: Einheitliches Stylesheet
-- NEU: SVG-Icons (`announce.svg`, `logo.svg`) ersetzen PNG-Versionen
-- NEU: Einklappbare Settings-Bereiche und verbesserte Tabellen-Layouts
+- NEU: WebUI grundlegend überarbeitet – Mobile und Desktop wurden zu einem gemeinsamen responsiven Interface zusammengeführt
+- NEU: Mehrsprachigkeit (Deutsch/Englisch), Uptime-Anzeige, einheitliches Stylesheet, SVG-Icons, einklappbare Settings-Bereiche und verbesserte Tabellen-Layouts in der WebUI
 - FIX: Eingabefeld wird nach dem Senden automatisch geleert
-- CLEANUP: Obsolete Dateien entfernt
+- CLEANUP: Obsolete WebUI-Dateien entfernt
 
-### WiFi & Netzwerk
-- NEU: mDNS-Support – Node ist per `<callsign>-rmesh.local` im lokalen Netzwerk erreichbar (inkl. HTTP Service-Discovery)
-- NEU: Erweiterte WiFi- und AP-Verwaltung mit neuen seriellen Befehlen
+- NEU: Support für Heltec HT-Tracker V1.2 (Wireless Tracker) mit TFT-Statusanzeige und Button-Steuerung
+- NEU: SSD1306-OLED-Support für HELTEC WiFi LoRa 32 V3, LILYGO T3 LoRa32 V1.6.1 und LILYGO T-Beam
+- NEU: Board-spezifische Display-HALs für einfachere Anpassungen je Gerät
+- NEU: Display-Einstellung wird persistent gespeichert; kurzer Tastendruck schaltet das Display, langer Druck wechselt den WiFi-Modus
+- NEU: Nachrichten-Gruppe für die Display-Anzeige ist konfigurierbar
+- NEU: Automatische Display-Erkennung beim T-Beam sowie Vext-Steuerung für HELTEC V3
+- FIX: Diverse Display-Korrekturen für T-Beam und HELTEC V3
+
+- NEU: Routing-Tabelle und Peer-Liste werden im Flash gespeichert und stehen nach Reboot direkt wieder zur Verfügung
+- NEU: Intelligente Speicher-Trigger reduzieren unnötige Flash-Schreibvorgänge; zusätzlicher periodischer Sicherungs-Timer für geänderte Daten
+- NEU: Kapazität für gespeicherte Routen erhöht
+
+- NEU: mDNS-Support – Nodes sind im lokalen Netzwerk per `<callsign>-rmesh.local` erreichbar
+- NEU: Erweiterte WiFi- und AP-Verwaltung
 - NEU: Verbesserte WiFi-Client/AP-Tabelle in der WebUI
 - NEU: WebSocket-Kommunikation überarbeitet
 
-### System
 - NEU: Erweitertes serielles Kommando-Interface
 - NEU: Erweiterte Settings-Verwaltung
+
+- NEU: Automatisierte Hardware-in-the-Loop Test Suite (`pytest` + `pyserial`) für Build-, Flash-, Boot-, Messaging-, Peer- und Routing-Tests
+- NEU: Node-Konfiguration per YAML und automatischer Build-/Flash-/Reboot-Ablauf für Tests
+- NEU: Serial-Debug-Modus und zusätzliche Testbefehle für reproduzierbare Kommunikations- und Routing-Tests
+
+- FIX: TX-Buffer-Handling verbessert – behebt verlorene Frames, Duplikate und festhängende Einträge bei unerreichbaren Peers
+- FIX: Private WiFi/UDP-Nachrichten an fremde Callsigns werden nicht mehr lokal angezeigt oder gespeichert, sondern nur noch weitergeleitet
+- FIX: Absturz bei DNS-/HTTP-Fehlern im Update- und Reporting-Pfad behoben
+- FIX: Mehrere Stabilitätsprobleme behoben, u. a. bei Speicher-Allokationen, Timern, Reboot-Logik, Buffer-Grenzen, TRACE-Echo, File-Handling und Auth-Session-Verwaltung
+
+- NEU: Nach LoRa-Sendungen wird eine zusätzliche Guard-Zeit eingehalten, damit Empfänger sicher in den RX-Modus zurückkehren können
+- NEU: Duty-Cycle-Enforcement für das öffentliche 869,4–869,65-MHz-Band – überschrittene Sendungen werden verzögert statt verworfen
+- NEU: Kapazitätslimits für Peer-, Routing- und UDP-Peer-Listen verhindern unkontrolliertes Wachstum
+- NEU: Konfigurierbarer minimaler SNR-Schwellwert für die Peer-Liste
+- CHANGE: ACK- und Retry-Timing für dichtere Mesh-Topologien angepasst
+
+- CLEANUP: Doppelte Includes, Log-Level-Aufrufe und unnötige Mehrfachberechnungen entfernt
 
 ## [v1.0.30a-dev]
 
