@@ -2,8 +2,6 @@
 
 ## [v1.0.31-dev]
 
-## [v1.0.31-dev]
-
 - FIX: Build-Problem bei LILYGO T-LoraPager und SEEED SenseCAP Indicator durch doppelte `groupNames`-Deklaration behoben
 
 - NEU: WebUI grundlegend überarbeitet – Mobile und Desktop wurden zu einem gemeinsamen responsiven Interface zusammengeführt
