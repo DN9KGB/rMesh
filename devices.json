@@ -64,5 +64,10 @@
     "chip": "ESP32-S3",
     "lfs_offset": 4259840,
     "image": "seeed_xiao_esp32s3_wio_sx1262.svg"
+  },
+  {
+    "name": "LILYGO_T-Echo",
+    "chip": "nRF52840",
+    "image": "lilygo_t-echo.svg"
   }
 ]
