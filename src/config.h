@@ -85,6 +85,9 @@ inline uint8_t syncWordForFrequency(float f) {
 /** Maximum number of messages persisted in messages.json (flash). */
 #define MAX_STORED_MESSAGES 1000
 
+/** Minimum free bytes on LittleFS before writes are skipped and a trim is triggered. */
+#define FS_MIN_FREE_BYTES (50 * 1024)
+
 /** Maximum number of messages held in the RAM message cache. */
 #define MAX_STORED_MESSAGES_RAM 100
 
