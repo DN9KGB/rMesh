@@ -198,9 +198,23 @@ void addJSONtoFileTask(void * pvParameters) {
     FileWriteParams* p = (FileWriteParams*) pvParameters;
     // Warten, bis das Dateisystem frei ist (max 30 Sekunden warten)
     if (xSemaphoreTake(fsMutex, pdMS_TO_TICKS(30000))) {
+        // Check free space before writing (ESP32 only — nRF52 InternalFS has no totalBytes())
+        #ifndef NRF52_PLATFORM
+        size_t freeSpace = LittleFS.totalBytes() - LittleFS.usedBytes();
+        if (freeSpace < FS_MIN_FREE_BYTES) {
+            Serial.printf("[FS] Low space (%u bytes free) — skipping write, requesting trim\n", freeSpace);
+            trimNeeded = true;
+            xSemaphoreGive(fsMutex);
+            if (p->content != nullptr) free(p->content);
+            delete p;
+            vTaskDelete(NULL);
+            return;
+        }
+        #endif
+
         // Datei im Append-Modus öffnen ("a")
         // Falls die Datei nicht existiert, wird sie automatisch erstellt.
-        File file = LittleFS.open(p->fileName, "a"); 
+        File file = LittleFS.open(p->fileName, "a");
         if (file) {
             if (p->content != nullptr && p->length > 0) {
                 // Den neuen Inhalt ans Ende schreiben

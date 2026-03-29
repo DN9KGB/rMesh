@@ -85,3 +85,6 @@ extern MSG messages[MAX_STORED_MESSAGES_RAM];
 
 /** Write head for the messages ring-buffer; wraps around at MAX_STORED_MESSAGES_RAM. */
 extern uint16_t messagesHead;
+
+/** Set to true when LittleFS free space is critically low; triggers an immediate trim in the main loop. */
+extern volatile bool trimNeeded;

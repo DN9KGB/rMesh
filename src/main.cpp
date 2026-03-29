@@ -130,6 +130,9 @@ uint32_t updateCheckTimer = 60 * 60 * 1000;
 /** First messages.json trim fires 30 minutes after boot. */
 uint32_t messagesDeleteTimer = 30 * 60 * 1000;
 
+/** Filesystem low-space flag — set by addJSONtoFileTask, consumed by main loop. */
+volatile bool trimNeeded = false;
+
 /** First topology report fires 5 minutes after boot. */
 uint32_t reportingTimer = 5 * 60 * 1000;
 
@@ -949,6 +952,11 @@ void loop() {
     #endif
 
     // ── 10. messages.json housekeeping ────────────────────────────────────────
+    if (trimNeeded) {
+        trimNeeded = false;
+        messagesDeleteTimer = millis() + 24 * 60 * 60 * 1000; // reset 24 h timer
+        trimFile("/messages.json", MAX_STORED_MESSAGES);
+    }
     if (timerExpired(messagesDeleteTimer)) {
         messagesDeleteTimer = millis() + 24 * 60 * 60 * 1000; // repeat every 24 h
         trimFile("/messages.json", MAX_STORED_MESSAGES);
