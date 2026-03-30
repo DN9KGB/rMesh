@@ -2,7 +2,6 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
-#include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
 
 #include "reporting.h"
@@ -23,17 +22,15 @@ static bool hasInternetUplink() {
 }
 
 static void reportTopologyTask(void* pvParameters) {
-    WiFiClientSecure client;
-    client.setInsecure();
-    client.setTimeout(10);  // 10s TLS timeout
+    WiFiClient client;
     HTTPClient http;
-    if (!http.begin(client, "https://www.rMesh.de/report.php")) {
+    http.setTimeout(10000);
+    if (!http.begin(client, "http://www.rMesh.de/report.php")) {
         reportingInProgress = false;
         vTaskDelete(NULL);
         return;
     }
     http.addHeader("Content-Type", "application/json");
-    http.setTimeout(10000);  // 10s HTTP timeout
 
     // JSON aufbauen
     JsonDocument doc;
@@ -95,14 +92,13 @@ void reportTopology() {
     if (!hasInternetUplink()) return;
     if (strlen(settings.mycall) == 0) return;
     if (reportingInProgress) return;
-    // WiFiClientSecure braucht ~50KB Heap für TLS-Puffer
-    if (ESP.getFreeHeap() < 80000) {
+    if (ESP.getFreeHeap() < 40000) {
         Serial.println("[Reporting] Skipped: low heap");
         return;
     }
     reportingInProgress = true;
 
-    xTaskCreate(reportTopologyTask, "ReportTopo", 8192, NULL, 1, NULL);
+    xTaskCreate(reportTopologyTask, "ReportTopo", 4096, NULL, 1, NULL);
 }
 
 // Muss regelmäßig aus dem main loop aufgerufen werden
