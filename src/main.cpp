@@ -626,13 +626,10 @@ void setup() {
     Serial.printf("\n[Boot] Reset reason: %s\n", lastResetReason);
     Serial.printf("[Boot] Free heap: %u bytes\n", ESP.getFreeHeap());
 
-    // Task-WDT-Timeout auf 30s erhöhen (WiFi-Scans blockieren CPU 0 bis zu 20s+)
-    esp_task_wdt_config_t twdt_config = {
-        .timeout_ms = 30000,
-        .idle_core_mask = (1 << 0) | (1 << 1),
-        .trigger_panic = true
-    };
-    esp_task_wdt_reconfigure(&twdt_config);
+    // Task-WDT deaktivieren: WiFi-Stack blockiert CPU 0 bei Scans/Reconnects
+    // für >30s, was den Task-WDT auslöst. Der Interrupt-WDT (Hardware) bleibt
+    // als Sicherheitsnetz gegen echte Hänger aktiv.
+    esp_task_wdt_deinit();
     #endif
 
     // Start at 80 MHz to save power; boost to 240 MHz only during LoRa TX
