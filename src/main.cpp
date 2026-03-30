@@ -626,9 +626,9 @@ void setup() {
     Serial.printf("\n[Boot] Reset reason: %s\n", lastResetReason);
     Serial.printf("[Boot] Free heap: %u bytes\n", ESP.getFreeHeap());
 
-    // Task-WDT-Timeout auf 15s erhöhen (WiFi-Scans blockieren CPU 0 bis zu 13s)
+    // Task-WDT-Timeout auf 30s erhöhen (WiFi-Scans blockieren CPU 0 bis zu 20s+)
     esp_task_wdt_config_t twdt_config = {
-        .timeout_ms = 15000,
+        .timeout_ms = 30000,
         .idle_core_mask = (1 << 0) | (1 << 1),
         .trigger_panic = true
     };

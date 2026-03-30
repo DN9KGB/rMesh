@@ -43,6 +43,23 @@ void checkPeerList() {
     bool update = false;
     time_t now = time(NULL);
 
+    // Zeitsprung nach NTP-Sync: Peer-Timestamps aus der Vor-NTP-Phase
+    // (nahe 0) auf jetzt korrigieren, statt sie sofort ablaufen zu lassen
+    if (now > 1700000000) {  // Systemzeit ist plausibel (nach 2023)
+        for (auto& peer : peerList) {
+            if (peer.timestamp < 1700000000) {
+                peer.timestamp = now - (PEER_INACTIVE_TIMEOUT - PEER_INITIAL_TIMEOUT);
+                update = true;
+            }
+        }
+    }
+
+    // Vor NTP-Sync keine Timeouts auswerten (Zeitbasis unzuverlässig)
+    if (now < 1700000000) {
+        if (update) { sendPeerList(); markTopologyChanged(); }
+        return;
+    }
+
     // Mark peers as unavailable after inactivity timeout
     for (auto& peer : peerList) {
         if (peer.available && (now - peer.timestamp) > PEER_INACTIVE_TIMEOUT) {
