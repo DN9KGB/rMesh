@@ -95,6 +95,11 @@ void reportTopology() {
     if (!hasInternetUplink()) return;
     if (strlen(settings.mycall) == 0) return;
     if (reportingInProgress) return;
+    // WiFiClientSecure braucht ~50KB Heap für TLS-Puffer
+    if (ESP.getFreeHeap() < 80000) {
+        Serial.println("[Reporting] Skipped: low heap");
+        return;
+    }
     reportingInProgress = true;
 
     xTaskCreate(reportTopologyTask, "ReportTopo", 8192, NULL, 1, NULL);

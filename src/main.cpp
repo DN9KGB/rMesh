@@ -942,15 +942,9 @@ void loop() {
         #ifdef HAS_BATTERY_ADC
         if (batteryEnabled) doc["status"]["battery"] = getBatteryVoltage();
         #endif
-        char* jsonBuffer = (char*)malloc(1024);
-        if (jsonBuffer != nullptr) {
-            size_t len = serializeJson(doc, jsonBuffer, 1024);
-            ws.textAll(jsonBuffer, len);
-            free(jsonBuffer);
-            jsonBuffer = nullptr;
-        } else {
-            Serial.println("[OOM] loop status: malloc failed");
-        }
+        char jsonBuffer[512];
+        size_t len = serializeJson(doc, jsonBuffer, sizeof(jsonBuffer));
+        ws.textAll(jsonBuffer, len);
         #endif
         // Expire stale peers once per second
         checkPeerList();
