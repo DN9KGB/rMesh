@@ -107,7 +107,7 @@ void checkSerialRX() {
 
                 #ifdef HAS_WIFI
                 //OTA Update
-                if (strncmp(serialRxBuffer, "upd", 3) == 0) {
+                if (strncmp(serialRxBuffer, "upd", 3) == 0 && strncmp(serialRxBuffer, "updf", 4) != 0) {
                     Serial.println("OTA Update gestartet...");
                     checkForUpdates();
                 }
@@ -590,9 +590,10 @@ void checkSerialRX() {
                             Serial.println("UDP Peers: keine");
                         } else {
                             for (size_t i = 0; i < udpPeers.size(); i++) {
-                                Serial.printf("UDP-Peer %zu: %d.%d.%d.%d%s\n", i + 1,
+                                Serial.printf("UDP-Peer %zu: %d.%d.%d.%d%s%s\n", i + 1,
                                     udpPeers[i][0], udpPeers[i][1], udpPeers[i][2], udpPeers[i][3],
-                                    udpPeerLegacy[i] ? " [legacy]" : "");
+                                    udpPeerLegacy[i] ? " [legacy]" : "",
+                                    (bool)udpPeerEnabled[i] ? "" : " [disabled]");
                             }
                         }
                     } else if (strncmp(parameter, "clear", 5) == 0) {

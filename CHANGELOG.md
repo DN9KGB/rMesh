@@ -1,6 +1,6 @@
 # Changelog
 
-## [v1.0.31-dev]
+## [v1.0.31]
 
 - FIX: Build-Problem bei LILYGO T-LoraPager und SEEED SenseCAP Indicator durch doppelte `groupNames`-Deklaration behoben
 
@@ -26,7 +26,10 @@
 - NEU: Verbesserte WiFi-Client/AP-Tabelle in der WebUI
 - NEU: WebSocket-Kommunikation überarbeitet
 
-- NEU: Erweitertes serielles Kommando-Interface
+- NEU: Erweitertes serielles Kommando-Interface – neue Befehle: `msg`, `xgrp`, `xtrace`, `announce`, `dbg`, `uc`, `updf`, `peers`, `routes`, `acks`, `xtxbuf`; Hilfe und Befehlsliste in Kategorien gegliedert
+- FIX: `updf` löste fälschlich auch den normalen OTA-Update-Handler aus
+- FIX: UDP-Peer-Auflistung zeigt jetzt auch den Enabled-Status an
+- NEU: Redirect-Seiten `gp.html` und `mobile.html` leiten auf `index.html` um (Kompatibilität mit alten URLs)
 - NEU: Erweiterte Settings-Verwaltung
 
 - NEU: Automatisierte Hardware-in-the-Loop Test Suite (`pytest` + `pyserial`) für Build-, Flash-, Boot-, Messaging-, Peer- und Routing-Tests
@@ -46,11 +49,11 @@
 
 - CLEANUP: Doppelte Includes, Log-Level-Aufrufe und unnötige Mehrfachberechnungen entfernt
 
-## [v1.0.30a-dev]
+## [v1.0.30a]
 
 - FIX: OTA-Update schlug auf langsamen Verbindungen mit „HTTP error: read Timeout" fehl – TCP-Read-Timeout für LittleFS- und Firmware-Download von 30 s auf 120 s erhöht; betrifft sowohl automatische als auch manuelle Updates
 
-## [v1.0.30-dev]
+## [v1.0.30]
 
 - NEU: Support für Seeed XIAO ESP32-S3 + Wio-SX1262 – neues HAL (`hal_SEEED_XIAO_ESP32S3_Wio_SX1262`) für das Seeed XIAO ESP32-S3 Board mit aufgestecktem Wio-SX1262 LoRa-Modul (B2B-Stecker); Build-Konfiguration in PlatformIO, Eintrag in `devices.json` für das Web-Flash-Tool
 - NEU: Manueller Firmware-Upload über die WebUI – neuer `/ota`-Endpunkt im Webserver zum direkten Flashen eigener Firmware- und LittleFS-Binaries ohne OTA-Server; Desktop- und Mobile-Interface erhalten einen „Upload & Flash"-Button, der beide Dateien sequenziell hochlädt und die Node danach neu startet
@@ -62,11 +65,11 @@
 - DOKU: Technische Dokumentation für alle unterstützten Boards neu strukturiert – Verzeichnis `Doku/` nach `docu/` umbenannt (einheitlich englisch); Datenblätter und Schaltpläne für HELTEC WiFi LoRa 32 V3/V4, Wireless Stick Lite V3, LILYGO T-Beam und T3 ergänzt; ESP32 E22 Multimodul-Dokumentation (Schaltplan, Bestückungsplan, Gehäuse-3MF-Dateien) hinzugefügt
 - CLEANUP: `build.bat` entfernt, ungenutztes LilyGoLib-ThirdParty-Submodul entfernt, PlatformIO-Boilerplate-README-Platzhalter entfernt
 
-## [v1.0.29e-dev]
+## [v1.0.29e]
 
 - FIX: Serielle Konsole – `h`-Befehl (Hilfe) zeigte seit v1.0.29b keine Ausgabe mehr – `help.txt` wurde durch den Filesystem-Build per gzip komprimiert (`.txt` in `COMPRESS_EXTENSIONS`) und lag im LittleFS nur noch als `help.txt.gz`; der Code öffnete aber `/help.txt` – Datei wurde nicht gefunden, keine Ausgabe; `.txt` aus den komprimierten Erweiterungen entfernt, `help.txt` liegt jetzt wieder unkomprimiert im LittleFS
 
-## [v1.0.29d-dev]
+## [v1.0.29d]
 
 - NEU: Serielle Konsole – `uc 0` / `uc 1` setzt den Update-Kanal (Release/Dev) und speichert ihn persistent; `updf` / `updf 0` / `updf 1` startet eine Force-Installation aus dem gewählten Kanal
 - NEU: Frisch geflashte Nodes wählen den Update-Kanal automatisch passend zur Firmware: Dev-Builds (`-dev`-Suffix) setzen den Default auf „Dev", Release-Builds auf „Release" – ein bereits gespeicherter Wert im Flash bleibt erhalten

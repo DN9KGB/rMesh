@@ -321,6 +321,18 @@ void showWiFiStatus() {
     }
 }
 
+void onWiFiGotIP(WiFiEvent_t event, WiFiEventInfo_t info) {
+    MDNS.end();
+    String mdnsName = String(settings.mycall) + "-rmesh";
+    mdnsName.toLowerCase();
+    if (MDNS.begin(mdnsName.c_str())) {
+        MDNS.addService("http", "tcp", 80);
+        Serial.printf("mDNS started: %s.local\n", mdnsName.c_str());
+    } else {
+        Serial.println("mDNS failed to start");
+    }
+}
+
 void onWiFiScanDone(WiFiEvent_t event, WiFiEventInfo_t info) {
     int n = WiFi.scanComplete();
 
@@ -431,14 +443,11 @@ void wifiInit() {
         WiFi.setAutoReconnect(wifiNetworks.size() <= 1);
     }
     WiFi.setSleep(false);
-    // Build mDNS hostname: <callsign>-rmesh (resolves as <callsign>-rmesh.local)
+    // Set hostname before connecting (mDNS is started later in onWiFiGotIP)
     String mdnsName = String(settings.mycall) + "-rmesh";
     mdnsName.toLowerCase();
     WiFi.setHostname(mdnsName.c_str());
     WiFi.setTxPower((wifi_power_t)(wifiTxPower * 4));
-    if (MDNS.begin(mdnsName.c_str())) {
-        MDNS.addService("http", "tcp", 80);
-    }
 }
 
 

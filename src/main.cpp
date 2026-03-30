@@ -665,6 +665,7 @@ void setup() {
 
     #ifdef HAS_WIFI
     // Register WiFi scan handler once (before wifiInit, which may be called repeatedly)
+    WiFi.onEvent(onWiFiGotIP, ARDUINO_EVENT_WIFI_STA_GOT_IP);
     WiFi.onEvent(onWiFiScanDone, ARDUINO_EVENT_WIFI_SCAN_DONE);
     // Connect to WiFi (AP or STA mode depending on settings)
     wifiInit();
