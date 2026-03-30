@@ -76,6 +76,27 @@
 /** POSIX timezone rule string for CET/CEST (Central Europe). */
 const char* TZ_INFO = "CET-1CEST,M3.5.0,M10.5.0/3";
 
+#ifndef NRF52_PLATFORM
+/** Human-readable string for the last ESP32 reset reason. */
+static const char* lastResetReason = "unknown";
+
+static const char* getResetReasonStr() {
+    switch (esp_reset_reason()) {
+        case ESP_RST_POWERON:  return "power-on";
+        case ESP_RST_EXT:      return "external";
+        case ESP_RST_SW:       return "software";
+        case ESP_RST_PANIC:    return "panic/crash";
+        case ESP_RST_INT_WDT:  return "interrupt-watchdog";
+        case ESP_RST_TASK_WDT: return "task-watchdog";
+        case ESP_RST_WDT:      return "other-watchdog";
+        case ESP_RST_DEEPSLEEP:return "deep-sleep";
+        case ESP_RST_BROWNOUT: return "brownout";
+        case ESP_RST_SDIO:     return "SDIO";
+        default:               return "unknown";
+    }
+}
+#endif
+
 /** Outgoing frame queue (see main.h for details). */
 std::vector<Frame> txBuffer;
 
@@ -600,6 +621,12 @@ void setup() {
     while (!Serial) {}
     #endif
 
+    #ifndef NRF52_PLATFORM
+    lastResetReason = getResetReasonStr();
+    Serial.printf("\n[Boot] Reset reason: %s\n", lastResetReason);
+    Serial.printf("[Boot] Free heap: %u bytes\n", ESP.getFreeHeap());
+    #endif
+
     // Start at 80 MHz to save power; boost to 240 MHz only during LoRa TX
     setCpuFrequencyMhz(80);
     #ifndef NRF52_PLATFORM
@@ -900,8 +927,10 @@ void loop() {
         doc["status"]["txBufferCount"]= txBuffer.size();
         doc["status"]["retry"]        = currentRetry;
         doc["status"]["heap"]         = ESP.getFreeHeap();
+        doc["status"]["minHeap"]      = ESP.getMinFreeHeap();
         doc["status"]["uptime"]       = millis() / 1000;
         doc["status"]["cpuFreq"]      = getCpuFrequencyMhz();
+        doc["status"]["resetReason"]  = lastResetReason;
         #ifdef HAS_BATTERY_ADC
         if (batteryEnabled) doc["status"]["battery"] = getBatteryVoltage();
         #endif

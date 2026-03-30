@@ -464,7 +464,7 @@ function onMessage(event) {
         }
         document.getElementById("txBuffer").innerHTML = d.status.txBufferCount;
         document.getElementById("retry").innerHTML = d.status.retry;
-        document.getElementById("heap").innerHTML = d.status.heap;
+        document.getElementById("heap").innerHTML = d.status.heap + (d.status.minHeap != null ? " (min: " + d.status.minHeap + ")" : "");
         if (d.status.uptime != null) {
             var s = d.status.uptime;
             var d2 = Math.floor(s / 86400); s %= 86400;
@@ -474,7 +474,7 @@ function onMessage(event) {
             if (d2 > 0) parts.push(d2 + "d");
             parts.push(h + "h " + m + "m " + s + "s");
             var upEl = document.getElementById("aboutUptime");
-            if (upEl) upEl.innerHTML = parts.join(" ");
+            if (upEl) upEl.innerHTML = parts.join(" ") + (d.status.resetReason ? " (" + d.status.resetReason + ")" : "");
         }
         if (d.status.cpuFreq != null) {
             pushCpuFreq(d.status.cpuFreq);
