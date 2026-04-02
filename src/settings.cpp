@@ -284,7 +284,7 @@ void loadSettings() {
     if (wifiTxPower < 2) wifiTxPower = 2;
     if (wifiTxPower > WIFI_MAX_TX_POWER_DBM) wifiTxPower = WIFI_MAX_TX_POWER_DBM;
     displayBrightness  = prefs.getUChar("dispBrightW", 200);
-    cpuFrequency       = prefs.getUShort("cpuFreq", 240);
+    cpuFrequency       = prefs.getUChar("cpuFreq", 240);
     if (cpuFrequency != 80 && cpuFrequency != 160 && cpuFrequency != 240) cpuFrequency = 240;
     oledEnabled        = prefs.getBool("oledEnabled", false);
     serialDebug        = prefs.getBool("serialDebug", false);
@@ -567,7 +567,7 @@ void saveSettings() {
     prefs.putFloat("batFullV", batteryFullVoltage);
     prefs.putChar("wifiTxPow", wifiTxPower);
     prefs.putUChar("dispBrightW", displayBrightness);
-    prefs.putUShort("cpuFreq", cpuFrequency);
+    prefs.putUChar("cpuFreq", cpuFrequency);
     prefs.putBool("serialDebug", serialDebug);
     saveOledSettings();
 #ifdef HAS_WIFI
