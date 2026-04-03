@@ -14,6 +14,11 @@ void onWiFiGotIP(WiFiEvent_t event, WiFiEventInfo_t info);
 // Flag: scan triggered for reconnect to pick best network from list
 extern bool pendingReconnectScan;
 
+// WiFi diagnostics counters (used by /api/diagnostics)
+extern uint32_t wifiDisconnectCount;
+extern uint8_t  lastWifiDisconnectReason;
+extern uint32_t lastWifiDisconnectTime;
+
 #else
 // ── No-op stubs for non-WiFi builds ─────────────────────────────────────────
 

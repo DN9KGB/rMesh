@@ -44,6 +44,7 @@
 #include "persistence.h"
 #include "time.h"
 #include "logging.h"
+#include "api.h"
 
 #ifdef LILYGO_T_LORA_PAGER
 #include "display_LILYGO_T-LoraPager.h"
@@ -129,6 +130,9 @@ uint32_t statusTimer = 0;
 
 /** Deadline for the next periodic flash save of dirty routes/peers. */
 static uint32_t persistTimer = PERSIST_INTERVAL;
+
+/** Deadline for the next ROUTING_INFO_MESSAGE broadcast (24 h cycle). */
+static uint32_t routingInfoTimer = 60 * 1000; // first send 60 s after boot
 
 /** millis() value at which ESP.restart() is called; 0 = disabled. */
 uint32_t rebootTimer = 0;
@@ -240,6 +244,11 @@ void processRxFrame(Frame &f) {
         logJson(dbg);
     }
 
+    // Record RX event in API ring buffer (always active, independent of serialDebug)
+    #ifdef HAS_WIFI
+    apiRecordRxEvent(f);
+    #endif
+
     // Update peer list with signal quality data from this frame
     addPeerList(f);
 
@@ -309,6 +318,12 @@ void processRxFrame(Frame &f) {
 
             // Persist the ACK so repeat logic and foreign-ACK forwarding work correctly
             addACK(f.srcCall, f.nodeCall, f.id);
+
+            // Record ACK event in API ring buffer and mark message as acked
+            #ifdef HAS_WIFI
+            apiRecordAckEvent(f);
+            apiMarkMessageAcked(f.srcCall, f.id);
+            #endif
 
             // Debug output for test framework
             if (serialDebug) {
@@ -425,8 +440,13 @@ void processRxFrame(Frame &f) {
                 if (messagesHead >= MAX_STORED_MESSAGES_RAM) { messagesHead = 0; }
             }
 
-            if ((found == false) && (f.messageLength > 0) && (!forOther)) {
+            if ((found == false) && (f.messageLength > 0) && (!forOther) && (f.messageType != Frame::MessageTypes::ROUTING_INFO_MESSAGE)) {
                 // ── New, unseen message addressed to us, a group, or broadcast ──
+
+                // Record in API message ring buffer (always active)
+                #ifdef HAS_WIFI
+                apiRecordMessage(f, false);
+                #endif
 
                 // Serialize to JSON, broadcast via WebSocket, and append to flash
                 char jsonBuffer[1024];
@@ -718,7 +738,16 @@ void setup() {
     // Pre-allocate vector capacity to avoid heap fragmentation at runtime
     peerList.reserve(PEER_LIST_SIZE);
     txBuffer.reserve(TX_BUFFER_SIZE);
-    routingList.reserve(ROUTING_BUFFER_SIZE);
+    #ifndef NRF52_PLATFORM
+    // PSRAM boards can afford full reservation; others start small and grow
+    if (psramFound()) {
+        routingList.reserve(ROUTING_BUFFER_SIZE);
+    } else {
+        routingList.reserve(100);
+    }
+    #else
+    routingList.reserve(100);
+    #endif
 
     // Mount filesystem (nRF52 Preferences uses InternalFS, so mount first)
     #ifdef NRF52_PLATFORM
@@ -941,6 +970,11 @@ void loop() {
                     // Duty cycle postponed: skip retry logic, try again later
                     if (postponed) break;
 
+                    // Record TX event in API ring buffer (always active)
+                    #ifdef HAS_WIFI
+                    apiRecordTxEvent(txBuffer[i]);
+                    #endif
+
                     // Debug output for test framework
                     if (serialDebug) {
                         JsonDocument dbgTx;
@@ -1069,7 +1103,20 @@ void loop() {
     }
     #endif
 
-    // ── 7b. Periodic flash persistence of routes/peers ─────────────────────
+    // ── 7b. Periodic ROUTING_INFO beacon (every 24 h) ──────────────────────
+    if (timerExpired(routingInfoTimer)) {
+        routingInfoTimer = millis() + 24UL * 60 * 60 * 1000; // repeat every 24 h
+        Frame rf;
+        rf.frameType = Frame::FrameTypes::MESSAGE_FRAME;
+        rf.messageType = Frame::MessageTypes::ROUTING_INFO_MESSAGE;
+        strncpy(rf.srcCall, settings.mycall, sizeof(rf.srcCall));
+        rf.message[0] = 0x00;
+        rf.messageLength = 1;
+        sendFrame(rf);
+        logPrintf(LOG_INFO, "Route", "Sent ROUTING_INFO beacon");
+    }
+
+    // ── 7c. Periodic flash persistence of routes/peers ─────────────────────
     if (timerExpired(persistTimer)) {
         persistTimer = millis() + PERSIST_INTERVAL;
         if (routesDirty) saveRoutes();

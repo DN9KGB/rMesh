@@ -10,6 +10,7 @@
 #include "settings.h"
 #include "persistence.h"
 #include "logging.h"
+#include "api.h"
 
 //Routing list
 std::vector<Route> routingList;
@@ -38,31 +39,9 @@ bool checkRoute(char* srcCall, char* viaCall) {
 }
 
 void sendRoutingList() {
-    // Estimate required buffer size: ~80 bytes per route entry + overhead
-    size_t bufSize = 40 + routingList.size() * 90;
-    if (bufSize < 256) bufSize = 256;
-    char* jsonBuffer = (char*)malloc(bufSize);
-    if (jsonBuffer == nullptr) {
-        logPrintf(LOG_ERROR, "Route", "sendRoutingList: malloc failed");
-        return;
-    }
-    size_t pos = 0;
-
-    pos += snprintf(jsonBuffer + pos, bufSize - pos, "{\"routingList\":{\"routes\":[");
-
-    for (size_t i = 0; i < routingList.size() && pos < bufSize - 120; i++) {
-        if (i > 0) jsonBuffer[pos++] = ',';
-        pos += snprintf(jsonBuffer + pos, bufSize - pos,
-            "{\"srcCall\":\"%s\",\"viaCall\":\"%s\",\"timestamp\":%ld,\"hopCount\":%u}",
-            routingList[i].srcCall, routingList[i].viaCall,
-            (long)routingList[i].timestamp, routingList[i].hopCount);
-    }
-
-    pos += snprintf(jsonBuffer + pos, bufSize - pos, "]}}");
-    if (pos < bufSize) {
-        wsBroadcast(jsonBuffer, pos);
-    }
-    free(jsonBuffer);
+    // Replaced: no longer serializes full JSON on heap.
+    // Sends lightweight notification; WebUI fetches /api/routes instead.
+    notifyRoutingChanged();
 }
 
 void addRoutingList(const char* srcCall, const char* viaCall, uint8_t hopCount) {
@@ -105,12 +84,18 @@ void addRoutingList(const char* srcCall, const char* viaCall, uint8_t hopCount) 
         r.hopCount = hopCount;
         routingList.push_back(r);
         routesDirty = true;
+        #ifdef HAS_WIFI
+        apiRecordRoutingEvent("new", srcCall, viaCall, hopCount);
+        #endif
         logPrintf(LOG_INFO, "Route", "New route: %s via %s (%d hops)", srcCall, viaCall, hopCount);
     } else {
         // Case B: Destination exists -> Shortest path wins
         if (hopCount < it->hopCount) {
             // Shorter path found -> Update route
             routesDirty = true;
+            #ifdef HAS_WIFI
+            apiRecordRoutingEvent("update", srcCall, viaCall, hopCount);
+            #endif
             strncpy(it->viaCall, viaCall, MAX_CALLSIGN_LENGTH);
             it->viaCall[MAX_CALLSIGN_LENGTH] = '\0';
             it->timestamp = time(NULL);

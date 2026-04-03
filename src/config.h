@@ -96,8 +96,8 @@ inline uint8_t syncWordForFrequency(float f) {
 /** Minimum free bytes on LittleFS before writes are skipped and a trim is triggered. */
 #define FS_MIN_FREE_BYTES (50 * 1024)
 
-/** Maximum number of messages held in the RAM message cache. */
-#define MAX_STORED_MESSAGES_RAM 100
+/** Maximum number of messages held in the RAM message cache (reduced to save heap). */
+#define MAX_STORED_MESSAGES_RAM 30
 
 /** Maximum number of ACK frames stored in ack.json. */
 #define MAX_STORED_ACK 300
@@ -117,8 +117,8 @@ inline uint8_t syncWordForFrequency(float f) {
 /** Maximum length of a callsign string (1–15 characters). */
 #define MAX_CALLSIGN_LENGTH 9
 
-/** Size of the outgoing TX frame buffer (number of frames). */
-#define TX_BUFFER_SIZE 50
+/** Size of the outgoing TX frame buffer (number of frames, reduced to save heap). */
+#define TX_BUFFER_SIZE 20
 
 /** Maximum number of peers tracked simultaneously. */
 #define PEER_LIST_SIZE 20

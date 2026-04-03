@@ -58,11 +58,12 @@ bool isAuthenticated(uint32_t clientId) {
 }
 
 // ── Create or update session ────────────────────────────────────────
-void setClientAuth(uint32_t clientId, bool auth) {
+void setClientAuth(uint32_t clientId, bool auth, uint32_t ipAddr) {
     // update existing session
     for (int i = 0; i < MAX_AUTH_SESSIONS; i++) {
         if (authSessions[i].clientId == clientId) {
             authSessions[i].authenticated = auth;
+            if (ipAddr) authSessions[i].ipAddr = ipAddr;
             return;
         }
     }
@@ -71,6 +72,7 @@ void setClientAuth(uint32_t clientId, bool auth) {
         if (authSessions[i].clientId == 0) {
             authSessions[i].clientId      = clientId;
             authSessions[i].authenticated = auth;
+            authSessions[i].ipAddr        = ipAddr;
             memset(authSessions[i].nonce, 0, sizeof(authSessions[i].nonce));
             return;
         }
@@ -82,6 +84,7 @@ void setClientAuth(uint32_t clientId, bool auth) {
     }
     authSessions[evict].clientId      = clientId;
     authSessions[evict].authenticated = auth;
+    authSessions[evict].ipAddr        = ipAddr;
     memset(authSessions[evict].nonce, 0, sizeof(authSessions[evict].nonce));
 }
 

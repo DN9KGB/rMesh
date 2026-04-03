@@ -9,6 +9,7 @@ struct AuthSession {
     uint32_t clientId    = 0;
     bool     authenticated = false;
     char     nonce[33]   = {0};  // 16 random bytes als 32-char Hex + \0
+    uint32_t ipAddr      = 0;   // Client IP (for API auth bypass)
 };
 
 extern AuthSession authSessions[MAX_AUTH_SESSIONS];
@@ -18,7 +19,7 @@ void   loadPasswordHash();
 void   savePasswordHash(const String& hash);
 String generateNonce(uint32_t clientId);
 bool   isAuthenticated(uint32_t clientId);
-void   setClientAuth(uint32_t clientId, bool auth);
+void   setClientAuth(uint32_t clientId, bool auth, uint32_t ipAddr = 0);
 void   removeClientAuth(uint32_t clientId);
 bool   verifyAuthResponse(uint32_t clientId, const String& response);
 

@@ -117,17 +117,17 @@ void loadRoutes() {
 }
 
 static void saveRoutesTask(void* pvParameters) {
-    // Snapshot routing list under listMutex to avoid data races
+    // Take both mutexes to write directly from routingList without heap-copying
+    // the entire vector (~30 KB for 1000 routes).
     if (!xSemaphoreTake(listMutex, pdMS_TO_TICKS(1000))) {
         logPrintf(LOG_ERROR, "FS", "listMutex timeout in saveRoutesTask");
         vTaskDelete(NULL);
         return;
     }
-    std::vector<Route> snap(routingList);
-    xSemaphoreGive(listMutex);
 
     if (!xSemaphoreTake(fsMutex, pdMS_TO_TICKS(30000))) {
         logPrintf(LOG_ERROR, "FS", "fsMutex timeout in saveRoutesTask");
+        xSemaphoreGive(listMutex);
         vTaskDelete(NULL);
         return;
     }
@@ -136,17 +136,18 @@ static void saveRoutesTask(void* pvParameters) {
     if (!f) {
         logPrintf(LOG_ERROR, "FS", "Failed to open routes file for writing");
         xSemaphoreGive(fsMutex);
+        xSemaphoreGive(listMutex);
         vTaskDelete(NULL);
         return;
     }
 
     f.write(&FILE_VERSION, 1);
-    uint16_t count = snap.size();
+    uint16_t count = routingList.size();
     f.write((uint8_t*)&count, 2);
 
     RouteEntry entry;
     memset(&entry, 0, sizeof(entry));
-    for (const auto& r : snap) {
+    for (const auto& r : routingList) {
         memcpy(entry.srcCall, r.srcCall, sizeof(entry.srcCall));
         memcpy(entry.viaCall, r.viaCall, sizeof(entry.viaCall));
         entry.hopCount = r.hopCount;
@@ -156,6 +157,7 @@ static void saveRoutesTask(void* pvParameters) {
 
     f.close();
     xSemaphoreGive(fsMutex);
+    xSemaphoreGive(listMutex);
 
     routesDirty = false;
     logPrintf(LOG_INFO, "FS", "Saved %d routes to %s", count, ROUTES_FILE);
@@ -258,17 +260,16 @@ void loadPeers() {
 }
 
 static void savePeersTask(void* pvParameters) {
-    // Snapshot peer list under listMutex to avoid data races
+    // Take both mutexes to write directly from peerList without heap-copying.
     if (!xSemaphoreTake(listMutex, pdMS_TO_TICKS(1000))) {
         logPrintf(LOG_ERROR, "FS", "listMutex timeout in savePeersTask");
         vTaskDelete(NULL);
         return;
     }
-    std::vector<Peer> snap(peerList);
-    xSemaphoreGive(listMutex);
 
     if (!xSemaphoreTake(fsMutex, pdMS_TO_TICKS(30000))) {
         logPrintf(LOG_ERROR, "FS", "fsMutex timeout in savePeersTask");
+        xSemaphoreGive(listMutex);
         vTaskDelete(NULL);
         return;
     }
@@ -277,17 +278,18 @@ static void savePeersTask(void* pvParameters) {
     if (!f) {
         logPrintf(LOG_ERROR, "FS", "Failed to open peers file for writing");
         xSemaphoreGive(fsMutex);
+        xSemaphoreGive(listMutex);
         vTaskDelete(NULL);
         return;
     }
 
     f.write(&FILE_VERSION, 1);
-    uint16_t count = snap.size();
+    uint16_t count = peerList.size();
     f.write((uint8_t*)&count, 2);
 
     PeerEntry entry;
     memset(&entry, 0, sizeof(entry));
-    for (const auto& p : snap) {
+    for (const auto& p : peerList) {
         memcpy(entry.nodeCall, p.nodeCall, sizeof(entry.nodeCall));
         entry.port = p.port;
         entry.available = p.available ? 1 : 0;
@@ -299,6 +301,7 @@ static void savePeersTask(void* pvParameters) {
 
     f.close();
     xSemaphoreGive(fsMutex);
+    xSemaphoreGive(listMutex);
 
     peersDirty = false;
     logPrintf(LOG_INFO, "FS", "Saved %d peers to %s", count, PEERS_FILE);
