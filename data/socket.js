@@ -196,6 +196,171 @@ var authNonce    = "";
 
 
 
+// ── Render functions (shared between WebSocket push and API fetch) ───────────
+
+function renderPeerList(data) {
+    var peerArray = data.peers || (data.peerlist && data.peerlist.peers) || [];
+    var peers = "";
+    peers += "<table class='mesh-table'>";
+    peers += "<thead><tr><th>" + t('peer.port') + "</th><th>" + t('peer.call') + "</th><th>" + t('peer.last_rx') + "</th><th>" + t('peer.rssi') + "</th><th>" + t('peer.snr') + "</th><th>" + t('peer.frq_err') + "</th></tr></thead>";
+    peers += "<tbody>";
+    peerArray.forEach(function(p) {
+        var port = (p.port == 0) ? "LoRa" : "Wifi";
+        var ts = p.timestamp || p.lastSeen || 0;
+        var lastRX = new Date(ts * 1000);
+        peers += "<tr>";
+        peers += "<td><span class='mesh-badge" + (p.port == 0 ? " badge-lora" : " badge-wifi") + "'>" + port + "</span>";
+        if (p.preferred === true) peers += " <span class='badge-preferred' title='" + t('peer.preferred') + "'>&#9733;</span>";
+        peers += "</td>";
+        var cls = p.available ? 'green' : (p.preferred === false ? 'suppressed' : 'red');
+        peers += "<td class='" + cls + "'>" + esc(p.call) + "</td>";
+        peers += "<td>" + lastRX.toLocaleString("de-DE", {day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit"}).replace(",", "") + "</td>";
+        peers += "<td>" + p.rssi + "</td>";
+        peers += "<td>" + p.snr + "</td>";
+        peers += "<td>" + parseInt(p.frqError || 0) + "</td>";
+        peers += "</tr>";
+    });
+    peers += "</tbody></table>";
+    document.getElementById("peer").innerHTML = peers;
+}
+
+function renderRoutingList(data) {
+    var routeArray = data.routes || (data.routingList && data.routingList.routes) || [];
+    var routing = "";
+    routing += "<table class='mesh-table'>";
+    routing += "<thead><tr><th>" + t('route.call') + "</th><th>" + t('route.node') + "</th><th>" + t('route.hops') + "</th><th>" + t('route.last_rx') + "</th></tr></thead>";
+    routing += "<tbody>";
+    routeArray.forEach(function(r) {
+        var ts = r.timestamp || 0;
+        var lastRX = new Date(ts * 1000);
+        routing += "<tr>";
+        routing += "<td>" + esc(r.srcCall || r.dest || "") + "</td>";
+        routing += "<td>" + esc(r.viaCall || r.via || "") + "</td>";
+        routing += "<td>" + (r.hopCount != null ? r.hopCount : (r.hops || 0)) + "</td>";
+        routing += "<td>" + lastRX.toLocaleString("de-DE", {day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit"}).replace(",", "") + "</td>";
+        routing += "</tr>";
+    });
+    routing += "</tbody></table>";
+    document.getElementById("routing").innerHTML = routing;
+}
+
+function onSettingsReceived(s) {
+    // Merge with existing settings so partial updates don't lose fields
+    if (settings) {
+        for (var k in s) { settings[k] = s[k]; }
+    } else {
+        settings = s;
+    }
+    s = settings;
+    function fmtIP(a) { return (a && a[0] !== undefined) ? a[0]+'.'+a[1]+'.'+a[2]+'.'+a[3] : '-'; }
+    // Only call fillSettingsForm when full settings are available (has wifiIP)
+    if (s.wifiIP) {
+        try { fillSettingsForm(settings); }
+        catch(e) { console.error("fillSettingsForm error:", e); }
+    }
+    var appText = document.getElementById("appNameText");
+    if (appText && s.name) appText.textContent = s.name;
+    if (s.version) document.getElementById("version").innerHTML = s.version;
+    if (s.mycall != null) document.getElementById("myCall").innerHTML = s.mycall;
+    if (s.loraMaxMessageLength) document.getElementById("settingsLoraMaxMessageLength").innerHTML = s.loraMaxMessageLength + " characters";
+    if (settings.name && settings.mycall) {
+        settings.titel = settings.name + " - " + settings.mycall;
+        settings.altTitel = "\ud83d\udea8 " + settings.name + " - " + settings.mycall + " \ud83d\udea8";
+    }
+    document.getElementById("currentWiFiIP").textContent      = fmtIP(s.currentIP);
+    document.getElementById("currentWifiNetMask").textContent  = fmtIP(s.currentNetMask);
+    document.getElementById("currentWifiGateway").textContent  = fmtIP(s.currentGateway);
+    document.getElementById("currentWifiDNS").textContent      = fmtIP(s.currentDNS);
+    if (s.udpPeers) {
+        renderUdpPeers(s.udpPeers);
+    }
+    captureSettingsSnapshot();
+    var chipIdEl = document.getElementById("aboutChipId");
+    if (chipIdEl) chipIdEl.innerHTML = s.chipId || "";
+    var hwEl = document.getElementById("aboutHardware");
+    if (hwEl) hwEl.innerHTML = s.hardware || "";
+    var aboutVersionEl = document.getElementById("aboutVersion");
+    if (aboutVersionEl) aboutVersionEl.innerHTML = (s.name || "") + " " + (s.version || "");
+    var aboutChangelogEl = document.getElementById("aboutChangelog");
+    if (aboutChangelogEl) aboutChangelogEl.textContent = s.changelog || "";
+    var hasBat = s.hasBattery === true;
+    var batEnabled = s.batteryEnabled !== false;
+    var batGpRow = document.getElementById("batteryGpRow");
+    if (batGpRow) batGpRow.style.display = (hasBat && batEnabled) ? "" : "none";
+    var batSettingsSection = document.getElementById("batterySettingsSection");
+    if (batSettingsSection) batSettingsSection.style.display = hasBat ? "" : "none";
+    var pwStatus = document.getElementById("settingsWebPasswordStatus");
+    var pwRemoveRow = document.getElementById("settingsWebPasswordRemoveRow");
+    if (pwStatus) {
+        if (s.webPasswordSet) {
+            pwStatus.textContent = typeof t === 'function' ? t('pw.set') : 'Password is set';
+            pwStatus.style.color = "#4ecca3";
+            if (pwRemoveRow) pwRemoveRow.style.display = "";
+        } else {
+            pwStatus.textContent = typeof t === 'function' ? t('pw.not_set') : 'No password set';
+            pwStatus.style.color = "";
+            if (pwRemoveRow) pwRemoveRow.style.display = "none";
+        }
+    }
+    if (s.groupNames) {
+        var pushToDevice = {};
+        var needsPush = false;
+        for (var i = 3; i <= 10; i++) {
+            var deviceName = s.groupNames[String(i)] || "";
+            var cookieName = Cookie.get("channel" + i) || "";
+            if (deviceName) {
+                Cookie.set("channel" + i, deviceName);
+            } else if (cookieName && cookieName !== "........") {
+                pushToDevice[String(i)] = cookieName;
+                needsPush = true;
+            }
+        }
+        if (needsPush) {
+            sendWS(JSON.stringify({settings: {groupNames: pushToDevice}}));
+        }
+    }
+    if (init == false) {
+        init = true;
+        fetch(baseURL + "messages.json?" + Math.random())
+            .then(function(response) {
+                if (!response.ok) throw new Error("HTTP " + response.status);
+                return response.text();
+            })
+            .then(function(text) {
+                var loaded = [];
+                if (text) {
+                    var lines = text.split(/\r?\n/);
+                    lines.forEach(function(line) {
+                        if (line.trim().length === 0) return;
+                        try {
+                            var m = JSON.parse(line);
+                            m.message.parsed = false;
+                            loaded.push(m.message);
+                        } catch(e) {}
+                    });
+                }
+                messages = mergeWithCache(loaded);
+                saveCachedMessages();
+                messages.push({"delimiter": true});
+                showMessages(true);
+                for (let i = 0; i <= 10; i++) {channels[i] = false;}
+                setUI(ui);
+            })
+            .catch(function(err) {
+                console.warn("messages.json fetch failed, using cache:", err);
+                var cached = loadCachedMessages();
+                if (cached.length > 0) {
+                    cached.forEach(function(m) { m.parsed = false; });
+                    messages = cached;
+                }
+                messages.push({"delimiter": true});
+                showMessages(true);
+                for (let i = 0; i <= 10; i++) {channels[i] = false;}
+                setUI(ui);
+            });
+    }
+}
+
 function onMessage(event) {
     var d;
     try { d = JSON.parse(event.data); } catch(e) { console.error("Invalid JSON:", e); return; }
@@ -233,6 +398,34 @@ function onMessage(event) {
     // Ignore messages while auth is pending
     if (authRequired) return;
 
+    // ── Notification events (lightweight, fetch data via REST API) ────────────
+    if (d.notify) {
+        var fetchUrl = baseURL + "api/" + d.notify;
+        console.log("Fetching: " + fetchUrl);
+        fetch(fetchUrl).then(function(r) {
+            if (!r.ok) throw new Error("HTTP " + r.status);
+            return r.json();
+        }).then(function(data) {
+            console.log("Fetched " + d.notify + ":", Object.keys(data));
+            switch (d.notify) {
+                case "peers":
+                    console.log("Peers count:", (data.peers||[]).length);
+                    renderPeerList(data);
+                    break;
+                case "routes":
+                    console.log("Routes count:", (data.routes||[]).length);
+                    renderRoutingList(data);
+                    break;
+                case "settings":
+                    if (data.settings) onSettingsReceived(data.settings);
+                    break;
+            }
+        }).catch(function(e) {
+            console.error("Failed to fetch " + d.notify + ":", e);
+        });
+        return;
+    }
+
     //RAW-RX
     if (d.monitor) {
         var f = d.monitor;
@@ -264,6 +457,7 @@ function onMessage(event) {
                 if (f.dstGroup) { msg += " GRP: " + esc(f.dstGroup); }
                 if (f.messageType == 0) {msg += " TEXT: ";}
                 if (f.messageType == 1) {msg += " TRACE: ";}
+                if (f.messageType == 14) {msg += " ROUTE: ";}
                 if (f.messageType == 15) {msg += " COMMAND: ";}
                 if (f.text) { msg += esc(f.text); }
                 break;
@@ -287,177 +481,19 @@ function onMessage(event) {
         showMessages();
     }
 
-    //Peers
+    //Peers (legacy WebSocket push fallback)
     if (d.peerlist) {
-        var peers = "";
-        peers += "<table class='mesh-table'>";
-        peers += "<thead><tr><th>" + t('peer.port') + "</th><th>" + t('peer.call') + "</th><th>" + t('peer.last_rx') + "</th><th>" + t('peer.rssi') + "</th><th>" + t('peer.snr') + "</th><th>" + t('peer.frq_err') + "</th></tr></thead>";
-        peers += "<tbody>";
-        if (d.peerlist.peers) {
-            d.peerlist.peers.forEach(function(p, index) {
-				if (p.port == 0) {port = "LoRa";} else {port = "Wifi";}
-                const lastRX = new Date(p.timestamp * 1000);
-                peers += "<tr>";
-                peers += "<td><span class='mesh-badge" + (p.port == 0 ? " badge-lora" : " badge-wifi") + "'>" + port + "</span>";
-                if (p.preferred === true) peers += " <span class='badge-preferred' title='" + t('peer.preferred') + "'>&#9733;</span>";
-                peers += "</td>";
-                var cls = p.available ? 'green' : (p.preferred === false ? 'suppressed' : 'red');
-                peers += "<td class='" + cls + "'>" + esc(p.call) + "</td>";
-                peers += "<td>" + lastRX.toLocaleString("de-DE", {day: "2-digit",  month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).replace(",", "")  + "</td>";
-                peers += "<td>" + p.rssi + "</td>";
-                peers += "<td>" + p.snr + "</td>";
-                peers += "<td>" + parseInt(p.frqError) + "</td>";
-                peers += "</tr>";
-            });
-        }
-        peers += "</tbody></table>";
-        document.getElementById("peer").innerHTML = peers;
+        renderPeerList(d);
     }
 
-    //Routing list
+    //Routing list (legacy WebSocket push fallback)
     if (d.routingList) {
-        var routing = "";
-        routing += "<table class='mesh-table'>";
-        routing += "<thead><tr><th>" + t('route.call') + "</th><th>" + t('route.node') + "</th><th>" + t('route.hops') + "</th><th>" + t('route.last_rx') + "</th></tr></thead>";
-        routing += "<tbody>";
-        if (d.routingList.routes) {
-            d.routingList.routes.forEach(function(r, index) {
-                const lastRX = new Date(r.timestamp * 1000);
-                routing += "<tr>";
-                routing += "<td>" + esc(r.srcCall) + "</td>";
-                routing += "<td>" + esc(r.viaCall) + "</td>";
-                routing += "<td>" + r.hopCount + "</td>";
-                routing += "<td>" + lastRX.toLocaleString("de-DE", {day: "2-digit",  month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).replace(",", "")  + "</td>";
-                routing += "</tr>";
-            });
-        }
-        routing += "</tbody></table>";
-        document.getElementById("routing").innerHTML = routing;
-    }    
+        renderRoutingList(d);
+    }
 
-    //Settings
+    //Settings (legacy WebSocket push fallback)
     if (d.settings) {
-        settings = d.settings;
-        function fmtIP(a) { return (a && a[0] !== undefined) ? a[0]+'.'+a[1]+'.'+a[2]+'.'+a[3] : '-'; }
-        fillSettingsForm(settings);
-        var appText = document.getElementById("appNameText");
-        if (appText) appText.textContent = d.settings.name;
-        document.getElementById("version").innerHTML = d.settings.version;
-        document.getElementById("myCall").innerHTML = d.settings.mycall;
-        document.getElementById("settingsLoraMaxMessageLength").innerHTML = d.settings.loraMaxMessageLength + " characters";
-        settings.titel = settings.name + " - " + settings.mycall;
-        settings.altTitel = "🚨 " + settings.name + " - " + settings.mycall + " 🚨"
-        document.getElementById("currentWiFiIP").textContent      = fmtIP(d.settings.currentIP);
-        document.getElementById("currentWifiNetMask").textContent  = fmtIP(d.settings.currentNetMask);
-        document.getElementById("currentWifiGateway").textContent  = fmtIP(d.settings.currentGateway);
-        document.getElementById("currentWifiDNS").textContent      = fmtIP(d.settings.currentDNS);
-        //UDP Peers
-        if (d.settings.udpPeers) {
-            renderUdpPeers(d.settings.udpPeers);
-        }
-
-        captureSettingsSnapshot();
-
-        // Chip ID + Hardware in About panel
-        var chipIdEl = document.getElementById("aboutChipId");
-        if (chipIdEl) chipIdEl.innerHTML = d.settings.chipId || "";
-        var hwEl = document.getElementById("aboutHardware");
-        if (hwEl) hwEl.innerHTML = d.settings.hardware || "";
-        var aboutVersionEl = document.getElementById("aboutVersion");
-        if (aboutVersionEl) aboutVersionEl.innerHTML = (d.settings.name || "") + " " + (d.settings.version || "");
-        var aboutChangelogEl = document.getElementById("aboutChangelog");
-        if (aboutChangelogEl) aboutChangelogEl.textContent = d.settings.changelog || "";
-
-        // Battery status row visibility
-        var hasBat = d.settings.hasBattery === true;
-        var batEnabled = d.settings.batteryEnabled !== false;
-        var batGpRow = document.getElementById("batteryGpRow");
-        if (batGpRow) batGpRow.style.display = (hasBat && batEnabled) ? "" : "none";
-        var batSettingsSection = document.getElementById("batterySettingsSection");
-        if (batSettingsSection) batSettingsSection.style.display = hasBat ? "" : "none";
-
-        // Password status display
-        var pwStatus = document.getElementById("settingsWebPasswordStatus");
-        var pwRemoveRow = document.getElementById("settingsWebPasswordRemoveRow");
-        if (pwStatus) {
-            if (d.settings.webPasswordSet) {
-                pwStatus.textContent = typeof t === 'function' ? t('pw.set') : 'Password is set';
-                pwStatus.style.color = "#4ecca3";
-                if (pwRemoveRow) pwRemoveRow.style.display = "";
-            } else {
-                pwStatus.textContent = typeof t === 'function' ? t('pw.not_set') : 'No password set';
-                pwStatus.style.color = "";
-                if (pwRemoveRow) pwRemoveRow.style.display = "none";
-            }
-        }
-
-        // Sync group names between device and browser
-        if (d.settings.groupNames) {
-            var pushToDevice = {};
-            var needsPush = false;
-            for (var i = 3; i <= 10; i++) {
-                var deviceName = d.settings.groupNames[String(i)] || "";
-                var cookieName = Cookie.get("channel" + i) || "";
-                if (deviceName) {
-                    // Device has a name → use it
-                    Cookie.set("channel" + i, deviceName);
-                } else if (cookieName && cookieName !== "........") {
-                    // Device empty but browser has a name → push to device
-                    pushToDevice[String(i)] = cookieName;
-                    needsPush = true;
-                }
-            }
-            if (needsPush) {
-                sendWS(JSON.stringify({settings: {groupNames: pushToDevice}}));
-            }
-        }
-
-        if (init == false) {
-            init = true;
-            //Load messages.json (only now possible, because mycall wasn't known before)
-            fetch(baseURL + "messages.json?" + Math.random())
-                .then(function(response) {
-                    if (!response.ok) throw new Error("HTTP " + response.status);
-                    return response.text();
-                })
-                .then(function(text) {
-                    var loaded = [];
-                    if (text) {
-                        var lines = text.split(/\r?\n/);
-                        lines.forEach(function(line) {
-                            if (line.trim().length === 0) return;
-                            try {
-                                var m = JSON.parse(line);
-                                m.message.parsed = false;
-                                loaded.push(m.message);
-                            } catch(e) { /* skip malformed line */ }
-                        });
-                    }
-                    messages = mergeWithCache(loaded);
-                    saveCachedMessages();
-
-                    //"Separator" between stored and new messages
-                    messages.push({"delimiter": true});
-                    showMessages(true);
-
-                    //Mark everything as read
-                    for (let i = 0; i <= 10; i++) {channels[i] = false;}
-                    setUI(ui);
-                })
-                .catch(function(err) {
-                    // Fetch failed – use cached messages as fallback
-                    console.warn("messages.json fetch failed, using cache:", err);
-                    var cached = loadCachedMessages();
-                    if (cached.length > 0) {
-                        cached.forEach(function(m) { m.parsed = false; });
-                        messages = cached;
-                    }
-                    messages.push({"delimiter": true});
-                    showMessages(true);
-                    for (let i = 0; i <= 10; i++) {channels[i] = false;}
-                    setUI(ui);
-                });
-        }
+        onSettingsReceived(d.settings);
     }
 
     //Status

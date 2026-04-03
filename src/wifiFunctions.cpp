@@ -338,8 +338,16 @@ void showWiFiStatus() {
     }
 }
 
+// WiFi diagnostics counters
+uint32_t wifiDisconnectCount = 0;
+uint8_t  lastWifiDisconnectReason = 0;
+uint32_t lastWifiDisconnectTime = 0;
+
 void onWiFiDisconnected(WiFiEvent_t event, WiFiEventInfo_t info) {
     uint8_t reason = info.wifi_sta_disconnected.reason;
+    wifiDisconnectCount++;
+    lastWifiDisconnectReason = reason;
+    lastWifiDisconnectTime = (uint32_t)time(nullptr);
     logPrintf(LOG_DEBUG, "WiFi", "disconnected reason=%d rssi=%d heap=%u uptime=%lu",
         reason, WiFi.RSSI(), ESP.getFreeHeap(), millis() / 1000);
 }

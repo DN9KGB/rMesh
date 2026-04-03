@@ -46,6 +46,7 @@ struct Frame {
         //Lower 4 bits of header byte -> 0x00 to 0x0F; Only for MESSAGE-HEADER (otherwise it's payload length)
         TEXT_MESSAGE = 0,
         TRACE_MESSAGE = 1,
+        ROUTING_INFO_MESSAGE = 14, //Periodic routing beacon – builds routing table automatically
         COMMAND_MESSAGE = 15   //Remote control commands for node: 0xFF:Version, 0xFE:Reboot
     };
 

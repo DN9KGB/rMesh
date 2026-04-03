@@ -15,6 +15,7 @@
 #include "auth.h"
 #include "serial.h"
 #include "logging.h"
+#include "api.h"
 
 #ifdef HELTEC_WIFI_LORA_32_V3
 #include "display_HELTEC_WiFi_LoRa_32_V3.h"
@@ -56,6 +57,78 @@ void wsBroadcast(const char *buf, size_t len) {
     }
 }
 
+// ── Lightweight WebSocket notifications ─────────────────────────────────────
+// Instead of serializing full JSON on the heap, send a tiny "data changed"
+// event.  The WebUI fetches the updated data via the REST API.
+
+void notifyPeerListChanged() {
+    wsBroadcast("{\"notify\":\"peers\"}", 18);
+}
+
+void notifyRoutingChanged() {
+    wsBroadcast("{\"notify\":\"routes\"}", 19);
+}
+
+void notifySettingsChanged() {
+    wsBroadcast("{\"notify\":\"settings\"}", 21);
+}
+
+void notifyNewMessage() {
+    wsBroadcast("{\"notify\":\"messages\"}", 21);
+}
+
+/**
+ * Send initial data to a single WebSocket client on connect/auth.
+ * Uses notification messages that tell the client to fetch via REST API.
+ * The REST API does not require auth when no password is set; when a password
+ * IS set, we send the full settings inline (since the client can't fetch
+ * the API without HTTP auth headers), but peers and routes use notifications
+ * (the JS fetches /api/peers and /api/routes without auth — we add a
+ * session-cookie bypass for these endpoints).
+ *
+ * Simpler approach: just send the same notifications. The client fetches
+ * the API. For the no-password case this works. For the password case,
+ * the API endpoints skip auth-check for requests originating from the
+ * same IP as an authenticated WebSocket client.
+ *
+ * SIMPLEST approach (chosen): Send data directly via WebSocket to the
+ * connecting client, using small JSON snippets.
+ */
+static void sendInitialDataToClient(AsyncWebSocketClient *client) {
+    if (ESP.getFreeHeap() < 15000 || ESP.getMaxAllocHeap() < 8000) return;
+
+    // Settings must be sent inline (WebUI needs mycall/version before anything works).
+    // Use a minimal JSON with just the essential fields — avoids the old 17KB JsonDocument.
+    {
+        String json;
+        json.reserve(512);
+        json = "{\"settings\":{\"mycall\":\"";
+        json += settings.mycall;
+        json += "\",\"version\":\"";
+        json += VERSION;
+        json += "\",\"name\":\"";
+        json += NAME;
+        json += "\",\"hardware\":\"";
+        json += PIO_ENV_NAME;
+        json += "\"";
+        // webPasswordSet (needed for password UI state)
+        json += ",\"webPasswordSet\":";
+        json += !webPasswordHash.isEmpty() ? "true" : "false";
+        // loraMaxMessageLength (shown in UI)
+        char buf[64];
+        snprintf(buf, sizeof(buf), ",\"loraMaxMessageLength\":%u", (unsigned)settings.loraMaxMessageLength);
+        json += buf;
+        json += "}}";
+        client->text(json);
+    }
+
+    // After minimal settings, tell client to fetch full data via API
+    // (API auth is bypassed for IPs with authenticated WS sessions)
+    client->text("{\"notify\":\"settings\"}");
+    client->text("{\"notify\":\"peers\"}");
+    client->text("{\"notify\":\"routes\"}");
+}
+
 /**
  * Initializes and starts the web server and WebSocket handlers.
  */
@@ -64,12 +137,10 @@ void startWebServer() {
 
     wsHandler.onConnect([](AsyncWebSocket *server, AsyncWebSocketClient *client) {
         ws.cleanupClients();
-        setClientAuth(client->id(), false);
+        setClientAuth(client->id(), false, (uint32_t)client->remoteIP());
 
         if (webPasswordHash.isEmpty()) {
-            sendSettings();
-            sendPeerList();
-            sendRoutingList();
+            sendInitialDataToClient(client);
         } else {
             String nonce = generateNonce(client->id());
             uint64_t mac = ESP.getEfuseMac();
@@ -106,11 +177,9 @@ void startWebServer() {
             if (json["auth"]["response"].is<JsonVariant>()) {
                 String response = json["auth"]["response"].as<String>();
                 if (verifyAuthResponse(client->id(), response)) {
-                    setClientAuth(client->id(), true);
+                    setClientAuth(client->id(), true, (uint32_t)client->remoteIP());
                     client->text("{\"auth\":{\"ok\":true}}");
-                    sendSettings();
-                    sendPeerList();
-                    sendRoutingList();
+                    sendInitialDataToClient(client);
                 } else {
                     String nonce = generateNonce(client->id());
                     char msg[192];
@@ -466,7 +535,7 @@ void startWebServer() {
     //---------------------- WEBSERVER -------------------------
     DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "*");
     DefaultHeaders::Instance().addHeader("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS");
-    DefaultHeaders::Instance().addHeader("Access-Control-Allow-Headers", "Content-Type");
+    DefaultHeaders::Instance().addHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
     // Serve files from LittleFS and fall back to 404
     webServer.onNotFound([](AsyncWebServerRequest *request) {
@@ -561,6 +630,9 @@ void startWebServer() {
                      }
                  }
     );
+
+    // Register REST API endpoints for Bridge Server integration
+    setupApiEndpoints(webServer);
 
     webServer.begin();
 }

@@ -161,50 +161,9 @@ void checkPeerList() {
  * @endcode
  */
 void sendPeerList() {
-    // Build JSON with snprintf instead of JsonDocument to avoid heap fragmentation.
-    // Each peer entry is ~130 bytes; use tight malloc based on actual peer count.
-    size_t bufSize = 40 + peerList.size() * 150;
-    if (bufSize < 256) bufSize = 256;
-    char* jsonBuffer = (char*)malloc(bufSize);
-    if (jsonBuffer == nullptr) {
-        logPrintf(LOG_WARN, "Peer", "sendPeerList: malloc failed");
-        return;
-    }
-    size_t pos = 0;
-
-    pos += snprintf(jsonBuffer + pos, bufSize - pos, "{\"peerlist\":{\"peers\":[");
-
-    for (size_t i = 0; i < peerList.size() && pos < bufSize - 200; i++) {
-        // Check if same callsign exists on a different port (dual-path node)
-        bool dualPath = false;
-        for (size_t j = 0; j < peerList.size(); j++) {
-            if (i != j && strcmp(peerList[i].nodeCall, peerList[j].nodeCall) == 0
-                       && peerList[i].port != peerList[j].port) {
-                dualPath = true;
-                break;
-            }
-        }
-
-        if (i > 0) jsonBuffer[pos++] = ',';
-        pos += snprintf(jsonBuffer + pos, bufSize - pos,
-            "{\"port\":%u,\"call\":\"%s\",\"timestamp\":%ld,\"rssi\":%.1f,"
-            "\"snr\":%.1f,\"frqError\":%.1f,\"available\":%s",
-            peerList[i].port, peerList[i].nodeCall,
-            (long)peerList[i].timestamp, peerList[i].rssi,
-            peerList[i].snr, peerList[i].frqError,
-            peerList[i].available ? "true" : "false");
-        if (dualPath) {
-            pos += snprintf(jsonBuffer + pos, bufSize - pos,
-                ",\"preferred\":%s", peerList[i].available ? "true" : "false");
-        }
-        jsonBuffer[pos++] = '}';
-    }
-
-    pos += snprintf(jsonBuffer + pos, bufSize - pos, "]}}");
-    if (pos < bufSize) {
-        wsBroadcast(jsonBuffer, pos);
-    }
-    free(jsonBuffer);
+    // Replaced: no longer serializes full JSON on heap.
+    // Sends lightweight notification; WebUI fetches /api/peers instead.
+    notifyPeerListChanged();
 }
 
 /**
