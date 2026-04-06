@@ -114,6 +114,7 @@ extern bool oledEnabled;                // Display on/off (persisted, survives r
 extern char oledDisplayGroup[17];       // Group to show last message from
 extern uint16_t oledPageInterval;       // Auto-rotate interval in ms (persisted)
 extern uint8_t  oledPageMask;           // Bitmask of pages to include in rotation (persisted)
+extern int8_t   oledButtonPin;          // GPIO for manual page-next button (-1 = disabled, persisted)
 void saveOledSettings();                // Persist oledEnabled + oledDisplayGroup to NVS
 
 // Channel/group names (persisted on device, shared across all clients)

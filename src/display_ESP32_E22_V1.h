@@ -25,5 +25,6 @@ bool hasStatusDisplay();
 void onStatusDisplayMessage(const char* srcCall, const char* text, const char* dstGroup, const char* dstCall);
 void displayNextPage();
 void displayForcePage(DisplayPage p, uint32_t holdMs);
+void displayButtonPoll();
 
 #endif // ESP32_E22_V1

@@ -31,6 +31,10 @@ static DisplayPage currentPage = PAGE_IDENTITY;
 static uint32_t pageSwitchAt  = 0;
 static uint32_t pageHoldUntil = 0;
 
+static int8_t   btnPinConfigured = -1;
+static bool     btnLastLevel     = true;   // pullup idle = HIGH
+static uint32_t btnLastChangeAt  = 0;
+
 static const char* pageTitle(DisplayPage p) {
     switch (p) {
         case PAGE_IDENTITY:  return "ID";
@@ -123,7 +127,40 @@ bool initStatusDisplay() {
     } else {
         u8g2.setPowerSave(1);
     }
+
+    // Optional page-next button
+    btnPinConfigured = -1;
+    if (oledButtonPin >= 0) {
+        pinMode(oledButtonPin, INPUT_PULLUP);
+        btnPinConfigured = oledButtonPin;
+        btnLastLevel = true;
+        btnLastChangeAt = millis();
+        logPrintf(LOG_INFO, "Display", "Page-next button on GPIO %d", (int)oledButtonPin);
+    }
     return true;
+}
+
+void displayButtonPoll() {
+    // Re-configure on pin change from WebUI
+    if (oledButtonPin != btnPinConfigured) {
+        btnPinConfigured = oledButtonPin;
+        if (oledButtonPin >= 0) {
+            pinMode(oledButtonPin, INPUT_PULLUP);
+            btnLastLevel = true;
+            btnLastChangeAt = millis();
+        }
+    }
+    if (btnPinConfigured < 0 || !displayDetected || !oledEnabled) return;
+
+    bool level = digitalRead(btnPinConfigured) != 0;
+    uint32_t now = millis();
+    if (level != btnLastLevel && (now - btnLastChangeAt) > 40) {
+        btnLastChangeAt = now;
+        btnLastLevel = level;
+        if (!level) {  // pressed (active-low)
+            displayNextPage();
+        }
+    }
 }
 
 static void drawNetworkPage() {
@@ -236,11 +273,25 @@ static void drawSystemPage() {
     u8g2.drawStr(0, 46, buf);
 
     u8g2.setFont(u8g2_font_5x7_tf);
-    // show tail of VERSION (build tag)
+    // Full version, wrapped across up to two 25-char lines.
     const char* v = VERSION;
-    const char* tail = strrchr(v, '+');
-    snprintf(buf, sizeof(buf), "ver %s", tail ? tail + 1 : v);
-    u8g2.drawStr(0, 62, buf);
+    char v1[26] = {0};
+    char v2[26] = {0};
+    strlcpy(v1, v, sizeof(v1));
+    if (strlen(v) > 25) strlcpy(v2, v + 25, sizeof(v2));
+    u8g2.drawStr(0, 56, v1);
+    u8g2.drawStr(0, 64, v2);
+}
+
+// Returns true if the given page should participate in the rotation.
+static bool pageAvailable(DisplayPage p) {
+    if ((oledPageMask & (1u << p)) == 0) return false;
+    if (p == PAGE_MESSAGES) {
+        // Only show MESSAGES if a channel filter is active AND a message exists.
+        if (oledDisplayGroup[0] == '\0') return false;
+        if (lastMsgSrc[0] == '\0')       return false;
+    }
+    return true;
 }
 
 void updateStatusDisplay() {
@@ -253,7 +304,15 @@ void updateStatusDisplay() {
         if (pageSwitchAt != 0 && now >= pageSwitchAt) {
             for (uint8_t i = 0; i < PAGE_COUNT; ++i) {
                 currentPage = (DisplayPage)((currentPage + 1) % PAGE_COUNT);
-                if (oledPageMask & (1u << currentPage)) break;
+                if (pageAvailable(currentPage)) break;
+            }
+        }
+        // If the currently-selected page is no longer available (e.g. mask changed
+        // via WebUI, or MESSAGES has no content), fall back to the next one.
+        if (!pageAvailable(currentPage)) {
+            for (uint8_t i = 0; i < PAGE_COUNT; ++i) {
+                currentPage = (DisplayPage)((currentPage + 1) % PAGE_COUNT);
+                if (pageAvailable(currentPage)) break;
             }
         }
         pageSwitchAt = now + (oledPageInterval ? oledPageInterval : 5000);
@@ -329,7 +388,11 @@ void onStatusDisplayMessage(const char* srcCall, const char* text, const char* d
     strlcpy(lastMsgSrc, srcCall, sizeof(lastMsgSrc));
     strlcpy(lastMsgText, text, sizeof(lastMsgText));
 
-    displayForcePage(PAGE_MESSAGES, 10000);
+    if (oledPageMask & (1u << PAGE_MESSAGES)) {
+        displayForcePage(PAGE_MESSAGES, 10000);
+    } else {
+        updateStatusDisplay();
+    }
 }
 
 #endif // ESP32_E22_V1

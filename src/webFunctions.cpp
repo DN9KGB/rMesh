@@ -403,6 +403,22 @@ void startWebServer() {
             if (json["settings"]["oledDisplayGroup"].is<JsonVariant>()) {
                 strlcpy(oledDisplayGroup, json["settings"]["oledDisplayGroup"] | "", sizeof(oledDisplayGroup));
             }
+            if (json["settings"]["oledPageInterval"].is<JsonVariant>()) {
+                uint32_t iv = json["settings"]["oledPageInterval"].as<uint32_t>();
+                if (iv < 1000)  iv = 1000;
+                if (iv > 60000) iv = 60000;
+                oledPageInterval = (uint16_t)iv;
+            }
+            if (json["settings"]["oledPageMask"].is<JsonVariant>()) {
+                uint8_t m = json["settings"]["oledPageMask"].as<uint8_t>();
+                if (m == 0) m = 0xFF;
+                oledPageMask = m;
+            }
+            if (json["settings"]["oledButtonPin"].is<JsonVariant>()) {
+                int pin = json["settings"]["oledButtonPin"].as<int>();
+                if (pin < -1 || pin > 48) pin = -1;
+                oledButtonPin = (int8_t)pin;
+            }
             if (json["settings"]["groupNames"].is<JsonObject>()) {
                 JsonObject gn = json["settings"]["groupNames"];
                 for (int i = 3; i <= MAX_CHANNELS; i++) {
