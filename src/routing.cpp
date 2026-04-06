@@ -47,8 +47,10 @@ void sendRoutingList() {
 void addRoutingList(const char* srcCall, const char* viaCall, uint8_t hopCount) {
     if (strlen(srcCall) == 0 || strlen(viaCall) == 0) return;
     if (strcmp(settings.mycall, srcCall) == 0) return;
-    // Loop detection: reject routes that point back to ourselves or to the destination itself
-    if (strcmp(viaCall, srcCall) == 0) return;
+    // Loop detection: reject routes that point back to ourselves.
+    // viaCall == srcCall is the legitimate "direct neighbor" case (hopCount must be 0);
+    // only reject when the hopCount is inconsistent with that.
+    if (strcmp(viaCall, srcCall) == 0 && hopCount != 0) return;
     if (strcmp(viaCall, settings.mycall) == 0) return;
 
     // 1. Check if viaCall (the next hop) is in the peer list
