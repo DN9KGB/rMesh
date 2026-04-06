@@ -2,71 +2,43 @@
 
 ## [v1.0.31]
 
-- FIX: Heap-Stabilität im Langzeitbetrieb grundlegend verbessert — zahlreiche Hot-Path-Stellen allozieren jetzt keine kurzlebigen Arduino-`String`- und `JsonDocument`-Objekte mehr, sondern schreiben direkt per `snprintf` in statische Puffer. Betrifft unter anderem Topologie-Report, Status-/Peer-/Routing-Broadcasts, `Frame::monitorJSON()`, den HMAC-/Auth-Pfad, den WiFi-Scan-Broadcast, `processRxFrame`, `sendFrame` sowie die UDP-Peer-Callsign-Speicherung
-- NEU: Gemeinsamer Background-Worker-Task (`bgWorker`) — ein einziger persistenter FreeRTOS-Task mit FIFO-Queue führt alle längeren Hintergrund-Operationen (Topologie-Reporting, Routing-/Peer-Persistenz, File-Append-Schreibvorgänge) serialisiert aus, statt pro Aktion einen neuen Task mit eigenem Stack zu spawnen
-- NEU: Topologie-Reports an rMesh.de nutzen einen persistenten `WiFiClient` mit HTTP-Keep-Alive und bauen den POST-Body in einem statischen 4-KB-Puffer auf — vermeidet TCP-TIME_WAIT-Akkumulation und per-Call-`malloc`
-- FIX: `sendPeerList()` wurde bei jedem empfangenen Frame aufgerufen (JSON + malloc + WebSocket-Broadcast) und verursachte ein Memory Leak bis zum OOM-Crash nach ~3,5 h — RSSI-Updates werden jetzt per Dirty-Flag max. 1×/s geflusht
-- FIX: Tote WebSocket-Clients werden periodisch (1×/s) aufgeräumt statt nur bei Connect/Disconnect-Events
-- FIX: Heap-Watchdog — automatischer Reboot bei < 10 KB freiem Heap verhindert den Zombie-Zustand (LoRa läuft, WiFi/Web tot)
-- FIX: File-Serving-Mutex-Timeout von 10 s auf 2 s reduziert — schnellerer Recovery bei laufenden Trim-Operationen
-- NEU: SSD1306-OLED-Support für das ESP32 E22 Multimodul (Rentner Gang) — Statusanzeige analog zu den anderen Nodes (Call, WiFi/IP, SSID, letzte Nachricht) per HW-I²C auf GPIO21/22, automatische Erkennung am Bus
-- NEU: Multi-Screen-UI für das ESP32-E22-Display — rotierende Seiten `ID` / `NET` / `LoRa` / `MSG` / `SYS` mit invertierter Header-Zeile; neue Nachrichten springen automatisch auf die MSG-Seite und halten 10 s. SYS-Seite zeigt Heap free/min, Uptime, CPU-Frequenz und vollständigen Versions-String. LoRa-Seite zeigt Frequenz, SF, BW, CR, TX-Power, Peer-Count und letzten LoRa-Peer mit RSSI/SNR (unter `listMutex`)
-- NEU: Seiten-Rotation, sichtbare Seiten (Bitmaske) und optionaler Taster-GPIO für manuellen Seitenwechsel sind in der WebUI unter „OLED Display" einstellbar und werden in NVS persistiert (`oledPageInterval`, `oledPageMask`, `oledButtonPin`); Pin-Änderungen greifen zur Laufzeit ohne Reboot, der Taster arbeitet active-low mit 40 ms Debounce. Die MSG-Seite wird nur dann in die Rotation aufgenommen, wenn ein Channel-Filter gesetzt ist und eine Nachricht vorliegt
+- FIX: Heap- und Langzeitstabilität grundlegend verbessert — deutlich weniger kurzlebige Allokationen in den Hot-Paths (Topologie-Report, Status-/Peer-/Routing-Broadcasts, Auth, WiFi-Scan, Frame-Verarbeitung, UDP-Peer-Verwaltung). Behebt u. a. ein Memory-Leak in `sendPeerList()`, das nach ~3,5 h zum OOM-Crash führte
+- NEU: Heap-Watchdog — automatischer Reboot bei < 10 KB freiem Heap verhindert den Zombie-Zustand (LoRa läuft, WiFi/Web tot)
 
-- NEU: WebUI grundlegend überarbeitet — Mobile und Desktop zu einem gemeinsamen responsiven Interface zusammengeführt
-- NEU: Mehrsprachigkeit (Deutsch/Englisch), Uptime-Anzeige, einheitliches Stylesheet, SVG-Icons, einklappbare Settings-Bereiche und verbesserte Tabellen-Layouts in der WebUI
-- NEU: CPU-Frequenz einstellbar (80 / 160 / 240 MHz, Default 240 MHz) — persistiert in NVS, sofort wirksam, konfigurierbar über WebUI
-- NEU: Channel 1 (all) und 2 (direct) können per Doppelklick stummgeschaltet werden — gleicher Dialog wie bei Gruppen-Channels, mit Tooltip auf den Icon-Buttons
-- NEU: Neuer Debug-Block in den Setup-Einstellungen mit "Serial Debug" und "Heap Debug" als dedizierte Toggles (DE/EN übersetzt)
-- UI: Channel-Einstellungsdialog optisch überarbeitet — einheitliches Styling mit dem Rest der WebUI (CSS-Klassen statt Inline-Styles)
-- FIX: Eingabefeld wird nach dem Senden automatisch geleert
-- CLEANUP: Obsolete WebUI-Dateien entfernt
+- NEU: WebUI grundlegend überarbeitet — Mobile und Desktop zu einem gemeinsamen responsiven Interface zusammengeführt, mit Mehrsprachigkeit (DE/EN), Uptime-Anzeige, einheitlichem Stylesheet, SVG-Icons, einklappbaren Settings-Bereichen und verbesserten Tabellen-Layouts
+- NEU: CPU-Frequenz einstellbar (80 / 160 / 240 MHz, Default 240 MHz) — persistiert, sofort wirksam, konfigurierbar in der WebUI
+- NEU: Channel 1 (all) und 2 (direct) können per Doppelklick stummgeschaltet werden
+- UI: Setup-Tab neu sortiert — Allgemein → System → Online Update → Firmware Upload → Sicherheit → Akku → OLED Display → Debug
 
 - NEU: Support für Heltec HT-Tracker V1.2 (Wireless Tracker) mit TFT-Statusanzeige und Button-Steuerung
-- NEU: SSD1306-OLED-Support für HELTEC WiFi LoRa 32 V3, LILYGO T3 LoRa32 V1.6.1 und LILYGO T-Beam
-- NEU: Board-spezifische Display-HALs für einfachere Anpassungen je Gerät
-- NEU: Display-Einstellung wird persistent gespeichert; kurzer Tastendruck schaltet das Display, langer Druck wechselt den WiFi-Modus
-- NEU: Nachrichten-Gruppe für die Display-Anzeige ist konfigurierbar
-- NEU: Automatische Display-Erkennung beim T-Beam sowie Vext-Steuerung für HELTEC V3
-- FIX: Diverse Display-Korrekturen für T-Beam und HELTEC V3
+- NEU: SSD1306-OLED-Support für HELTEC WiFi LoRa 32 V3, LILYGO T3 LoRa32 V1.6.1, LILYGO T-Beam sowie das ESP32 E22 Multimodul (Rentner Gang)
+- NEU: Display-Einstellung wird persistent gespeichert; kurzer Tastendruck schaltet das Display, langer Druck wechselt den WiFi-Modus; Nachrichten-Gruppe für die Display-Anzeige ist konfigurierbar
+- NEU: Automatische Display-Erkennung beim T-Beam sowie Vext-Steuerung für HELTEC V3; diverse Display-Korrekturen für T-Beam und HELTEC V3
+- NEU: Multi-Screen-UI für das ESP32-E22-Display — rotierende Seiten `ID` / `NET` / `LoRa` / `MSG` / `SYS`, neue Nachrichten springen automatisch auf die MSG-Seite. Seitenwechsel-Intervall, sichtbare Seiten und optionaler Taster-GPIO sind in der WebUI unter „OLED Display" einstellbar
+- NEU: 5 s Boot-Splashscreen auf dem ESP32-E22-Display mit „rMesh"-Überschrift, Versions-String und Node-Callsign — unabhängig vom Display-Setting
+- NEU: Während eines OTA-/HTTP-Firmware-Updates zeigt das ESP32-E22-Display „Flashing…" großflächig an
 
-- NEU: Routing-Tabelle und Peer-Liste werden im Flash gespeichert und stehen nach Reboot direkt wieder zur Verfügung
-- NEU: Intelligente Speicher-Trigger reduzieren unnötige Flash-Schreibvorgänge; zusätzlicher periodischer Sicherungs-Timer für geänderte Daten
-- NEU: Kapazität für gespeicherte Routen erhöht
-
+- NEU: Routing-Tabelle und Peer-Liste werden im Flash gespeichert und stehen nach Reboot direkt wieder zur Verfügung; Kapazität für gespeicherte Routen erhöht
 - NEU: mDNS-Support — Nodes sind im lokalen Netzwerk per `<callsign>-rmesh.local` erreichbar
-- NEU: Erweiterte WiFi- und AP-Verwaltung
-- NEU: Verbesserte WiFi-Client/AP-Tabelle in der WebUI
-- NEU: WebSocket-Kommunikation überarbeitet
+- NEU: Erweiterte WiFi- und AP-Verwaltung inklusive verbesserter WiFi-Client/AP-Tabelle in der WebUI
 
 - NEU: Erweitertes serielles Kommando-Interface — neue Befehle: `msg`, `xgrp`, `xtrace`, `announce`, `dbg`, `uc`, `updf`, `peers`, `routes`, `acks`, `xtxbuf`; Hilfe und Befehlsliste in Kategorien gegliedert
-- FIX: UDP-Peer-Auflistung zeigt jetzt auch den Enabled-Status an
-- NEU: Redirect-Seiten `gp.html` und `mobile.html` leiten auf `index.html` um (Kompatibilität mit alten URLs)
-- NEU: Erweiterte Settings-Verwaltung
-- NEU: Einheitlicher `[YYYY-MM-DD HH:MM:SS]`-Zeitstempel auf jeder Serial-Log-Zeile (vor NTP-Sync epochenbasiert, konsistentes Format)
-- NEU: Optional aktivierbare Heap-Instrumentierung (`HEAP_MARK` / `HEAP_SCOPE` / `heapTick`) mit Ringbuffer, auslesbar über `/api/diagnostics.heapLog`; Default aus, keine Last im Normalbetrieb
-- NEU: Build-Skript `get_version.py` mit Build-Counter und Source-Hash-Tracking — der Zähler wird nur bei echten Source-Änderungen erhöht und als `+bN` an die Version angehängt, Per-Environment-Versionen werden in `build_versions.json` abgelegt
 
-- NEU: Automatisierte Hardware-in-the-Loop Test Suite (`pytest` + `pyserial`) für Build-, Flash-, Boot-, Messaging-, Peer- und Routing-Tests
-- NEU: Node-Konfiguration per YAML und automatischer Build-/Flash-/Reboot-Ablauf für Tests
-- NEU: Serial-Debug-Modus und zusätzliche Testbefehle für reproduzierbare Kommunikations- und Routing-Tests
-
-- FIX: TX-Buffer-Handling verbessert – behebt verlorene Frames, Duplikate und festhängende Einträge bei unerreichbaren Peers
+- FIX: TX-Buffer-Handling verbessert — behebt verlorene Frames, Duplikate und festhängende Einträge bei unerreichbaren Peers
 - FIX: Private WiFi/UDP-Nachrichten an fremde Callsigns werden nicht mehr lokal angezeigt oder gespeichert, sondern nur noch weitergeleitet
 - FIX: Absturz bei DNS-/HTTP-Fehlern im Update- und Reporting-Pfad behoben
 - FIX: Mehrere Stabilitätsprobleme behoben, u. a. bei Speicher-Allokationen, Timern, Reboot-Logik, Buffer-Grenzen, TRACE-Echo, File-Handling und Auth-Session-Verwaltung
-- FIX: Gerichtete Nachrichten gingen verloren, wenn der geroutete Next-Hop unavailable oder identisch mit dem Absender war – Relay fällt jetzt auf Flooding zurück statt die Nachricht stillschweigend zu verwerfen
-- FIX: Duplikat-Erkennung für MESSAGE_FRAMEs greift jetzt vor der teuren JSON-Debug-Serialisierung und addPeerList() – behebt extrem langsame WiFi-Reaktion bei Retransmit-Flut von Nachbar-Nodes
-- FIX: sendPeerList() wurde bei jedem empfangenen Frame aufgerufen (JSON+malloc+WebSocket-Broadcast) und verursachte Memory Leak bis zum OOM-Crash nach ~3,5 h – RSSI-Updates werden jetzt per Dirty-Flag max. 1×/s geflusht
+- FIX: Gerichtete Nachrichten gingen verloren, wenn der geroutete Next-Hop unavailable oder identisch mit dem Absender war — Relay fällt jetzt auf Flooding zurück statt die Nachricht stillschweigend zu verwerfen
+- FIX: Extrem langsame WiFi-Reaktion bei Retransmit-Fluten von Nachbar-Nodes — Duplikat-Erkennung für MESSAGE_FRAMEs greift jetzt vor der teuren Nachverarbeitung
+- FIX: Eingabefeld wird nach dem Senden automatisch geleert
+- FIX: UDP-Peer-Auflistung zeigt jetzt auch den Enabled-Status an
 - NEU: Peer-Cooldown (10 min) nach Retry-Exhaustion verhindert den Announce→Relay→Exhaust→Re-Announce-Zyklus bei einseitigen Funkverbindungen
 
 - NEU: Nach LoRa-Sendungen wird eine zusätzliche Guard-Zeit eingehalten, damit Empfänger sicher in den RX-Modus zurückkehren können
-- NEU: Duty-Cycle-Enforcement für das öffentliche 869,4–869,65-MHz-Band – überschrittene Sendungen werden verzögert statt verworfen
+- NEU: Duty-Cycle-Enforcement für das öffentliche 869,4–869,65-MHz-Band — überschrittene Sendungen werden verzögert statt verworfen
 - NEU: Kapazitätslimits für Peer-, Routing- und UDP-Peer-Listen verhindern unkontrolliertes Wachstum
 - NEU: Konfigurierbarer minimaler SNR-Schwellwert für die Peer-Liste
 - CHANGE: ACK- und Retry-Timing für dichtere Mesh-Topologien angepasst
-
-- CLEANUP: Doppelte Includes, Log-Level-Aufrufe und unnötige Mehrfachberechnungen entfernt
 
 ## [v1.0.30a]
 
