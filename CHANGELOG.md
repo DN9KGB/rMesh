@@ -12,6 +12,10 @@
 - NEU: SSD1306-OLED-Support für das ESP32 E22 Multimodul (Rentner Gang) — Statusanzeige analog zu den anderen Nodes (Call, WiFi/IP, SSID, letzte Nachricht) per HW-I²C auf GPIO21/22, automatische Erkennung am Bus
 - NEU: Multi-Screen-UI für das ESP32-E22-Display — rotierende Seiten `ID` / `NET` / `LoRa` / `MSG` / `SYS` mit invertierter Header-Zeile; neue Nachrichten springen automatisch auf die MSG-Seite und halten 10 s. SYS-Seite zeigt Heap free/min, Uptime, CPU-Frequenz und vollständigen Versions-String. LoRa-Seite zeigt Frequenz, SF, BW, CR, TX-Power, Peer-Count und letzten LoRa-Peer mit RSSI/SNR (unter `listMutex`)
 - NEU: Seiten-Rotation, sichtbare Seiten (Bitmaske) und optionaler Taster-GPIO für manuellen Seitenwechsel sind in der WebUI unter „OLED Display" einstellbar und werden in NVS persistiert (`oledPageInterval`, `oledPageMask`, `oledButtonPin`); Pin-Änderungen greifen zur Laufzeit ohne Reboot, der Taster arbeitet active-low mit 40 ms Debounce. Die MSG-Seite wird nur dann in die Rotation aufgenommen, wenn ein Channel-Filter gesetzt ist und eine Nachricht vorliegt
+- NEU: 5 s Boot-Splashscreen auf dem ESP32-E22-Display mit großer „rMesh"-Überschrift, vollständigem Versions-String und Node-Callsign; wird unabhängig vom Display-Setting angezeigt, danach wird das Display bei deaktivierter Einstellung automatisch wieder abgeschaltet
+- NEU: Während eines OTA-/HTTP-Firmware-Updates zeigt das ESP32-E22-Display „Flashing…" groß über den gesamten Bildschirm und ignoriert weitere Redraws bis zum Reboot
+- NEU: NET-Seite zeigt den vollständigen mDNS-Hostnamen (`<call>-rmesh.local`); Gateway-Zeile entfernt. LoRa-Seite zeigt zusätzlich die Anzahl der bekannten Routen (`Peers:N Routes:N`, ausgelesen unter `listMutex`)
+- UI: Setup-Tab neu sortiert — Allgemein → System → Online Update → Firmware Upload → Sicherheit → Akku → OLED Display → Debug
 
 - NEU: WebUI grundlegend überarbeitet — Mobile und Desktop zu einem gemeinsamen responsiven Interface zusammengeführt
 - NEU: Mehrsprachigkeit (Deutsch/Englisch), Uptime-Anzeige, einheitliches Stylesheet, SVG-Icons, einklappbare Settings-Bereiche und verbesserte Tabellen-Layouts in der WebUI
