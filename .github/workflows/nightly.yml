@@ -79,7 +79,7 @@ jobs:
                   continue
               opts = dict(section[1])
               platform = opts.get('platform', '')
-              if 'nrf' in platform.lower():
+              if 'nrf' in platform.lower() and 'T-Echo' not in name:
                   print(name.split(':',1)[1])
           ")
           echo "esp32_envs<<DELIM" >> "$GITHUB_OUTPUT"
