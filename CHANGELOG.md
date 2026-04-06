@@ -2,15 +2,18 @@
 
 ## [v1.0.31]
 
-- FIX: Heap- und Langzeitstabilität grundlegend verbessert — deutlich weniger kurzlebige Allokationen in den Hot-Paths (Topologie-Report, Status-/Peer-/Routing-Broadcasts, Auth, WiFi-Scan, Frame-Verarbeitung, UDP-Peer-Verwaltung). Behebt u. a. ein Memory-Leak in `sendPeerList()`, das nach ~3,5 h zum OOM-Crash führte
+- FIX: Heap- und Langzeitstabilität grundlegend verbessert — deutlich weniger kurzlebige Allokationen in den Hot-Paths (Topologie-Report, Status-/Peer-/Routing-Broadcasts, Auth, WiFi-Scan, Frame-Verarbeitung, UDP-Peer-Verwaltung). Behebt u. a. ein Memory-Leak in `sendPeerList()`, das nach ~3,5 h zum OOM-Crash führte, sowie eine Task-Stack-Fragmentierung, die nach längerer Laufzeit AsyncTCP zum Hängen brachte
 - NEU: Heap-Watchdog — automatischer Reboot bei < 10 KB freiem Heap verhindert den Zombie-Zustand (LoRa läuft, WiFi/Web tot)
+- FIX: LittleFS „No more free space"-Abstürze beim Schreiben von Logs/Nachrichten verhindert (Freiplatz wird jetzt vor dem Schreiben geprüft)
 
 - NEU: WebUI grundlegend überarbeitet — Mobile und Desktop zu einem gemeinsamen responsiven Interface zusammengeführt, mit Mehrsprachigkeit (DE/EN), Uptime-Anzeige, einheitlichem Stylesheet, SVG-Icons, einklappbaren Settings-Bereichen und verbesserten Tabellen-Layouts
 - NEU: CPU-Frequenz einstellbar (80 / 160 / 240 MHz, Default 240 MHz) — persistiert, sofort wirksam, konfigurierbar in der WebUI
 - NEU: Channel 1 (all) und 2 (direct) können per Doppelklick stummgeschaltet werden
+- NEU: Gruppennamen werden persistent auf dem Node gespeichert und zwischen allen verbundenen Clients synchronisiert (vorher nur pro Browser)
 - UI: Setup-Tab neu sortiert — Allgemein → System → Online Update → Firmware Upload → Sicherheit → Akku → OLED Display → Debug
 
 - NEU: Support für Heltec HT-Tracker V1.2 (Wireless Tracker) mit TFT-Statusanzeige und Button-Steuerung
+- NEU: Platform-Abstraktion für nRF52840-basierte Boards (`NRF52_PLATFORM`), erster experimenteller Bringup für LILYGO T-Echo (noch nicht produktionsreif)
 - NEU: SSD1306-OLED-Support für HELTEC WiFi LoRa 32 V3, LILYGO T3 LoRa32 V1.6.1, LILYGO T-Beam sowie das ESP32 E22 Multimodul (Rentner Gang)
 - NEU: Display-Einstellung wird persistent gespeichert; kurzer Tastendruck schaltet das Display, langer Druck wechselt den WiFi-Modus; Nachrichten-Gruppe für die Display-Anzeige ist konfigurierbar
 - NEU: Automatische Display-Erkennung beim T-Beam sowie Vext-Steuerung für HELTEC V3; diverse Display-Korrekturen für T-Beam und HELTEC V3
@@ -31,7 +34,8 @@
 - FIX: Gerichtete Nachrichten gingen verloren, wenn der geroutete Next-Hop unavailable oder identisch mit dem Absender war — Relay fällt jetzt auf Flooding zurück statt die Nachricht stillschweigend zu verwerfen
 - FIX: Extrem langsame WiFi-Reaktion bei Retransmit-Fluten von Nachbar-Nodes — Duplikat-Erkennung für MESSAGE_FRAMEs greift jetzt vor der teuren Nachverarbeitung
 - FIX: Eingabefeld wird nach dem Senden automatisch geleert
-- FIX: UDP-Peer-Auflistung zeigt jetzt auch den Enabled-Status an
+- FIX: UDP-Peer-Auflistung zeigt jetzt auch den Enabled-Status an; `udp add` Serial-Befehl setzt das Enabled-Flag nun korrekt
+- FIX: Automatische Update-Prüfung wird bei Nightly-Builds unterdrückt (verhinderte unnötige Downgrade-Versuche)
 - NEU: Peer-Cooldown (10 min) nach Retry-Exhaustion verhindert den Announce→Relay→Exhaust→Re-Announce-Zyklus bei einseitigen Funkverbindungen
 
 - NEU: Nach LoRa-Sendungen wird eine zusätzliche Guard-Zeit eingehalten, damit Empfänger sicher in den RX-Modus zurückkehren können
