@@ -9,6 +9,7 @@
 - FIX: Tote WebSocket-Clients werden periodisch (1×/s) aufgeräumt statt nur bei Connect/Disconnect-Events
 - FIX: Heap-Watchdog — automatischer Reboot bei < 10 KB freiem Heap verhindert den Zombie-Zustand (LoRa läuft, WiFi/Web tot)
 - FIX: File-Serving-Mutex-Timeout von 10 s auf 2 s reduziert — schnellerer Recovery bei laufenden Trim-Operationen
+- NEU: SSD1306-OLED-Support für das ESP32 E22 Multimodul (Rentner Gang) — Statusanzeige analog zu den anderen Nodes (Call, WiFi/IP, SSID, letzte Nachricht) per HW-I²C auf GPIO21/22, automatische Erkennung am Bus
 
 - NEU: WebUI grundlegend überarbeitet — Mobile und Desktop zu einem gemeinsamen responsiven Interface zusammengeführt
 - NEU: Mehrsprachigkeit (Deutsch/Englisch), Uptime-Anzeige, einheitliches Stylesheet, SVG-Icons, einklappbare Settings-Bereiche und verbesserte Tabellen-Layouts in der WebUI
