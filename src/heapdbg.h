@@ -60,6 +60,7 @@ struct HeapScope {
 #else
 // nRF52 / other: no-op
 inline void heapMark(const char*) {}
+inline void heapRecord(const char*, uint32_t, uint32_t) {}
 inline void heapTick() {}
 inline size_t heapDbgCount() { return 0; }
 #define HEAP_MARK(tag)  ((void)0)
