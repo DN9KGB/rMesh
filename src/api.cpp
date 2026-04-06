@@ -11,13 +11,16 @@
 #include "helperFunctions.h"
 #include "hal.h"
 #include "logging.h"
+#include "heapdbg.h"
 
 #include <WiFi.h>
+#include <cstdarg>
 #include <time.h>
 #include <esp_sntp.h>
 #include <Preferences.h>
 
 #include "wifiFunctions.h"
+#include "webFunctions.h"
 #include "serial.h"
 
 // ── NTP sync tracking ──────────────────────────────────────────────────────
@@ -44,31 +47,60 @@ static ApiEvent evtBuffer[API_EVT_BUFFER_SIZE];
 static uint8_t evtHead = 0;
 static uint8_t evtCount = 0;
 
-// ── JSON escape helper (String-based) ───────────────────────────────────────
-static void appendJsonStr(String &out, const char *str) {
-    out += '"';
-    for (const char *p = str; *p; p++) {
-        char c = *p;
-        if (c == '"')       out += "\\\"";
-        else if (c == '\\') out += "\\\\";
-        else if (c == '\n') out += "\\n";
-        else if (c == '\r') out += "\\r";
-        else if (c == '\t') out += "\\t";
-        else if ((uint8_t)c < 0x20) {
-            char buf[8];
-            snprintf(buf, sizeof(buf), "\\u%04x", (uint8_t)c);
-            out += buf;
-        }
-        else out += c;
-    }
-    out += '"';
+// ── Static JSON build buffer ───────────────────────────────────────────────
+// AsyncWebServer dispatches one request handler at a time on the async TCP
+// task, so a single shared buffer is safe.  Writing directly into a fixed
+// buffer via snprintf eliminates the dozens of intermediate String heap
+// allocations that String += causes, preventing heap fragmentation on
+// long-running nodes.
+static char jBuf[10240];
+static int  jPos;
+
+static void jReset() { jPos = 0; jBuf[0] = '\0'; }
+
+__attribute__((format(printf, 1, 2)))
+static void jPrintf(const char *fmt, ...) {
+    if (jPos >= (int)sizeof(jBuf) - 1) return;
+    va_list ap;
+    va_start(ap, fmt);
+    int n = vsnprintf(jBuf + jPos, sizeof(jBuf) - jPos, fmt, ap);
+    va_end(ap);
+    if (n > 0 && jPos + n < (int)sizeof(jBuf)) jPos += n;
 }
 
-// ── Helper: send pre-built JSON String with correct Content-Length ──────────
-static void sendJsonResponse(AsyncWebServerRequest *request, const String &json) {
-    AsyncWebServerResponse *response = request->beginResponse(200, "application/json", json);
-    response->addHeader("Access-Control-Allow-Origin", "*");
-    request->send(response);
+// Append a JSON-escaped, double-quoted string directly into jBuf.
+static void jStr(const char *s) {
+    const int cap = (int)sizeof(jBuf);
+    if (jPos + 2 >= cap) return;
+    jBuf[jPos++] = '"';
+    for (const char *p = s; *p; p++) {
+        if (jPos + 7 >= cap) break;   // room for \uXXXX + closing "
+        switch (*p) {
+            case '"':  jBuf[jPos++] = '\\'; jBuf[jPos++] = '"';  break;
+            case '\\': jBuf[jPos++] = '\\'; jBuf[jPos++] = '\\'; break;
+            case '\n': jBuf[jPos++] = '\\'; jBuf[jPos++] = 'n';  break;
+            case '\r': jBuf[jPos++] = '\\'; jBuf[jPos++] = 'r';  break;
+            case '\t': jBuf[jPos++] = '\\'; jBuf[jPos++] = 't';  break;
+            default:
+                if ((uint8_t)*p < 0x20)
+                    jPos += snprintf(jBuf + jPos, cap - jPos, "\\u%04x", (uint8_t)*p);
+                else
+                    jBuf[jPos++] = *p;
+        }
+    }
+    jBuf[jPos++] = '"';
+    jBuf[jPos] = '\0';
+}
+
+// Send jBuf using AsyncProgmemResponse which reads directly from the source
+// pointer without any heap allocation (no String copy, no chunked buffer).
+// On ESP32, memcpy_P == memcpy, so reading from static RAM works fine.
+
+static void jSend(AsyncWebServerRequest *request) {
+    AsyncWebServerResponse *resp = request->beginResponse(
+        200, "application/json", (const uint8_t *)jBuf, (size_t)jPos);
+    resp->addHeader("Access-Control-Allow-Origin", "*");
+    request->send(resp);
 }
 
 // ── Ring buffer record functions ────────────────────────────────────────────
@@ -235,74 +267,39 @@ static const char* apiGetResetReason() {
 
 // ── Heap guard ──────────────────────────────────────────────────────────────
 static bool heapGuard(AsyncWebServerRequest *request) {
-    if (ESP.getFreeHeap() < 15000) {
+    if (ESP.getFreeHeap() < 20000 || ESP.getMaxAllocHeap() < 10000) {
         request->send(503, "application/json", "{\"error\":\"heap too low\"}");
         return false;
     }
     return true;
 }
 
-// ── Endpoint handlers ───────────────────────────────────────────────────────
+// ── JSON section builders (write into jBuf without jReset/jSend) ────────────
 
-static void handleStatus(AsyncWebServerRequest *request) {
-    if (!checkApiAuth(request)) return;
-    if (!heapGuard(request)) return;
-
-    String json;
-    json.reserve(512);
-
-    char buf[256];
-    snprintf(buf, sizeof(buf), "{\"call\":\"%s\",\"version\":\"%s\",\"board\":\"%s\"",
-             settings.mycall, VERSION, getBoardName());
-    json += buf;
-    snprintf(buf, sizeof(buf), ",\"uptime\":%lu,\"heap\":%u",
-             millis() / 1000, ESP.getFreeHeap());
-    json += buf;
-
+static void buildStatus() {
+    jPrintf("\"call\":"); jStr(settings.mycall);
+    jPrintf(",\"version\":"); jStr(VERSION);
+    jPrintf(",\"board\":"); jStr(getBoardName());
+    jPrintf(",\"uptime\":%lu,\"heap\":%u", millis() / 1000, ESP.getFreeHeap());
 #ifndef NRF52_PLATFORM
-    snprintf(buf, sizeof(buf), ",\"resetReason\":\"%s\"", apiGetResetReason());
-    json += buf;
+    jPrintf(",\"resetReason\":\"%s\"", apiGetResetReason());
 #endif
-
-    // WiFi info
-    snprintf(buf, sizeof(buf), ",\"wifi\":{\"connected\":%s", WiFi.isConnected() ? "true" : "false");
-    json += buf;
+    jPrintf(",\"wifi\":{\"connected\":%s", WiFi.isConnected() ? "true" : "false");
     if (WiFi.isConnected()) {
-        snprintf(buf, sizeof(buf), ",\"rssi\":%d,\"ip\":\"%s\"", WiFi.RSSI(), WiFi.localIP().toString().c_str());
-        json += buf;
+        jPrintf(",\"rssi\":%d,\"ip\":\"%s\"", WiFi.RSSI(), WiFi.localIP().toString().c_str());
     }
-    json += "}";
-
-    // LoRa info
-    snprintf(buf, sizeof(buf), ",\"lora\":{\"txQueue\":%u,\"txTotal\":%lu,\"rxTotal\":%lu}",
-             (unsigned)txBuffer.size(), (unsigned long)apiTxTotal, (unsigned long)apiRxTotal);
-    json += buf;
-
-    // Peers and routes count
-    snprintf(buf, sizeof(buf), ",\"peers\":%u,\"routes\":%u", (unsigned)peerList.size(), (unsigned)routingList.size());
-    json += buf;
-
-    // Current time
-    snprintf(buf, sizeof(buf), ",\"time\":%ld}", (long)time(nullptr));
-    json += buf;
-
-    sendJsonResponse(request, json);
+    jPrintf("}");
+    jPrintf(",\"lora\":{\"txQueue\":%u,\"txTotal\":%lu,\"rxTotal\":%lu}",
+            (unsigned)txBuffer.size(), (unsigned long)apiTxTotal, (unsigned long)apiRxTotal);
+    jPrintf(",\"peers\":%u,\"routes\":%u", (unsigned)peerList.size(), (unsigned)routingList.size());
+    jPrintf(",\"time\":%ld", (long)time(nullptr));
 }
 
-static void handlePeers(AsyncWebServerRequest *request) {
-    if (!checkApiAuth(request)) return;
-    if (!heapGuard(request)) return;
-
-    String json;
-    json.reserve(2048);
-    json = "{\"peers\":[";
-
-    char buf[256];
+static void buildPeers() {
+    jPrintf("\"peers\":[");
     for (size_t i = 0; i < peerList.size(); i++) {
-        if (i > 0) json += ",";
+        if (i > 0) jPrintf(",");
         const Peer &p = peerList[i];
-
-        // Check if same callsign exists on a different port (dual-path node)
         bool dualPath = false;
         for (size_t j = 0; j < peerList.size(); j++) {
             if (i != j && strcmp(peerList[i].nodeCall, peerList[j].nodeCall) == 0
@@ -311,94 +308,148 @@ static void handlePeers(AsyncWebServerRequest *request) {
                 break;
             }
         }
-
-        json += "{\"call\":";
-        appendJsonStr(json, p.nodeCall);
-        snprintf(buf, sizeof(buf),
-            ",\"port\":%u,\"timestamp\":%ld,\"rssi\":%.1f,\"snr\":%.1f,"
-            "\"frqError\":%.1f,\"available\":%s",
-            p.port, (long)p.timestamp, p.rssi, p.snr, p.frqError,
-            p.available ? "true" : "false");
-        json += buf;
+        jPrintf("{\"call\":"); jStr(p.nodeCall);
+        jPrintf(",\"port\":%u,\"timestamp\":%ld,\"rssi\":%.1f,\"snr\":%.1f,"
+                "\"frqError\":%.1f,\"available\":%s",
+                p.port, (long)p.timestamp, p.rssi, p.snr, p.frqError,
+                p.available ? "true" : "false");
         if (dualPath) {
-            snprintf(buf, sizeof(buf), ",\"preferred\":%s", p.available ? "true" : "false");
-            json += buf;
+            jPrintf(",\"preferred\":%s", p.available ? "true" : "false");
         }
-        json += "}";
-
+        jPrintf("}");
         if (ESP.getFreeHeap() < 20000) break;
     }
-
-    json += "]}";
-    sendJsonResponse(request, json);
+    jPrintf("]");
 }
 
-// Chunked streaming state for /api/routes (avoids building full JSON in heap)
-struct RouteChunkState {
-    size_t routeIdx;
-    bool headerSent;
-    bool footerSent;
-};
+static void buildRoutes() {
+    jPrintf("\"routes\":[");
+    for (size_t i = 0; i < routingList.size(); i++) {
+        if (i > 0) jPrintf(",");
+        const Route &rt = routingList[i];
+        jPrintf("{\"srcCall\":"); jStr(rt.srcCall);
+        jPrintf(",\"viaCall\":"); jStr(rt.viaCall);
+        jPrintf(",\"timestamp\":%ld,\"hopCount\":%u}", (long)rt.timestamp, rt.hopCount);
+        if (ESP.getFreeHeap() < 20000) break;
+    }
+    jPrintf("]");
+}
+
+static void buildMessages(uint32_t since, int limit, const char* groupFilter) {
+    jPrintf("\"messages\":[");
+    int count = 0;
+    for (int i = msgCount - 1; i >= 0 && count < limit; i--) {
+        uint8_t idx = (msgHead - msgCount + i + API_MSG_BUFFER_SIZE) % API_MSG_BUFFER_SIZE;
+        const ApiMessage &m = msgBuffer[idx];
+        if (m.time <= since) continue;
+        if (groupFilter && strcmp(m.group, groupFilter) != 0) continue;
+        if (count > 0) jPrintf(",");
+        jPrintf("{\"id\":%lu,\"time\":%lu,\"src\":", (unsigned long)m.id, (unsigned long)m.time);
+        jStr(m.src);
+        jPrintf(",\"group\":"); jStr(m.group);
+        jPrintf(",\"text\":"); jStr(m.text);
+        if (m.via[0] != '\0') {
+            jPrintf(",\"via\":"); jStr(m.via);
+        } else {
+            jPrintf(",\"via\":null");
+        }
+        jPrintf(",\"hops\":%u,\"rssi\":%d,\"snr\":%d,\"dir\":\"%s\",\"ack\":%s}",
+                m.hops, m.rssi, (int)m.snr,
+                m.dir == 1 ? "tx" : "rx",
+                m.acked ? "true" : "false");
+        count++;
+        if (ESP.getFreeHeap() < 20000) break;
+    }
+    jPrintf("]");
+}
+
+static void buildEvents(uint32_t since, int limit, const char* typeFilter) {
+    jPrintf("\"events\":[");
+    int count = 0;
+    for (int i = evtCount - 1; i >= 0 && count < limit; i--) {
+        uint8_t idx = (evtHead - evtCount + i + API_EVT_BUFFER_SIZE) % API_EVT_BUFFER_SIZE;
+        const ApiEvent &e = evtBuffer[idx];
+        if (e.time <= since) continue;
+        if (typeFilter && strcmp(e.event, typeFilter) != 0) continue;
+        if (count > 0) jPrintf(",");
+        jPrintf("{\"time\":%lu,\"event\":\"%s\"", (unsigned long)e.time, e.event);
+        if (strcmp(e.event, "rx") == 0 || strcmp(e.event, "tx") == 0) {
+            jPrintf(",\"frameType\":%u", e.frameType);
+            if (e.nodeCall[0]) { jPrintf(",\"nodeCall\":"); jStr(e.nodeCall); }
+            if (e.viaCall[0])  { jPrintf(",\"viaCall\":");  jStr(e.viaCall); }
+            if (e.srcCall[0])  { jPrintf(",\"srcCall\":");  jStr(e.srcCall); }
+            jPrintf(",\"id\":%lu", (unsigned long)e.id);
+            if (strcmp(e.event, "rx") == 0) {
+                jPrintf(",\"rssi\":%d,\"snr\":%d", e.rssi, (int)e.snr);
+            }
+            jPrintf(",\"port\":%u", e.port);
+        } else if (strcmp(e.event, "ack") == 0) {
+            if (e.srcCall[0])  { jPrintf(",\"srcCall\":"); jStr(e.srcCall); }
+            if (e.nodeCall[0]) { jPrintf(",\"nodeCall\":"); jStr(e.nodeCall); }
+            jPrintf(",\"id\":%lu", (unsigned long)e.id);
+        } else if (strcmp(e.event, "routing") == 0) {
+            jPrintf(",\"action\":\"%s\"", e.action);
+            if (e.dest[0])    { jPrintf(",\"dest\":"); jStr(e.dest); }
+            if (e.viaCall[0]) { jPrintf(",\"via\":");  jStr(e.viaCall); }
+            jPrintf(",\"hops\":%u", e.hops);
+        } else if (strcmp(e.event, "error") == 0) {
+            jPrintf(",\"source\":"); jStr(e.source);
+            jPrintf(",\"text\":"); jStr(e.text);
+        }
+        jPrintf("}");
+        count++;
+        if (ESP.getFreeHeap() < 20000) break;
+    }
+    jPrintf("]");
+}
+
+static void buildGroups() {
+    jPrintf("\"groups\":[");
+    int count = 0;
+    for (int i = 1; i <= MAX_CHANNELS; i++) {
+        if (groupNames[i][0] == '\0') continue;
+        if (count > 0) jPrintf(",");
+        jPrintf("{\"name\":"); jStr(groupNames[i]);
+        jPrintf(",\"id\":%d,\"mode\":\"rw\"}", i);
+        count++;
+    }
+    jPrintf("]");
+}
+
+// ── Endpoint handlers (thin wrappers around builders) ──────────────────────
+
+static void handleStatus(AsyncWebServerRequest *request) {
+    if (!checkApiAuth(request)) return;
+    if (!heapGuard(request)) return;
+    jReset();
+    jPrintf("{"); buildStatus(); jPrintf("}");
+    jSend(request);
+}
+
+static void handlePeers(AsyncWebServerRequest *request) {
+    if (!checkApiAuth(request)) return;
+    if (!heapGuard(request)) return;
+    jReset();
+    jPrintf("{"); buildPeers(); jPrintf("}");
+    jSend(request);
+}
 
 static void handleRoutes(AsyncWebServerRequest *request) {
     if (!checkApiAuth(request)) return;
     if (!heapGuard(request)) return;
-
-    RouteChunkState *state = new RouteChunkState{0, false, false};
-    if (!state) {
-        request->send(503, "application/json", "{\"error\":\"heap too low\"}");
-        return;
-    }
-
-    AsyncWebServerResponse *response = request->beginChunkedResponse(
-        "application/json",
-        [state](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
-            if (!state->headerSent) {
-                size_t w = snprintf((char*)buffer, maxLen, "{\"routes\":[");
-                state->headerSent = true;
-                return w;
-            }
-
-            if (state->routeIdx < routingList.size()) {
-                const Route &rt = routingList[state->routeIdx];
-                char entry[160];
-                // Manually escape callsigns (they're alphanumeric, no escaping needed)
-                int len = snprintf(entry, sizeof(entry),
-                    "%s{\"srcCall\":\"%s\",\"viaCall\":\"%s\",\"timestamp\":%ld,\"hopCount\":%u}",
-                    state->routeIdx > 0 ? "," : "",
-                    rt.srcCall, rt.viaCall, (long)rt.timestamp, rt.hopCount);
-                if (len > 0 && (size_t)len < maxLen) {
-                    memcpy(buffer, entry, len);
-                    state->routeIdx++;
-                    return len;
-                }
-                return 0;  // buffer too small, try again
-            }
-
-            if (!state->footerSent) {
-                size_t w = snprintf((char*)buffer, maxLen, "]}");
-                state->footerSent = true;
-                return w;
-            }
-
-            delete state;
-            return 0;  // done
-        }
-    );
-    response->addHeader("Access-Control-Allow-Origin", "*");
-    request->send(response);
+    jReset();
+    jPrintf("{"); buildRoutes(); jPrintf("}");
+    jSend(request);
 }
 
 static void handleGetMessages(AsyncWebServerRequest *request) {
     if (!checkApiAuth(request)) return;
     if (!heapGuard(request)) return;
 
-    // Parse query parameters
     const char* groupFilter = nullptr;
     uint32_t since = 0;
     int limit = 20;
     uint32_t ack = 0;
-
     if (request->hasParam("group")) groupFilter = request->getParam("group")->value().c_str();
     if (request->hasParam("since")) since = request->getParam("since")->value().toInt();
     if (request->hasParam("limit")) {
@@ -406,55 +457,12 @@ static void handleGetMessages(AsyncWebServerRequest *request) {
         if (limit < 1) limit = 1;
         if (limit > API_MSG_BUFFER_SIZE) limit = API_MSG_BUFFER_SIZE;
     }
-    if (request->hasParam("ack")) {
-        ack = request->getParam("ack")->value().toInt();
-    }
+    if (request->hasParam("ack")) ack = request->getParam("ack")->value().toInt();
+    if (ack > 0) purgeMessages(ack);
 
-    // FIRST: purge acknowledged messages to free heap before JSON serialization
-    if (ack > 0) {
-        purgeMessages(ack);
-    }
-
-    String json;
-    json.reserve(4096);
-    json = "{\"messages\":[";
-
-    char buf[128];
-    int count = 0;
-    // Iterate from newest to oldest
-    for (int i = msgCount - 1; i >= 0 && count < limit; i--) {
-        uint8_t idx = (msgHead - msgCount + i + API_MSG_BUFFER_SIZE) % API_MSG_BUFFER_SIZE;
-        const ApiMessage &m = msgBuffer[idx];
-
-        if (m.time <= since) continue;
-        if (groupFilter && strcmp(m.group, groupFilter) != 0) continue;
-
-        if (count > 0) json += ",";
-        snprintf(buf, sizeof(buf), "{\"id\":%lu,\"time\":%lu,\"src\":", (unsigned long)m.id, (unsigned long)m.time);
-        json += buf;
-        appendJsonStr(json, m.src);
-        json += ",\"group\":";
-        appendJsonStr(json, m.group);
-        json += ",\"text\":";
-        appendJsonStr(json, m.text);
-        if (m.via[0] != '\0') {
-            json += ",\"via\":";
-            appendJsonStr(json, m.via);
-        } else {
-            json += ",\"via\":null";
-        }
-        snprintf(buf, sizeof(buf), ",\"hops\":%u,\"rssi\":%d,\"snr\":%d,\"dir\":\"%s\",\"ack\":%s}",
-                 m.hops, m.rssi, (int)m.snr,
-                 m.dir == 1 ? "tx" : "rx",
-                 m.acked ? "true" : "false");
-        json += buf;
-        count++;
-
-        if (ESP.getFreeHeap() < 20000) break;
-    }
-
-    json += "]}";
-    sendJsonResponse(request, json);
+    jReset();
+    jPrintf("{"); buildMessages(since, limit, groupFilter); jPrintf("}");
+    jSend(request);
 }
 
 static void handlePostMessage(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
@@ -499,37 +507,19 @@ static void handlePostMessage(AsyncWebServerRequest *request, uint8_t *data, siz
 static void handleGroups(AsyncWebServerRequest *request) {
     if (!checkApiAuth(request)) return;
     if (!heapGuard(request)) return;
-
-    String json;
-    json.reserve(512);
-    json = "{\"groups\":[";
-
-    char buf[32];
-    int count = 0;
-    for (int i = 1; i <= MAX_CHANNELS; i++) {
-        if (groupNames[i][0] == '\0') continue;
-        if (count > 0) json += ",";
-        json += "{\"name\":";
-        appendJsonStr(json, groupNames[i]);
-        snprintf(buf, sizeof(buf), ",\"id\":%d,\"mode\":\"rw\"}", i);
-        json += buf;
-        count++;
-    }
-
-    json += "]}";
-    sendJsonResponse(request, json);
+    jReset();
+    jPrintf("{"); buildGroups(); jPrintf("}");
+    jSend(request);
 }
 
 static void handleEvents(AsyncWebServerRequest *request) {
     if (!checkApiAuth(request)) return;
     if (!heapGuard(request)) return;
 
-    // Parse query parameters
     const char* typeFilter = nullptr;
     uint32_t since = 0;
     int limit = 50;
     uint32_t ack = 0;
-
     if (request->hasParam("type")) typeFilter = request->getParam("type")->value().c_str();
     if (request->hasParam("since")) since = request->getParam("since")->value().toInt();
     if (request->hasParam("limit")) {
@@ -537,74 +527,12 @@ static void handleEvents(AsyncWebServerRequest *request) {
         if (limit < 1) limit = 1;
         if (limit > API_EVT_BUFFER_SIZE) limit = API_EVT_BUFFER_SIZE;
     }
-    if (request->hasParam("ack")) {
-        ack = request->getParam("ack")->value().toInt();
-    }
+    if (request->hasParam("ack")) ack = request->getParam("ack")->value().toInt();
+    if (ack > 0) purgeEvents(ack);
 
-    // FIRST: purge acknowledged events to free heap before JSON serialization
-    if (ack > 0) {
-        purgeEvents(ack);
-    }
-
-    String json;
-    json.reserve(4096);
-    json = "{\"events\":[";
-
-    char buf[128];
-    int count = 0;
-    // Iterate from newest to oldest
-    for (int i = evtCount - 1; i >= 0 && count < limit; i--) {
-        uint8_t idx = (evtHead - evtCount + i + API_EVT_BUFFER_SIZE) % API_EVT_BUFFER_SIZE;
-        const ApiEvent &e = evtBuffer[idx];
-
-        if (e.time <= since) continue;
-        if (typeFilter && strcmp(e.event, typeFilter) != 0) continue;
-
-        if (count > 0) json += ",";
-        snprintf(buf, sizeof(buf), "{\"time\":%lu,\"event\":\"%s\"", (unsigned long)e.time, e.event);
-        json += buf;
-
-        if (strcmp(e.event, "rx") == 0 || strcmp(e.event, "tx") == 0) {
-            snprintf(buf, sizeof(buf), ",\"frameType\":%u", e.frameType);
-            json += buf;
-            if (e.nodeCall[0]) { json += ",\"nodeCall\":"; appendJsonStr(json, e.nodeCall); }
-            if (e.viaCall[0])  { json += ",\"viaCall\":";  appendJsonStr(json, e.viaCall); }
-            if (e.srcCall[0])  { json += ",\"srcCall\":";  appendJsonStr(json, e.srcCall); }
-            snprintf(buf, sizeof(buf), ",\"id\":%lu", (unsigned long)e.id);
-            json += buf;
-            if (strcmp(e.event, "rx") == 0) {
-                snprintf(buf, sizeof(buf), ",\"rssi\":%d,\"snr\":%d", e.rssi, (int)e.snr);
-                json += buf;
-            }
-            snprintf(buf, sizeof(buf), ",\"port\":%u", e.port);
-            json += buf;
-        } else if (strcmp(e.event, "ack") == 0) {
-            if (e.srcCall[0])  { json += ",\"srcCall\":"; appendJsonStr(json, e.srcCall); }
-            if (e.nodeCall[0]) { json += ",\"nodeCall\":"; appendJsonStr(json, e.nodeCall); }
-            snprintf(buf, sizeof(buf), ",\"id\":%lu", (unsigned long)e.id);
-            json += buf;
-        } else if (strcmp(e.event, "routing") == 0) {
-            snprintf(buf, sizeof(buf), ",\"action\":\"%s\"", e.action);
-            json += buf;
-            if (e.dest[0])    { json += ",\"dest\":"; appendJsonStr(json, e.dest); }
-            if (e.viaCall[0]) { json += ",\"via\":";  appendJsonStr(json, e.viaCall); }
-            snprintf(buf, sizeof(buf), ",\"hops\":%u", e.hops);
-            json += buf;
-        } else if (strcmp(e.event, "error") == 0) {
-            json += ",\"source\":";
-            appendJsonStr(json, e.source);
-            json += ",\"text\":";
-            appendJsonStr(json, e.text);
-        }
-
-        json += "}";
-        count++;
-
-        if (ESP.getFreeHeap() < 20000) break;
-    }
-
-    json += "]}";
-    sendJsonResponse(request, json);
+    jReset();
+    jPrintf("{"); buildEvents(since, limit, typeFilter); jPrintf("}");
+    jSend(request);
 }
 
 // ── Settings endpoint ───────────────────────────────────────────────────────
@@ -617,27 +545,18 @@ static void handleSettings(AsyncWebServerRequest *request) {
         return;
     }
 
-    String json;
-    json.reserve(4096);
-    json = "{\"settings\":{";
-
-    char buf[256];
+    jReset();
+    jPrintf("{\"settings\":{");
 
     // Basic info
-    json += "\"mycall\":";
-    appendJsonStr(json, settings.mycall);
-    json += ",\"position\":";
-    appendJsonStr(json, settings.position);
-    json += ",\"ntp\":";
-    appendJsonStr(json, settings.ntpServer);
+    jPrintf("\"mycall\":"); jStr(settings.mycall);
+    jPrintf(",\"position\":"); jStr(settings.position);
+    jPrintf(",\"ntp\":"); jStr(settings.ntpServer);
 
     // Device info
-    json += ",\"version\":";
-    appendJsonStr(json, VERSION);
-    json += ",\"name\":";
-    appendJsonStr(json, NAME);
-    json += ",\"hardware\":";
-    appendJsonStr(json, PIO_ENV_NAME);
+    jPrintf(",\"version\":"); jStr(VERSION);
+    jPrintf(",\"name\":"); jStr(NAME);
+    jPrintf(",\"hardware\":"); jStr(PIO_ENV_NAME);
 
     // Chip ID
     {
@@ -646,241 +565,228 @@ static void handleSettings(AsyncWebServerRequest *request) {
         snprintf(chipId, sizeof(chipId), "%02X%02X%02X%02X%02X%02X",
             (uint8_t)(mac >> 40), (uint8_t)(mac >> 32), (uint8_t)(mac >> 24),
             (uint8_t)(mac >> 16), (uint8_t)(mac >> 8), (uint8_t)(mac));
-        json += ",\"chipId\":";
-        appendJsonStr(json, chipId);
+        jPrintf(",\"chipId\":"); jStr(chipId);
     }
 
-    snprintf(buf, sizeof(buf), ",\"webPasswordSet\":%s", !webPasswordHash.isEmpty() ? "true" : "false");
-    json += buf;
+    jPrintf(",\"webPasswordSet\":%s", !webPasswordHash.isEmpty() ? "true" : "false");
 
     // WiFi settings
-    snprintf(buf, sizeof(buf), ",\"dhcpActive\":%s,\"apMode\":%s",
-             settings.dhcpActive ? "true" : "false",
-             settings.apMode ? "true" : "false");
-    json += buf;
+    jPrintf(",\"dhcpActive\":%s,\"apMode\":%s",
+            settings.dhcpActive ? "true" : "false",
+            settings.apMode ? "true" : "false");
 
-    json += ",\"wifiSSID\":";
-    appendJsonStr(json, settings.wifiSSID);
-    json += ",\"wifiPassword\":";
-    appendJsonStr(json, (settings.wifiPassword[0] != '\0') ? "***" : "");
+    jPrintf(",\"wifiSSID\":"); jStr(settings.wifiSSID);
+    jPrintf(",\"wifiPassword\":"); jStr((settings.wifiPassword[0] != '\0') ? "***" : "");
 
-    json += ",\"apName\":";
-    appendJsonStr(json, apName.c_str());
-    json += ",\"apPassword\":";
-    appendJsonStr(json, apPassword.c_str());
+    jPrintf(",\"apName\":"); jStr(apName.c_str());
+    jPrintf(",\"apPassword\":"); jStr(apPassword.c_str());
 
     // WiFi networks array
-    json += ",\"wifiNetworks\":[";
+    jPrintf(",\"wifiNetworks\":[");
     for (size_t i = 0; i < wifiNetworks.size(); i++) {
-        if (i > 0) json += ",";
-        json += "{\"ssid\":";
-        appendJsonStr(json, wifiNetworks[i].ssid);
-        json += ",\"password\":";
-        appendJsonStr(json, (wifiNetworks[i].password[0] != '\0') ? "***" : "");
-        snprintf(buf, sizeof(buf), ",\"favorite\":%s}", wifiNetworks[i].favorite ? "true" : "false");
-        json += buf;
+        if (i > 0) jPrintf(",");
+        jPrintf("{\"ssid\":"); jStr(wifiNetworks[i].ssid);
+        jPrintf(",\"password\":"); jStr((wifiNetworks[i].password[0] != '\0') ? "***" : "");
+        jPrintf(",\"favorite\":%s}", wifiNetworks[i].favorite ? "true" : "false");
     }
-    json += "]";
+    jPrintf("]");
 
     // Static IP addresses
-    snprintf(buf, sizeof(buf), ",\"wifiIP\":[%u,%u,%u,%u]",
-             settings.wifiIP[0], settings.wifiIP[1], settings.wifiIP[2], settings.wifiIP[3]);
-    json += buf;
-    snprintf(buf, sizeof(buf), ",\"wifiNetMask\":[%u,%u,%u,%u]",
-             settings.wifiNetMask[0], settings.wifiNetMask[1], settings.wifiNetMask[2], settings.wifiNetMask[3]);
-    json += buf;
-    snprintf(buf, sizeof(buf), ",\"wifiGateway\":[%u,%u,%u,%u]",
-             settings.wifiGateway[0], settings.wifiGateway[1], settings.wifiGateway[2], settings.wifiGateway[3]);
-    json += buf;
-    snprintf(buf, sizeof(buf), ",\"wifiDNS\":[%u,%u,%u,%u]",
-             settings.wifiDNS[0], settings.wifiDNS[1], settings.wifiDNS[2], settings.wifiDNS[3]);
-    json += buf;
-    snprintf(buf, sizeof(buf), ",\"wifiBrodcast\":[%u,%u,%u,%u]",
-             settings.wifiBrodcast[0], settings.wifiBrodcast[1], settings.wifiBrodcast[2], settings.wifiBrodcast[3]);
-    json += buf;
+    jPrintf(",\"wifiIP\":[%u,%u,%u,%u]",
+            settings.wifiIP[0], settings.wifiIP[1], settings.wifiIP[2], settings.wifiIP[3]);
+    jPrintf(",\"wifiNetMask\":[%u,%u,%u,%u]",
+            settings.wifiNetMask[0], settings.wifiNetMask[1], settings.wifiNetMask[2], settings.wifiNetMask[3]);
+    jPrintf(",\"wifiGateway\":[%u,%u,%u,%u]",
+            settings.wifiGateway[0], settings.wifiGateway[1], settings.wifiGateway[2], settings.wifiGateway[3]);
+    jPrintf(",\"wifiDNS\":[%u,%u,%u,%u]",
+            settings.wifiDNS[0], settings.wifiDNS[1], settings.wifiDNS[2], settings.wifiDNS[3]);
+    jPrintf(",\"wifiBrodcast\":[%u,%u,%u,%u]",
+            settings.wifiBrodcast[0], settings.wifiBrodcast[1], settings.wifiBrodcast[2], settings.wifiBrodcast[3]);
 
     // Current IP (if connected)
     if (WiFi.status() == WL_CONNECTED) {
-        snprintf(buf, sizeof(buf), ",\"currentIP\":[%u,%u,%u,%u]",
-                 WiFi.localIP()[0], WiFi.localIP()[1], WiFi.localIP()[2], WiFi.localIP()[3]);
-        json += buf;
-        snprintf(buf, sizeof(buf), ",\"currentNetMask\":[%u,%u,%u,%u]",
-                 WiFi.subnetMask()[0], WiFi.subnetMask()[1], WiFi.subnetMask()[2], WiFi.subnetMask()[3]);
-        json += buf;
-        snprintf(buf, sizeof(buf), ",\"currentGateway\":[%u,%u,%u,%u]",
-                 WiFi.gatewayIP()[0], WiFi.gatewayIP()[1], WiFi.gatewayIP()[2], WiFi.gatewayIP()[3]);
-        json += buf;
-        snprintf(buf, sizeof(buf), ",\"currentDNS\":[%u,%u,%u,%u]",
-                 WiFi.dnsIP()[0], WiFi.dnsIP()[1], WiFi.dnsIP()[2], WiFi.dnsIP()[3]);
-        json += buf;
+        jPrintf(",\"currentIP\":[%u,%u,%u,%u]",
+                WiFi.localIP()[0], WiFi.localIP()[1], WiFi.localIP()[2], WiFi.localIP()[3]);
+        jPrintf(",\"currentNetMask\":[%u,%u,%u,%u]",
+                WiFi.subnetMask()[0], WiFi.subnetMask()[1], WiFi.subnetMask()[2], WiFi.subnetMask()[3]);
+        jPrintf(",\"currentGateway\":[%u,%u,%u,%u]",
+                WiFi.gatewayIP()[0], WiFi.gatewayIP()[1], WiFi.gatewayIP()[2], WiFi.gatewayIP()[3]);
+        jPrintf(",\"currentDNS\":[%u,%u,%u,%u]",
+                WiFi.dnsIP()[0], WiFi.dnsIP()[1], WiFi.dnsIP()[2], WiFi.dnsIP()[3]);
     }
 
     // LoRa settings
-    snprintf(buf, sizeof(buf), ",\"loraFrequency\":%.4f,\"loraOutputPower\":%d,\"loraBandwidth\":%.1f",
-             settings.loraFrequency, (int)settings.loraOutputPower, settings.loraBandwidth);
-    json += buf;
-    snprintf(buf, sizeof(buf), ",\"loraSyncWord\":%u,\"loraCodingRate\":%u,\"loraSpreadingFactor\":%u",
-             (unsigned)settings.loraSyncWord, (unsigned)settings.loraCodingRate, (unsigned)settings.loraSpreadingFactor);
-    json += buf;
-    snprintf(buf, sizeof(buf), ",\"loraPreambleLength\":%d,\"loraRepeat\":%s,\"loraMaxMessageLength\":%u",
-             (int)settings.loraPreambleLength, settings.loraRepeat ? "true" : "false",
-             (unsigned)settings.loraMaxMessageLength);
-    json += buf;
-    snprintf(buf, sizeof(buf), ",\"loraEnabled\":%s", loraEnabled ? "true" : "false");
-    json += buf;
+    jPrintf(",\"loraFrequency\":%.4f,\"loraOutputPower\":%d,\"loraBandwidth\":%.1f",
+            settings.loraFrequency, (int)settings.loraOutputPower, settings.loraBandwidth);
+    jPrintf(",\"loraSyncWord\":%u,\"loraCodingRate\":%u,\"loraSpreadingFactor\":%u",
+            (unsigned)settings.loraSyncWord, (unsigned)settings.loraCodingRate, (unsigned)settings.loraSpreadingFactor);
+    jPrintf(",\"loraPreambleLength\":%d,\"loraRepeat\":%s,\"loraMaxMessageLength\":%u",
+            (int)settings.loraPreambleLength, settings.loraRepeat ? "true" : "false",
+            (unsigned)settings.loraMaxMessageLength);
+    jPrintf(",\"loraEnabled\":%s", loraEnabled ? "true" : "false");
 
     // UDP peers array
-    json += ",\"udpPeers\":[";
+    jPrintf(",\"udpPeers\":[");
     for (size_t i = 0; i < udpPeers.size(); i++) {
-        if (i > 0) json += ",";
-        snprintf(buf, sizeof(buf), "{\"ip\":[%u,%u,%u,%u],\"legacy\":%s,\"enabled\":%s,\"call\":",
-                 udpPeers[i][0], udpPeers[i][1], udpPeers[i][2], udpPeers[i][3],
-                 udpPeerLegacy[i] ? "true" : "false",
-                 udpPeerEnabled[i] ? "true" : "false");
-        json += buf;
-        appendJsonStr(json, (i < udpPeerCall.size()) ? udpPeerCall[i].c_str() : "");
-        json += "}";
+        if (i > 0) jPrintf(",");
+        jPrintf("{\"ip\":[%u,%u,%u,%u],\"legacy\":%s,\"enabled\":%s,\"call\":",
+                udpPeers[i][0], udpPeers[i][1], udpPeers[i][2], udpPeers[i][3],
+                udpPeerLegacy[i] ? "true" : "false",
+                udpPeerEnabled[i] ? "true" : "false");
+        jStr((i < udpPeerCall.size()) ? udpPeerCall[i].c_str() : "");
+        jPrintf("}");
     }
-    json += "]";
+    jPrintf("]");
 
     // Hop limits and SNR
-    snprintf(buf, sizeof(buf), ",\"maxHopMessage\":%u,\"maxHopPosition\":%u,\"maxHopTelemetry\":%u,\"minSnr\":%d",
-             (unsigned)extSettings.maxHopMessage, (unsigned)extSettings.maxHopPosition,
-             (unsigned)extSettings.maxHopTelemetry, (int)extSettings.minSnr);
-    json += buf;
+    jPrintf(",\"maxHopMessage\":%u,\"maxHopPosition\":%u,\"maxHopTelemetry\":%u,\"minSnr\":%d",
+            (unsigned)extSettings.maxHopMessage, (unsigned)extSettings.maxHopPosition,
+            (unsigned)extSettings.maxHopTelemetry, (int)extSettings.minSnr);
 
     // Misc settings
-    snprintf(buf, sizeof(buf), ",\"updateChannel\":%u", (unsigned)updateChannel);
-    json += buf;
+    jPrintf(",\"updateChannel\":%u", (unsigned)updateChannel);
 
 #ifdef HAS_BATTERY_ADC
-    json += ",\"hasBattery\":true";
+    jPrintf(",\"hasBattery\":true");
 #else
-    json += ",\"hasBattery\":false";
+    jPrintf(",\"hasBattery\":false");
 #endif
-    snprintf(buf, sizeof(buf), ",\"batteryEnabled\":%s,\"batteryFullVoltage\":%.1f",
-             batteryEnabled ? "true" : "false", batteryFullVoltage);
-    json += buf;
-    snprintf(buf, sizeof(buf), ",\"wifiTxPower\":%u,\"wifiMaxTxPower\":%u",
-             (unsigned)wifiTxPower, (unsigned)WIFI_MAX_TX_POWER_DBM);
-    json += buf;
-    snprintf(buf, sizeof(buf), ",\"displayBrightness\":%u,\"cpuFrequency\":%u",
-             (unsigned)displayBrightness, (unsigned)cpuFrequency);
-    json += buf;
-    snprintf(buf, sizeof(buf), ",\"oledEnabled\":%s,\"serialDebug\":%s",
-             oledEnabled ? "true" : "false", serialDebug ? "true" : "false");
-    json += buf;
-    json += ",\"oledDisplayGroup\":";
-    appendJsonStr(json, oledDisplayGroup);
+    jPrintf(",\"batteryEnabled\":%s,\"batteryFullVoltage\":%.1f",
+            batteryEnabled ? "true" : "false", batteryFullVoltage);
+    jPrintf(",\"wifiTxPower\":%u,\"wifiMaxTxPower\":%u",
+            (unsigned)wifiTxPower, (unsigned)WIFI_MAX_TX_POWER_DBM);
+    jPrintf(",\"displayBrightness\":%u,\"cpuFrequency\":%u",
+            (unsigned)displayBrightness, (unsigned)cpuFrequency);
+    jPrintf(",\"oledEnabled\":%s,\"serialDebug\":%s,\"heapDebug\":%s",
+            oledEnabled ? "true" : "false",
+            serialDebug ? "true" : "false",
+            heapDebugEnabled ? "true" : "false");
+    jPrintf(",\"oledDisplayGroup\":"); jStr(oledDisplayGroup);
 
     // Group names
-    json += ",\"groupNames\":{";
+    jPrintf(",\"groupNames\":{");
     bool firstGroup = true;
     for (int i = 3; i <= MAX_CHANNELS; i++) {
-        if (!firstGroup) json += ",";
-        snprintf(buf, sizeof(buf), "\"%d\":", i);
-        json += buf;
-        appendJsonStr(json, groupNames[i]);
+        if (!firstGroup) jPrintf(",");
+        jPrintf("\"%d\":", i); jStr(groupNames[i]);
         firstGroup = false;
     }
-    json += "}";
+    jPrintf("}");
 
-    json += "}}";
-    sendJsonResponse(request, json);
+    jPrintf("}}");
+    jSend(request);
 }
 
-// ── Diagnostics endpoint ────────────────────────────────────────────────────
+// ── Diagnostics ────────────────────────────────────────────────────────────
+
+static void buildDiagnostics() {
+    jPrintf("\"diagnostics\":{");
+    jPrintf("\"heap\":{\"free\":%u,\"minEver\":%u,\"maxBlock\":%u}",
+            ESP.getFreeHeap(), ESP.getMinFreeHeap(), ESP.getMaxAllocHeap());
+    // Recent heap events from heapdbg ring buffer
+    jPrintf(",\"heapLog\":[");
+    {
+        size_t n = heapDbgCount();
+        for (size_t i = 0; i < n; i++) {
+            const HeapEvent &e = heapDbgAt(i);
+            if (i) jPrintf(",");
+            jPrintf("{\"up\":%lu,\"tag\":", (unsigned long)e.uptime);
+            jStr(e.tag);
+            jPrintf(",\"fd\":%ld,\"md\":%ld,\"f\":%u,\"mb\":%u}",
+                    (long)e.freeDelta, (long)e.maxBlockDelta,
+                    (unsigned)e.freeAfter, (unsigned)e.maxBlockAfter);
+        }
+    }
+    jPrintf("]");
+    jPrintf(",\"wifi\":{\"connected\":%s,\"rssi\":%d",
+            WiFi.isConnected() ? "true" : "false", WiFi.RSSI());
+    jPrintf(",\"ip\":\"%s\"", WiFi.localIP().toString().c_str());
+    jPrintf(",\"mac\":\"%s\"", WiFi.macAddress().c_str());
+    jPrintf(",\"ssid\":"); jStr(WiFi.SSID().c_str());
+    jPrintf(",\"channel\":%d,\"disconnects\":%lu,\"lastDisconnectReason\":%u,\"lastDisconnectTime\":%lu}",
+            WiFi.channel(), (unsigned long)wifiDisconnectCount,
+            lastWifiDisconnectReason, (unsigned long)lastWifiDisconnectTime);
+    jPrintf(",\"lora\":{\"txQueue\":%u,\"txTotal\":%lu,\"rxTotal\":%lu}",
+            (unsigned)txBuffer.size(), (unsigned long)apiTxTotal, (unsigned long)apiRxTotal);
+    jPrintf(",\"mesh\":{\"peerCount\":%u,\"routeCount\":%u,\"msgBufferUsed\":%u,\"msgBufferMax\":%u,\"eventBufferUsed\":%u,\"eventBufferMax\":%u}",
+            (unsigned)peerList.size(), (unsigned)routingList.size(),
+            (unsigned)msgCount, (unsigned)API_MSG_BUFFER_SIZE,
+            (unsigned)evtCount, (unsigned)API_EVT_BUFFER_SIZE);
+    jPrintf(",\"system\":{\"version\":\"%s\",\"board\":\"%s\"", VERSION, getBoardName());
+    jPrintf(",\"uptime\":%lu", millis() / 1000);
+    jPrintf(",\"resetReason\":\"%s\"", apiGetResetReason());
+    jPrintf(",\"resetCount\":%lu", (unsigned long)nvsResetCount);
+    jPrintf(",\"cpuFreqMHz\":%u", (unsigned)ESP.getCpuFreqMHz());
+    jPrintf(",\"flashSizeKB\":%lu", (unsigned long)(ESP.getFlashChipSize() / 1024));
+    jPrintf(",\"sdkVersion\":\"%s\"", ESP.getSdkVersion());
+    jPrintf(",\"compileTime\":\"%s %s\"}", __DATE__, __TIME__);
+    time_t now = time(nullptr);
+    jPrintf(",\"ntp\":{\"synced\":%s,\"lastSyncTime\":%lu",
+            now > 1700000000 ? "true" : "false", (unsigned long)lastNtpSyncTime);
+    jPrintf(",\"server\":"); jStr(settings.ntpServer);
+    jPrintf("}");
+    jPrintf(",\"tasks\":[");
+    if (mainLoopTaskHandle) {
+        uint32_t hwm = uxTaskGetStackHighWaterMark(mainLoopTaskHandle) * sizeof(StackType_t);
+        jPrintf("{\"name\":\"loopTask\",\"stackHighWater\":%lu,\"priority\":%lu,\"core\":%d}",
+                (unsigned long)hwm,
+                (unsigned long)uxTaskPriorityGet(mainLoopTaskHandle),
+                (int)xTaskGetAffinity(mainLoopTaskHandle));
+    }
+    jPrintf("]");
+    jPrintf(",\"ws\":{\"clients\":%u}", (unsigned)ws.count());
+    jPrintf(",\"freertos\":{\"taskCount\":%u}", (unsigned)uxTaskGetNumberOfTasks());
+    jPrintf("}");
+}
 
 static void handleDiagnostics(AsyncWebServerRequest *request) {
     if (!checkApiAuth(request)) return;
     if (!heapGuard(request)) return;
+    jReset();
+    jPrintf("{"); buildDiagnostics(); jPrintf("}");
+    jSend(request);
+}
 
-    String json;
-    json.reserve(2048);
-    char buf[256];
+// ── Combined poll endpoint ──────────────────────────────────────────────────
+// Returns status + peers + routes + messages + events + diagnostics in a
+// single response.  Reduces 6 HTTP round-trips to 1, cutting heap
+// fragmentation from ESPAsyncWebServer's per-request allocations.
 
-    // Heap section
-    json = "{\"heap\":{";
-    snprintf(buf, sizeof(buf), "\"free\":%u,\"minEver\":%u,\"maxBlock\":%u",
-             ESP.getFreeHeap(), ESP.getMinFreeHeap(), ESP.getMaxAllocHeap());
-    json += buf;
-    json += "}";
+static void handlePoll(AsyncWebServerRequest *request) {
+    if (!checkApiAuth(request)) return;
+    if (!heapGuard(request)) return;
 
-    // WiFi section
-    json += ",\"wifi\":{";
-    snprintf(buf, sizeof(buf), "\"connected\":%s,\"rssi\":%d",
-             WiFi.isConnected() ? "true" : "false", WiFi.RSSI());
-    json += buf;
-    json += ",\"ip\":\"" + WiFi.localIP().toString() + "\"";
-    json += ",\"mac\":\"" + WiFi.macAddress() + "\"";
-    json += ",\"ssid\":";
-    appendJsonStr(json, WiFi.SSID().c_str());
-    snprintf(buf, sizeof(buf), ",\"channel\":%d,\"disconnects\":%lu,\"lastDisconnectReason\":%u,\"lastDisconnectTime\":%lu",
-             WiFi.channel(), (unsigned long)wifiDisconnectCount,
-             lastWifiDisconnectReason, (unsigned long)lastWifiDisconnectTime);
-    json += buf;
-    json += "}";
-
-    // LoRa section
-    json += ",\"lora\":{";
-    snprintf(buf, sizeof(buf), "\"txQueue\":%u,\"txTotal\":%lu,\"rxTotal\":%lu",
-             (unsigned)txBuffer.size(), (unsigned long)apiTxTotal, (unsigned long)apiRxTotal);
-    json += buf;
-    json += "}";
-
-    // Mesh section
-    json += ",\"mesh\":{";
-    snprintf(buf, sizeof(buf), "\"peerCount\":%u,\"routeCount\":%u,\"msgBufferUsed\":%u,\"msgBufferMax\":%u,\"eventBufferUsed\":%u,\"eventBufferMax\":%u",
-             (unsigned)peerList.size(), (unsigned)routingList.size(),
-             (unsigned)msgCount, (unsigned)API_MSG_BUFFER_SIZE,
-             (unsigned)evtCount, (unsigned)API_EVT_BUFFER_SIZE);
-    json += buf;
-    json += "}";
-
-    // System section
-    json += ",\"system\":{";
-    json += "\"version\":\"" + String(VERSION) + "\"";
-    json += ",\"board\":\"" + String(getBoardName()) + "\"";
-    snprintf(buf, sizeof(buf), ",\"uptime\":%lu", millis() / 1000);
-    json += buf;
-    snprintf(buf, sizeof(buf), ",\"resetReason\":\"%s\"", apiGetResetReason());
-    json += buf;
-    snprintf(buf, sizeof(buf), ",\"resetCount\":%lu", (unsigned long)nvsResetCount);
-    json += buf;
-    snprintf(buf, sizeof(buf), ",\"cpuFreqMHz\":%u", (unsigned)ESP.getCpuFreqMHz());
-    json += buf;
-    snprintf(buf, sizeof(buf), ",\"flashSizeKB\":%lu", (unsigned long)(ESP.getFlashChipSize() / 1024));
-    json += buf;
-    json += ",\"sdkVersion\":\"" + String(ESP.getSdkVersion()) + "\"";
-    json += ",\"compileTime\":\"" + String(__DATE__) + " " + String(__TIME__) + "\"";
-    json += "}";
-
-    // NTP section
-    json += ",\"ntp\":{";
-    time_t now = time(nullptr);
-    bool ntpSynced = now > 1700000000;
-    snprintf(buf, sizeof(buf), "\"synced\":%s,\"lastSyncTime\":%lu",
-             ntpSynced ? "true" : "false", (unsigned long)lastNtpSyncTime);
-    json += buf;
-    json += ",\"server\":";
-    appendJsonStr(json, settings.ntpServer);
-    json += "}";
-
-    // Tasks section — report stack high watermark for the main loop task
-    json += ",\"tasks\":[";
-    if (mainLoopTaskHandle) {
-        uint32_t hwm = uxTaskGetStackHighWaterMark(mainLoopTaskHandle) * sizeof(StackType_t);
-        json += "{\"name\":\"loopTask\"";
-        snprintf(buf, sizeof(buf), ",\"stackHighWater\":%lu,\"priority\":%lu,\"core\":%d}",
-                 (unsigned long)hwm,
-                 (unsigned long)uxTaskPriorityGet(mainLoopTaskHandle),
-                 (int)xTaskGetAffinity(mainLoopTaskHandle));
-        json += buf;
+    // Parse optional message/event parameters
+    uint32_t sinceMsgs = 0, sinceEvts = 0, ackMsgs = 0, ackEvts = 0;
+    int msgLimit = 20, evtLimit = 50;
+    if (request->hasParam("since_msg")) sinceMsgs = request->getParam("since_msg")->value().toInt();
+    if (request->hasParam("since_evt")) sinceEvts = request->getParam("since_evt")->value().toInt();
+    if (request->hasParam("ack_msg"))   ackMsgs   = request->getParam("ack_msg")->value().toInt();
+    if (request->hasParam("ack_evt"))   ackEvts   = request->getParam("ack_evt")->value().toInt();
+    if (request->hasParam("msg_limit")) {
+        msgLimit = request->getParam("msg_limit")->value().toInt();
+        if (msgLimit < 1) msgLimit = 1;
+        if (msgLimit > API_MSG_BUFFER_SIZE) msgLimit = API_MSG_BUFFER_SIZE;
     }
-    json += "]";
+    if (request->hasParam("evt_limit")) {
+        evtLimit = request->getParam("evt_limit")->value().toInt();
+        if (evtLimit < 1) evtLimit = 1;
+        if (evtLimit > API_EVT_BUFFER_SIZE) evtLimit = API_EVT_BUFFER_SIZE;
+    }
 
-    json += "}";
-    sendJsonResponse(request, json);
+    if (ackMsgs > 0) purgeMessages(ackMsgs);
+    if (ackEvts > 0) purgeEvents(ackEvts);
+
+    jReset();
+    jPrintf("{\"status\":{"); buildStatus(); jPrintf("}");
+    jPrintf(","); buildPeers();
+    jPrintf(","); buildRoutes();
+    jPrintf(","); buildMessages(sinceMsgs, msgLimit, nullptr);
+    jPrintf(","); buildEvents(sinceEvts, evtLimit, nullptr);
+    jPrintf(","); buildGroups();
+    jPrintf(","); buildDiagnostics();
+    jPrintf("}");
+    jSend(request);
 }
 
 // ── Register endpoints ──────────────────────────────────────────────────────
@@ -896,6 +802,7 @@ void setupApiEndpoints(AsyncWebServer &server) {
     // Register NTP sync callback
     sntp_set_time_sync_notification_cb(onNtpSync);
 
+    server.on("/api/poll", HTTP_GET, handlePoll);
     server.on("/api/status", HTTP_GET, handleStatus);
     server.on("/api/peers", HTTP_GET, handlePeers);
     server.on("/api/routes", HTTP_GET, handleRoutes);

@@ -5,6 +5,8 @@
 #include <ArduinoJson.h>
 
 #include "reporting.h"
+#include "heapdbg.h"
+#include "bgWorker.h"
 #include "serial.h"
 #include "settings.h"
 #include "logging.h"
@@ -24,79 +26,83 @@ static bool hasInternetUplink() {
     return (WiFi.status() == WL_CONNECTED);
 }
 
-static void reportTopologyTask(void* pvParameters) {
-    WiFiClient client;
+// Persistent WiFiClient — keeping this as a file-level static means lwIP
+// socket state is allocated once (when the first report runs, while heap
+// is still unfragmented) and then reused. Avoids the repeated TIME_WAIT
+// accumulation that was bleeding ~6 KB per report.
+static WiFiClient s_reportClient;
+
+static void reportTopologyWork() {
+    // Manual heap accounting — the bgWorker runs this inline, but we still
+    // want a scoped before/after record in the heapdbg ring.
+    uint32_t _heapFree0 = ESP.getFreeHeap();
+    uint32_t _heapMax0  = ESP.getMaxAllocHeap();
+
     HTTPClient http;
     http.setTimeout(10000);
-    if (!http.begin(client, "http://www.rMesh.de:8082/report.php")) {
+    http.setReuse(true);
+    if (!http.begin(s_reportClient, "http://www.rMesh.de:8082/report.php")) {
+        heapRecord("reportTopo/beginFail", _heapFree0, _heapMax0);
         reportingInProgress = false;
-        vTaskDelete(NULL);
         return;
     }
     http.addHeader("Content-Type", "application/json");
 
-    // Build JSON
-    JsonDocument doc;
-    doc["call"]      = settings.mycall;
-    doc["position"]  = settings.position;
-    doc["timestamp"] = (uint32_t)time(NULL);
+    // Build JSON directly into a stack buffer with snprintf — no JsonDocument,
+    // no std::vector snapshot copies, no malloc. This eliminates the main
+    // per-call heap churn that was fragmenting maxBlock.
+    static char body[4096];
+    size_t pos = 0;
+    uint64_t mac = ESP.getEfuseMac();
+    pos += snprintf(body + pos, sizeof(body) - pos,
+        "{\"call\":\"%s\",\"position\":\"%s\",\"timestamp\":%u,"
+        "\"chip_id\":\"%02X%02X%02X%02X%02X%02X\","
+        "\"is_afu\":%s,\"band\":\"%s\",\"peers\":[",
+        settings.mycall, settings.position, (unsigned)time(NULL),
+        (uint8_t)(mac >> 40), (uint8_t)(mac >> 32), (uint8_t)(mac >> 24),
+        (uint8_t)(mac >> 16), (uint8_t)(mac >> 8), (uint8_t)mac,
+        isAmateurBand(settings.loraFrequency) ? "true" : "false",
+        isPublicBand(settings.loraFrequency) ? "868" : "433");
 
-    // Chip-ID (EFuse MAC)
-    {
-        uint64_t mac = ESP.getEfuseMac();
-        char chipId[13];
-        snprintf(chipId, sizeof(chipId), "%02X%02X%02X%02X%02X%02X",
-            (uint8_t)(mac >> 40), (uint8_t)(mac >> 32), (uint8_t)(mac >> 24),
-            (uint8_t)(mac >> 16), (uint8_t)(mac >> 8), (uint8_t)(mac));
-        doc["chip_id"] = chipId;
-    }
-
-    // Derive amateur radio flag and band from the configured frequency
-    doc["is_afu"] = isAmateurBand(settings.loraFrequency);
-    doc["band"]   = isPublicBand(settings.loraFrequency) ? "868" : "433";
-
-    // Snapshot lists under listMutex to avoid data races with the main loop
-    std::vector<Peer> peerSnap;
-    std::vector<Route> routeSnap;
+    // Iterate peer/route lists directly under mutex — no heap snapshot.
     if (xSemaphoreTake(listMutex, pdMS_TO_TICKS(1000))) {
-        peerSnap = peerList;
-        routeSnap = routingList;
+        bool firstPeer = true;
+        for (size_t i = 0; i < peerList.size() && pos < sizeof(body) - 128; i++) {
+            const Peer& p = peerList[i];
+            if (!p.available) continue;
+            pos += snprintf(body + pos, sizeof(body) - pos,
+                "%s{\"call\":\"%s\",\"rssi\":%.1f,\"snr\":%.1f,\"port\":%u,\"available\":true}",
+                firstPeer ? "" : ",", p.nodeCall, p.rssi, p.snr, p.port);
+            firstPeer = false;
+        }
+        pos += snprintf(body + pos, sizeof(body) - pos, "],\"routes\":[");
+        bool firstRoute = true;
+        for (size_t i = 0; i < routingList.size() && pos < sizeof(body) - 96; i++) {
+            const Route& r = routingList[i];
+            pos += snprintf(body + pos, sizeof(body) - pos,
+                "%s{\"src\":\"%s\",\"via\":\"%s\",\"hops\":%u}",
+                firstRoute ? "" : ",", r.srcCall, r.viaCall, r.hopCount);
+            firstRoute = false;
+        }
         xSemaphoreGive(listMutex);
+    } else {
+        pos += snprintf(body + pos, sizeof(body) - pos, "],\"routes\":[");
+    }
+    pos += snprintf(body + pos, sizeof(body) - pos, "]}");
+
+    if (pos >= sizeof(body) - 1) {
+        logPrintf(LOG_WARN, "Report", "topology body truncated (pos=%u)", (unsigned)pos);
     }
 
-    JsonArray peers = doc["peers"].to<JsonArray>();
-    for (size_t i = 0; i < peerSnap.size(); i++) {
-        if (!peerSnap[i].available) continue;
-        JsonObject o = peers.add<JsonObject>();
-        o["call"]      = peerSnap[i].nodeCall;
-        o["rssi"]      = peerSnap[i].rssi;
-        o["snr"]       = peerSnap[i].snr;
-        o["port"]      = peerSnap[i].port;
-        o["available"] = peerSnap[i].available;
-    }
-
-    // Routing table
-    JsonArray routes = doc["routes"].to<JsonArray>();
-    for (size_t i = 0; i < routeSnap.size(); i++) {
-        JsonObject o = routes.add<JsonObject>();
-        o["src"]  = routeSnap[i].srcCall;
-        o["via"]  = routeSnap[i].viaCall;
-        o["hops"] = routeSnap[i].hopCount;
-    }
-
-    char* buf = (char*)malloc(4096);
-    if (!buf) { http.end(); reportingInProgress = false; vTaskDelete(NULL); return; }
-    size_t len = serializeJson(doc, buf, 4096);
-    int code = http.POST((uint8_t*)buf, len);
-    free(buf);
+    int code = http.POST((uint8_t*)body, pos);
     http.end();
 
     if (code == 200) {
         topologyChanged = false;
     }
-    logPrintf(LOG_DEBUG, "Report", "topology report http_code=%d", code);
+    logPrintf(LOG_DEBUG, "Report", "topology report http_code=%d len=%u", code, (unsigned)pos);
+    heapRecord("reportTopo/done", _heapFree0, _heapMax0);
     reportingInProgress = false;
-    vTaskDelete(NULL);
 }
 
 void reportTopology() {
@@ -109,7 +115,11 @@ void reportTopology() {
     }
     reportingInProgress = true;
 
-    xTaskCreate(reportTopologyTask, "ReportTopo", 4096, NULL, 1, NULL);
+    HEAP_MARK("reportTopo/enq");
+    if (!bgWorkerEnqueue(reportTopologyWork)) {
+        logPrintf(LOG_WARN, "Report", "reportTopo enqueue failed (queue full?)");
+        reportingInProgress = false;
+    }
 }
 
 // Must be called regularly from the main loop
@@ -142,9 +152,9 @@ bool logRemoteCommand(const char* sender, const char* command) {
     doc["sender"]  = sender;
     doc["command"] = command;
 
-    String body;
-    serializeJson(doc, body);
-    int code = http.POST(body);
+    char body[256];
+    size_t len = serializeJson(doc, body, sizeof(body));
+    int code = http.POST((uint8_t*)body, len);
     http.end();
 
     logPrintf(LOG_DEBUG, "Report", "command_log sender=%s command=%s http_code=%d", sender, command, code);

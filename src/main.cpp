@@ -44,6 +44,8 @@
 #include "persistence.h"
 #include "time.h"
 #include "logging.h"
+#include "heapdbg.h"
+#include "bgWorker.h"
 #include "api.h"
 
 #ifdef LILYGO_T_LORA_PAGER
@@ -764,6 +766,7 @@ void setup() {
     listMutex = xSemaphoreCreateMutex();
     mainLoopTaskHandle = xTaskGetCurrentTaskHandle();
     initPendingSendQueue();
+    initFileWriteWorker();
 
     // Load user settings from NVS / InternalFS
     loadSettings();
@@ -793,6 +796,11 @@ void setup() {
         }
         file.close();
     }
+
+    // Start shared background worker BEFORE loading peers/routes, so its
+    // stack is carved out of a still-contiguous heap and never needs to
+    // be reallocated later (key mitigation against heap fragmentation).
+    bgWorkerInit();
 
     // Restore persisted peers and routes from flash
     loadPeers();
@@ -1044,40 +1052,43 @@ void loop() {
     if (checkUDP(f))     { processRxFrame(f); }   // UDP
     #endif
 
-    // ── 7. Status broadcast (1 s interval) ────────────────────────────────────
+    // ── 7. Status broadcast (3 s interval) ────────────────────────────────────
     if (timerExpired(statusTimer)) {
-        statusTimer = millis() + 1000;
+        statusTimer = millis() + 3000;
         #ifdef HAS_WIFI
         // Periodically clean up dead WebSocket clients to prevent heap leaks
         ws.cleanupClients();
 
-        // Build status JSON on the stack without JsonDocument to avoid heap fragmentation
-        char jsonBuffer[384];
-        int len;
-        #ifdef HAS_BATTERY_ADC
-        if (batteryEnabled) {
-            len = snprintf(jsonBuffer, sizeof(jsonBuffer),
-                "{\"status\":{\"time\":%ld,\"tx\":%s,\"rx\":%s,\"txBufferCount\":%u,"
-                "\"retry\":%u,\"heap\":%u,\"minHeap\":%u,\"uptime\":%lu,"
-                "\"cpuFreq\":%u,\"resetReason\":\"%s\",\"battery\":%.2f}}",
-                (long)time(NULL), txFlag ? "true" : "false", rxFlag ? "true" : "false",
-                (unsigned)txBuffer.size(), currentRetry, ESP.getFreeHeap(),
-                ESP.getMinFreeHeap(), millis() / 1000, getCpuFrequencyMhz(),
-                lastResetReason, getBatteryVoltage());
-        } else
-        #endif
-        {
-            len = snprintf(jsonBuffer, sizeof(jsonBuffer),
-                "{\"status\":{\"time\":%ld,\"tx\":%s,\"rx\":%s,\"txBufferCount\":%u,"
-                "\"retry\":%u,\"heap\":%u,\"minHeap\":%u,\"uptime\":%lu,"
-                "\"cpuFreq\":%u,\"resetReason\":\"%s\"}}",
-                (long)time(NULL), txFlag ? "true" : "false", rxFlag ? "true" : "false",
-                (unsigned)txBuffer.size(), currentRetry, ESP.getFreeHeap(),
-                ESP.getMinFreeHeap(), millis() / 1000, getCpuFrequencyMhz(),
-                lastResetReason);
-        }
-        if (len > 0 && (size_t)len < sizeof(jsonBuffer)) {
-            wsBroadcast(jsonBuffer, len);
+        // Only broadcast status if heap has enough room for the WebSocket
+        // shared_ptr allocation (~400 bytes per message per client)
+        if (ESP.getFreeHeap() > 40000) {
+            char jsonBuffer[384];
+            int len;
+            #ifdef HAS_BATTERY_ADC
+            if (batteryEnabled) {
+                len = snprintf(jsonBuffer, sizeof(jsonBuffer),
+                    "{\"status\":{\"time\":%ld,\"tx\":%s,\"rx\":%s,\"txBufferCount\":%u,"
+                    "\"retry\":%u,\"heap\":%u,\"minHeap\":%u,\"uptime\":%lu,"
+                    "\"cpuFreq\":%u,\"resetReason\":\"%s\",\"battery\":%.2f}}",
+                    (long)time(NULL), txFlag ? "true" : "false", rxFlag ? "true" : "false",
+                    (unsigned)txBuffer.size(), currentRetry, ESP.getFreeHeap(),
+                    ESP.getMinFreeHeap(), millis() / 1000, getCpuFrequencyMhz(),
+                    lastResetReason, getBatteryVoltage());
+            } else
+            #endif
+            {
+                len = snprintf(jsonBuffer, sizeof(jsonBuffer),
+                    "{\"status\":{\"time\":%ld,\"tx\":%s,\"rx\":%s,\"txBufferCount\":%u,"
+                    "\"retry\":%u,\"heap\":%u,\"minHeap\":%u,\"uptime\":%lu,"
+                    "\"cpuFreq\":%u,\"resetReason\":\"%s\"}}",
+                    (long)time(NULL), txFlag ? "true" : "false", rxFlag ? "true" : "false",
+                    (unsigned)txBuffer.size(), currentRetry, ESP.getFreeHeap(),
+                    ESP.getMinFreeHeap(), millis() / 1000, getCpuFrequencyMhz(),
+                    lastResetReason);
+            }
+            if (len > 0 && (size_t)len < sizeof(jsonBuffer)) {
+                wsBroadcast(jsonBuffer, len);
+            }
         }
         #endif
         // Expire stale peers once per second
@@ -1180,4 +1191,6 @@ void loop() {
     }
     reportTopologyIfChanged(); // change-driven report with 30 s debounce
     #endif
+
+    heapTick();
 }

@@ -4,6 +4,7 @@
 #include <ESPmDNS.h>
 #include <ArduinoJson.h>
 #include <HTTPClient.h>
+#include "heapdbg.h"
 #include <HTTPUpdate.h>
 #include <WiFiClientSecure.h>
 
@@ -70,6 +71,7 @@ static void sendUpdateStatus(const char* msg) {
 }
 
 void checkForUpdates(bool force, uint8_t forceChannel) {
+    HEAP_SCOPE("checkForUpdates");
     if (WiFi.status() != WL_CONNECTED) return;
     if (strcmp(VERSION, "unknown") == 0) {
         sendUpdateStatus("No update: dev build (unknown).");
@@ -103,14 +105,11 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
     HTTPClient http;
     http.setTimeout(10000);  // 10s HTTP timeout
     uint8_t activeChannel = force ? forceChannel : updateChannel;
-    String latestUrl = "http://www.rMesh.de:8082/latest.php?call=";
-    latestUrl += settings.mycall;
-    latestUrl += "&device=";
-    latestUrl += PIO_ENV_NAME;
-    latestUrl += "&version=";
-    latestUrl += VERSION;
-    latestUrl += "&channel=";
-    latestUrl += (activeChannel == 1) ? "dev" : "release";
+    char latestUrl[256];
+    snprintf(latestUrl, sizeof(latestUrl),
+             "http://www.rMesh.de:8082/latest.php?call=%s&device=%s&version=%s&channel=%s",
+             settings.mycall, PIO_ENV_NAME, VERSION,
+             (activeChannel == 1) ? "dev" : "release");
     if (!http.begin(client, latestUrl)) {
         sendUpdateStatus("Update server unreachable.");
         return;
@@ -140,7 +139,9 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
     }
     // Current version is a dev build ahead of the tag (git describe: "v1.0.25a-3-gb480c38")
     // → installed version is newer, no update needed (install anyway if force is set)
-    if (!force && String(VERSION).startsWith(String(latestTag) + "-")) {
+    // Check if VERSION starts with "latestTag-" (dev build ahead of tag)
+    size_t tagLen = strlen(latestTag);
+    if (!force && strncmp(VERSION, latestTag, tagLen) == 0 && VERSION[tagLen] == '-') {
         http.end();
         sendUpdateStatus("Already up to date (dev build).");
         return;
@@ -148,22 +149,23 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
     http.end();
 
     // New update found
-    String newVersion = latestTag;
+    char newVersion[32];
+    strlcpy(newVersion, latestTag, sizeof(newVersion));
     {
         char msg[64];
-        snprintf(msg, sizeof(msg), "Installing update %s...", newVersion.c_str());
+        snprintf(msg, sizeof(msg), "Installing update %s...", newVersion);
         sendUpdateStatus(msg);
     }
-    String callParam = "&call=";
-    callParam += settings.mycall;
-    callParam += "&device=";
-    callParam += PIO_ENV_NAME;
-    callParam += "&tag=";
-    callParam += newVersion;
+    char callParam[128];
+    snprintf(callParam, sizeof(callParam), "&call=%s&device=%s&tag=%s",
+             settings.mycall, PIO_ENV_NAME, newVersion);
     httpUpdate.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
 
     // LittleFS – up to 3 attempts
-    String spiffsUrl = "http://www.rMesh.de:8082/update.php?file=" PIO_ENV_NAME "_littlefs.bin" + callParam;
+    char spiffsUrl[256];
+    snprintf(spiffsUrl, sizeof(spiffsUrl),
+             "http://www.rMesh.de:8082/update.php?file=%s_littlefs.bin%s",
+             PIO_ENV_NAME, callParam);
     t_httpUpdate_return spiffsResult = HTTP_UPDATE_FAILED;
     for (int attempt = 1; attempt <= 3; attempt++) {
         if (attempt > 1) {
@@ -179,18 +181,26 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
         if (spiffsResult != HTTP_UPDATE_FAILED) break;
     }
     if (spiffsResult == HTTP_UPDATE_FAILED) {
-        // LittleFS not available (e.g. no release asset) – continue with firmware update anyway
-        String warnMsg = "LittleFS not updated: " + httpUpdate.getLastErrorString() + " – continuing with firmware";
-        sendUpdateStatus(warnMsg.c_str());
+        char warnMsg[192];
+        snprintf(warnMsg, sizeof(warnMsg),
+                 "LittleFS not updated: %s – continuing with firmware",
+                 httpUpdate.getLastErrorString().c_str());
+        sendUpdateStatus(warnMsg);
     }
 
     // Firmware – on success the node reboots, onEnd fires shortly before
-    httpUpdate.onEnd([newVersion]() {
-        sendOtaLog("update_success", VERSION, newVersion.c_str(), "");
+    // Capture newVersion by copy (it's a local char[])
+    char capturedVersion[32];
+    strlcpy(capturedVersion, newVersion, sizeof(capturedVersion));
+    httpUpdate.onEnd([capturedVersion]() {
+        sendOtaLog("update_success", VERSION, capturedVersion, "");
     });
 
     // Firmware – up to 3 attempts
-    String fwUrl = "http://www.rMesh.de:8082/update.php?file=" PIO_ENV_NAME "_firmware.bin" + callParam;
+    char fwUrl[256];
+    snprintf(fwUrl, sizeof(fwUrl),
+             "http://www.rMesh.de:8082/update.php?file=%s_firmware.bin%s",
+             PIO_ENV_NAME, callParam);
     t_httpUpdate_return fwResult = HTTP_UPDATE_FAILED;
     for (int attempt = 1; attempt <= 3; attempt++) {
         if (attempt > 1) {
@@ -207,10 +217,14 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
     }
     // Only reached if failed (success = reboot)
     if (fwResult == HTTP_UPDATE_FAILED) {
-        String errMsg = "Update failed (firmware): " + httpUpdate.getLastErrorString();
-        sendUpdateStatus(errMsg.c_str());
-        sendOtaLog("update_failed", VERSION, newVersion.c_str(),
-            ("Firmware: " + httpUpdate.getLastErrorString()).c_str());
+        char errMsg[192];
+        snprintf(errMsg, sizeof(errMsg), "Update failed (firmware): %s",
+                 httpUpdate.getLastErrorString().c_str());
+        sendUpdateStatus(errMsg);
+        char logDetail[128];
+        snprintf(logDetail, sizeof(logDetail), "Firmware: %s",
+                 httpUpdate.getLastErrorString().c_str());
+        sendOtaLog("update_failed", VERSION, newVersion, logDetail);
     }
 }
 
@@ -353,6 +367,7 @@ void onWiFiDisconnected(WiFiEvent_t event, WiFiEventInfo_t info) {
 }
 
 void onWiFiGotIP(WiFiEvent_t event, WiFiEventInfo_t info) {
+    HEAP_SCOPE("onWiFiGotIP_mDNS");
     MDNS.end();
     String mdnsName = String(settings.mycall) + "-rmesh";
     mdnsName.toLowerCase();
@@ -435,6 +450,7 @@ static void processDeferredScanActions() {
         }
     }
     if (pendingScanBroadcast) {
+        HEAP_SCOPE("scanBroadcast");
         pendingScanBroadcast = false;
         int n = WiFi.scanComplete();
         if (n > 0) {
@@ -456,10 +472,20 @@ static void processDeferredScanActions() {
                     default: doc["wifiScan"][i]["encryption"] = "unknown";
                 }
             }
-            String jsonOutput;
-            serializeJson(doc, jsonOutput);
-            wsBroadcast(jsonOutput.c_str(), jsonOutput.length());
+            // Use a fixed heap buffer sized from measureJson to avoid the
+            // dynamic-growth reallocations of Arduino String, which badly
+            // fragment the heap on repeated WiFi scans.
+            size_t jlen = measureJson(doc);
+            if (jlen > 0 && jlen < 8192 && ESP.getMaxAllocHeap() > jlen + 1024) {
+                char* jbuf = (char*)malloc(jlen + 1);
+                if (jbuf) {
+                    serializeJson(doc, jbuf, jlen + 1);
+                    wsBroadcast(jbuf, jlen);
+                    free(jbuf);
+                }
+            }
         }
+        WiFi.scanDelete();
     }
 }
 

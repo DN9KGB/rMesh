@@ -437,6 +437,22 @@
             </td>
           </tr>
           <tr>
+            <td colspan="2">
+              <button class="button" id="settingsDeleteMessages" data-i18n="btn.delete_messages">Nachrichten löschen</button>
+              <button class="button" id="statusSyncTime" data-i18n="btn.sync_time">Browserzeit sync.</button>
+              <button class="button" id="settingsReboot" title="Neustart" data-i18n-title="btn.reboot">&#x21BB;</button>
+              <button class="button" id="settingsShutdown" title="Herunterfahren" data-i18n-title="btn.shutdown">&#x23FB;</button>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <div class="section-header" data-i18n="setup.section_debug">Debug</div>
+      <div class="section-body">
+        <table>
+          <tr>
             <td data-i18n="setup.serial_debug">Serial Debug:</td>
             <td>
               <label class="toggle-switch">
@@ -446,11 +462,12 @@
             </td>
           </tr>
           <tr>
-            <td colspan="2">
-              <button class="button" id="settingsDeleteMessages" data-i18n="btn.delete_messages">Nachrichten löschen</button>
-              <button class="button" id="statusSyncTime" data-i18n="btn.sync_time">Browserzeit sync.</button>
-              <button class="button" id="settingsReboot" title="Neustart" data-i18n-title="btn.reboot">&#x21BB;</button>
-              <button class="button" id="settingsShutdown" title="Herunterfahren" data-i18n-title="btn.shutdown">&#x23FB;</button>
+            <td data-i18n="setup.heap_debug">Heap Debug:</td>
+            <td>
+              <label class="toggle-switch">
+                <input type="checkbox" id="settingsHeapDebug">
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+              </label>
             </td>
           </tr>
         </table>

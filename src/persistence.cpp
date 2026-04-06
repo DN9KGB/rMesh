@@ -29,6 +29,8 @@
 #endif
 
 #include "persistence.h"
+#include "heapdbg.h"
+#include "bgWorker.h"
 #include "routing.h"
 #include "peer.h"
 #include "main.h"
@@ -44,6 +46,11 @@ static const uint8_t PEER_FILE_VERSION_V1 = 1;
 volatile bool routesDirty = false;
 volatile bool peersDirty  = false;
 
+// Re-entrance guards: prevent piling up multiple save tasks (each 4KB stack)
+// if a previous save has not finished before the next PERSIST_INTERVAL tick.
+static volatile bool saveRoutesInProgress = false;
+static volatile bool savePeersInProgress  = false;
+
 // ── Route persistence ────────────────────────────────────────────────────────
 
 /** Packed on-disk route entry (no timestamp — regenerated on load). */
@@ -55,6 +62,7 @@ struct __attribute__((packed)) RouteEntry {
 };
 
 void loadRoutes() {
+    HEAP_SCOPE("loadRoutes");
     if (!xSemaphoreTake(fsMutex, pdMS_TO_TICKS(5000))) {
         logPrintf(LOG_ERROR, "FS", "fsMutex timeout in loadRoutes");
         return;
@@ -116,19 +124,22 @@ void loadRoutes() {
     logPrintf(LOG_INFO, "FS", "Loaded %d routes from %s", loaded, ROUTES_FILE);
 }
 
-static void saveRoutesTask(void* pvParameters) {
-    // Take both mutexes to write directly from routingList without heap-copying
-    // the entire vector (~30 KB for 1000 routes).
+// Worker function — runs on the shared bgWorker task, no own stack alloc.
+static void saveRoutesWork() {
+    uint32_t _hf0 = ESP.getFreeHeap();
+    uint32_t _hm0 = ESP.getMaxAllocHeap();
+
     if (!xSemaphoreTake(listMutex, pdMS_TO_TICKS(1000))) {
-        logPrintf(LOG_ERROR, "FS", "listMutex timeout in saveRoutesTask");
-        vTaskDelete(NULL);
+        logPrintf(LOG_ERROR, "FS", "listMutex timeout in saveRoutes");
+        heapRecord("saveRoutes/listTO", _hf0, _hm0);
+        saveRoutesInProgress = false;
         return;
     }
-
     if (!xSemaphoreTake(fsMutex, pdMS_TO_TICKS(30000))) {
-        logPrintf(LOG_ERROR, "FS", "fsMutex timeout in saveRoutesTask");
+        logPrintf(LOG_ERROR, "FS", "fsMutex timeout in saveRoutes");
         xSemaphoreGive(listMutex);
-        vTaskDelete(NULL);
+        heapRecord("saveRoutes/fsTO", _hf0, _hm0);
+        saveRoutesInProgress = false;
         return;
     }
 
@@ -137,7 +148,8 @@ static void saveRoutesTask(void* pvParameters) {
         logPrintf(LOG_ERROR, "FS", "Failed to open routes file for writing");
         xSemaphoreGive(fsMutex);
         xSemaphoreGive(listMutex);
-        vTaskDelete(NULL);
+        heapRecord("saveRoutes/openFail", _hf0, _hm0);
+        saveRoutesInProgress = false;
         return;
     }
 
@@ -161,11 +173,18 @@ static void saveRoutesTask(void* pvParameters) {
 
     routesDirty = false;
     logPrintf(LOG_INFO, "FS", "Saved %d routes to %s", count, ROUTES_FILE);
-    vTaskDelete(NULL);
+    heapRecord("saveRoutes/done", _hf0, _hm0);
+    saveRoutesInProgress = false;
 }
 
 void saveRoutes() {
-    xTaskCreate(saveRoutesTask, "SaveRoutes", 4096, NULL, 1, NULL);
+    if (saveRoutesInProgress) return;
+    saveRoutesInProgress = true;
+    HEAP_MARK("saveRoutes/enq");
+    if (!bgWorkerEnqueue(saveRoutesWork)) {
+        logPrintf(LOG_WARN, "FS", "saveRoutes enqueue failed (queue full?)");
+        saveRoutesInProgress = false;
+    }
 }
 
 // ── Peer persistence ─────────────────────────────────────────────────────────
@@ -188,6 +207,7 @@ struct __attribute__((packed)) PeerEntry {
 };
 
 void loadPeers() {
+    HEAP_SCOPE("loadPeers");
     if (!xSemaphoreTake(fsMutex, pdMS_TO_TICKS(5000))) {
         logPrintf(LOG_ERROR, "FS", "fsMutex timeout in loadPeers");
         return;
@@ -259,18 +279,21 @@ void loadPeers() {
                   loaded, PEERS_FILE, PEER_INITIAL_TIMEOUT);
 }
 
-static void savePeersTask(void* pvParameters) {
-    // Take both mutexes to write directly from peerList without heap-copying.
+static void savePeersWork() {
+    uint32_t _hf0 = ESP.getFreeHeap();
+    uint32_t _hm0 = ESP.getMaxAllocHeap();
+
     if (!xSemaphoreTake(listMutex, pdMS_TO_TICKS(1000))) {
-        logPrintf(LOG_ERROR, "FS", "listMutex timeout in savePeersTask");
-        vTaskDelete(NULL);
+        logPrintf(LOG_ERROR, "FS", "listMutex timeout in savePeers");
+        heapRecord("savePeers/listTO", _hf0, _hm0);
+        savePeersInProgress = false;
         return;
     }
-
     if (!xSemaphoreTake(fsMutex, pdMS_TO_TICKS(30000))) {
-        logPrintf(LOG_ERROR, "FS", "fsMutex timeout in savePeersTask");
+        logPrintf(LOG_ERROR, "FS", "fsMutex timeout in savePeers");
         xSemaphoreGive(listMutex);
-        vTaskDelete(NULL);
+        heapRecord("savePeers/fsTO", _hf0, _hm0);
+        savePeersInProgress = false;
         return;
     }
 
@@ -279,7 +302,8 @@ static void savePeersTask(void* pvParameters) {
         logPrintf(LOG_ERROR, "FS", "Failed to open peers file for writing");
         xSemaphoreGive(fsMutex);
         xSemaphoreGive(listMutex);
-        vTaskDelete(NULL);
+        heapRecord("savePeers/openFail", _hf0, _hm0);
+        savePeersInProgress = false;
         return;
     }
 
@@ -305,9 +329,16 @@ static void savePeersTask(void* pvParameters) {
 
     peersDirty = false;
     logPrintf(LOG_INFO, "FS", "Saved %d peers to %s", count, PEERS_FILE);
-    vTaskDelete(NULL);
+    heapRecord("savePeers/done", _hf0, _hm0);
+    savePeersInProgress = false;
 }
 
 void savePeers() {
-    xTaskCreate(savePeersTask, "SavePeers", 4096, NULL, 1, NULL);
+    if (savePeersInProgress) return;
+    savePeersInProgress = true;
+    HEAP_MARK("savePeers/enq");
+    if (!bgWorkerEnqueue(savePeersWork)) {
+        logPrintf(LOG_WARN, "FS", "savePeers enqueue failed (queue full?)");
+        savePeersInProgress = false;
+    }
 }

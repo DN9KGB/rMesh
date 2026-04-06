@@ -8,6 +8,7 @@
 #endif
 
 #include "settings.h"
+#include "heapdbg.h"
 #include "config.h"
 #include "version.h"
 #include "webFunctions.h"
@@ -25,7 +26,7 @@ bool loraEnabled = true;
 std::vector<IPAddress> udpPeers;
 std::vector<bool> udpPeerLegacy;
 std::vector<bool> udpPeerEnabled;
-std::vector<String> udpPeerCall;
+std::vector<UdpPeerCallsign> udpPeerCall;
 
 std::vector<WifiNetwork> wifiNetworks;
 String apName = "rMesh";
@@ -174,6 +175,7 @@ void loadSettings() {
     if (cpuFrequency != 80 && cpuFrequency != 160 && cpuFrequency != 240) cpuFrequency = 240;
     oledEnabled        = prefs.getBool("oledEnabled", false);
     serialDebug        = prefs.getBool("serialDebug", false);
+    heapDebugEnabled   = prefs.getBool("heapDebug", false);
     {
         String grp = prefs.getString("oledGroup", "");
         strlcpy(oledDisplayGroup, grp.c_str(), sizeof(oledDisplayGroup));
@@ -214,7 +216,7 @@ void loadSettings() {
                             udpPeers.push_back(addr);
                             udpPeerLegacy.push_back(legacy);
                             udpPeerEnabled.push_back(true);
-                            udpPeerCall.push_back("");
+                            udpPeerCall.push_back(UdpPeerCallsign());
                         }
                     }
                 }
@@ -287,7 +289,7 @@ void loadSettings() {
                 udpPeers.push_back(IPAddress(buf[1+i*stride], buf[2+i*stride], buf[3+i*stride], buf[4+i*stride]));
                 udpPeerLegacy.push_back(buf[5+i*stride] != 0);
                 udpPeerEnabled.push_back(newFormat ? buf[6+i*stride] != 0 : true);
-                udpPeerCall.push_back("");
+                udpPeerCall.push_back(UdpPeerCallsign());
             }
             delete[] buf;
         }
@@ -463,6 +465,7 @@ void saveSettings() {
     prefs.putUChar("dispBrightW", displayBrightness);
     prefs.putUChar("cpuFreq", cpuFrequency);
     prefs.putBool("serialDebug", serialDebug);
+    prefs.putBool("heapDebug", heapDebugEnabled);
     saveOledSettings();
 #ifdef HAS_WIFI
     saveWifiNetworks();

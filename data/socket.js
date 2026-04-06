@@ -834,6 +834,10 @@ function fillSettingsForm(s) {
     var serialDebugEl = document.getElementById("settingsSerialDebug");
     if (serialDebugEl) serialDebugEl.checked = s.serialDebug === true;
 
+    // Heap debug (heap instrumentation / ring buffer)
+    var heapDebugEl = document.getElementById("settingsHeapDebug");
+    if (heapDebugEl) heapDebugEl.checked = s.heapDebug === true;
+
     // OLED display settings
     var oledEnabledEl = document.getElementById("settingsOledEnabled");
     if (oledEnabledEl) oledEnabledEl.checked = s.oledEnabled === true;
@@ -923,6 +927,8 @@ function saveSettings() {
     if (cpuFreqEl) s["cpuFrequency"] = parseInt(cpuFreqEl.value);
     var serialDebugEl = document.getElementById("settingsSerialDebug");
     if (serialDebugEl) s["serialDebug"] = serialDebugEl.checked;
+    var heapDebugEl = document.getElementById("settingsHeapDebug");
+    if (heapDebugEl) s["heapDebug"] = heapDebugEl.checked;
     var oledGroupEl = document.getElementById("settingsOledDisplayGroup");
     if (oledGroupEl) s["oledDisplayGroup"] = oledGroupEl.value;
     s["udpPeers"] = [];

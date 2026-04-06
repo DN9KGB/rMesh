@@ -15,6 +15,7 @@
 #include "auth.h"
 #include "serial.h"
 #include "logging.h"
+#include "heapdbg.h"
 #include "api.h"
 
 #ifdef HELTEC_WIFI_LORA_32_V3
@@ -43,8 +44,10 @@ AsyncWebSocket ws("/socket", wsHandler.eventHandler());
 void wsBroadcast(const char *buf, size_t len) {
     // ws.textAll/text internally allocates shared_ptr<vector> on the heap.
     // Under low heap conditions, operator new would trigger std::terminate().
-    // Check both free heap and largest contiguous block.
-    if (ESP.getFreeHeap() < 15000 || ESP.getMaxAllocHeap() < 8000) return;
+    // Small messages (notifications < 30 bytes) are allowed at lower heap;
+    // larger messages (status, monitor) need more headroom.
+    uint32_t minHeap = (len < 30) ? 15000 : 40000;
+    if (ESP.getFreeHeap() < minHeap || ESP.getMaxAllocHeap() < 8000) return;
 
     if (webPasswordHash.isEmpty()) {
         ws.textAll(buf, len);
@@ -61,6 +64,10 @@ void wsBroadcast(const char *buf, size_t len) {
 // Instead of serializing full JSON on the heap, send a tiny "data changed"
 // event.  The WebUI fetches the updated data via the REST API.
 
+// Lightweight "something changed" notifications: the payload is a
+// constant 20-byte string, so they do not grow the WS send buffer or the
+// heap beyond what the WS stack already reserves per client. The WebUI
+// re-fetches /api/peers or /api/routes via REST on receipt.
 void notifyPeerListChanged() {
     wsBroadcast("{\"notify\":\"peers\"}", 18);
 }
@@ -70,6 +77,7 @@ void notifyRoutingChanged() {
 }
 
 void notifySettingsChanged() {
+    // Settings changes are rare; still broadcast so open WebUIs refresh.
     wsBroadcast("{\"notify\":\"settings\"}", 21);
 }
 
@@ -100,26 +108,18 @@ static void sendInitialDataToClient(AsyncWebSocketClient *client) {
     // Settings must be sent inline (WebUI needs mycall/version before anything works).
     // Use a minimal JSON with just the essential fields — avoids the old 17KB JsonDocument.
     {
-        String json;
-        json.reserve(512);
-        json = "{\"settings\":{\"mycall\":\"";
-        json += settings.mycall;
-        json += "\",\"version\":\"";
-        json += VERSION;
-        json += "\",\"name\":\"";
-        json += NAME;
-        json += "\",\"hardware\":\"";
-        json += PIO_ENV_NAME;
-        json += "\"";
-        // webPasswordSet (needed for password UI state)
-        json += ",\"webPasswordSet\":";
-        json += !webPasswordHash.isEmpty() ? "true" : "false";
-        // loraMaxMessageLength (shown in UI)
-        char buf[64];
-        snprintf(buf, sizeof(buf), ",\"loraMaxMessageLength\":%u", (unsigned)settings.loraMaxMessageLength);
-        json += buf;
-        json += "}}";
-        client->text(json);
+        char json[512];
+        int n = snprintf(json, sizeof(json),
+            "{\"settings\":{\"mycall\":\"%s\",\"version\":\"%s\","
+            "\"name\":\"%s\",\"hardware\":\"%s\","
+            "\"webPasswordSet\":%s,"
+            "\"loraMaxMessageLength\":%u}}",
+            settings.mycall, VERSION, NAME, PIO_ENV_NAME,
+            !webPasswordHash.isEmpty() ? "true" : "false",
+            (unsigned)settings.loraMaxMessageLength);
+        if (n > 0 && n < (int)sizeof(json)) {
+            client->text(json, n);
+        }
     }
 
     // After minimal settings, tell client to fetch full data via API
@@ -142,7 +142,8 @@ void startWebServer() {
         if (webPasswordHash.isEmpty()) {
             sendInitialDataToClient(client);
         } else {
-            String nonce = generateNonce(client->id());
+            char nonce[33];
+            generateNonce(client->id(), nonce);
             uint64_t mac = ESP.getEfuseMac();
             char chipId[13];
             snprintf(chipId, sizeof(chipId), "%02X%02X%02X%02X%02X%02X",
@@ -151,7 +152,7 @@ void startWebServer() {
             char challenge[256];
             snprintf(challenge, sizeof(challenge),
                      "{\"auth\":{\"required\":true,\"nonce\":\"%s\",\"mycall\":\"%s\",\"chipId\":\"%s\"}}",
-                     nonce.c_str(), settings.mycall, chipId);
+                     nonce, settings.mycall, chipId);
             client->text(challenge);
         }
     });
@@ -175,17 +176,18 @@ void startWebServer() {
         // Authentication handshake
         if (json["auth"].is<JsonVariant>()) {
             if (json["auth"]["response"].is<JsonVariant>()) {
-                String response = json["auth"]["response"].as<String>();
+                const char* response = json["auth"]["response"] | "";
                 if (verifyAuthResponse(client->id(), response)) {
                     setClientAuth(client->id(), true, (uint32_t)client->remoteIP());
                     client->text("{\"auth\":{\"ok\":true}}");
                     sendInitialDataToClient(client);
                 } else {
-                    String nonce = generateNonce(client->id());
+                    char nonce[33];
+                    generateNonce(client->id(), nonce);
                     char msg[192];
                     snprintf(msg, sizeof(msg),
                              "{\"auth\":{\"error\":\"Wrong password\",\"nonce\":\"%s\"}}",
-                             nonce.c_str());
+                             nonce);
                     client->text(msg);
                 }
             }
@@ -201,16 +203,16 @@ void startWebServer() {
 
         // Set or clear the web password hash
         if (json["setPassword"].is<JsonVariant>()) {
-            String hash = json["setPassword"].as<String>();
-            logPrintf(LOG_INFO, "Auth", "setPassword received, hash='%s'", hash.c_str());
+            const char* hash = json["setPassword"] | "";
+            logPrintf(LOG_INFO, "Auth", "setPassword received, hash='%s'", hash);
             savePasswordHash(hash);
             setClientAuth(client->id(), true);
             logPrintf(LOG_INFO, "Auth", "webPasswordHash now: '%s'", webPasswordHash.c_str());
 
-            String resp = hash.isEmpty()
+            const char* resp = (hash[0] == '\0')
                               ? "{\"passwordSaved\":false}"
                               : "{\"passwordSaved\":true}";
-            logPrintf(LOG_INFO, "Auth", "Sending to client %u: %s", client->id(), resp.c_str());
+            logPrintf(LOG_INFO, "Auth", "Sending to client %u: %s", client->id(), resp);
             client->text(resp);
             return;
         }
@@ -247,10 +249,10 @@ void startWebServer() {
                 settings.apMode = json["settings"]["apMode"].as<bool>();
             }
             if (json["settings"]["apName"].is<JsonVariant>()) {
-                apName = json["settings"]["apName"].as<String>();
+                apName = json["settings"]["apName"] | "rMesh";
             }
             if (json["settings"]["apPassword"].is<JsonVariant>()) {
-                apPassword = json["settings"]["apPassword"].as<String>();
+                apPassword = json["settings"]["apPassword"] | "";
             }
             // Update WiFi network list
             if (json["settings"]["wifiNetworks"].is<JsonArray>()) {
@@ -313,7 +315,7 @@ void startWebServer() {
                         udpPeers.push_back(IPAddress(ip[0] | 0, ip[1] | 0, ip[2] | 0, ip[3] | 0));
                         udpPeerLegacy.push_back(p["legacy"] | false);
                         udpPeerEnabled.push_back(p["enabled"] | true);
-                        udpPeerCall.push_back(p["call"] | "");
+                        udpPeerCall.push_back(UdpPeerCallsign(p["call"] | ""));
                     }
                 }
             }
@@ -394,6 +396,9 @@ void startWebServer() {
             if (json["settings"]["serialDebug"].is<JsonVariant>()) {
                 serialDebug = json["settings"]["serialDebug"].as<bool>();
                 Serial.setDebugOutput(serialDebug);
+            }
+            if (json["settings"]["heapDebug"].is<JsonVariant>()) {
+                heapDebugEnabled = json["settings"]["heapDebug"].as<bool>();
             }
             if (json["settings"]["oledDisplayGroup"].is<JsonVariant>()) {
                 strlcpy(oledDisplayGroup, json["settings"]["oledDisplayGroup"] | "", sizeof(oledDisplayGroup));
