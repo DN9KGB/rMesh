@@ -75,17 +75,23 @@ jobs:
       - name: Build firmware (${{ matrix.env }})
         run: pio run -e ${{ matrix.env }} -j 6
 
-      - name: Build filesystem (${{ matrix.env }})
-        run: pio run -e ${{ matrix.env }} --target buildfs -j 6
-
-      - name: Stage artifacts
+      - name: Stage firmware artifacts
         run: |
           set -euo pipefail
           mkdir -p staging
           env_dir=".pio/build/${{ matrix.env }}"
-          for f in firmware.bin bootloader.bin partitions.bin littlefs.bin firmware.hex firmware.uf2; do
+          for f in firmware.bin bootloader.bin partitions.bin firmware.hex firmware.uf2; do
             [ -f "$env_dir/$f" ] && cp "$env_dir/$f" "staging/${{ matrix.env }}_${f}"
           done
+
+      - name: Build filesystem (${{ matrix.env }})
+        run: pio run -e ${{ matrix.env }} --target buildfs -j 6
+
+      - name: Stage filesystem artifacts
+        run: |
+          set -euo pipefail
+          env_dir=".pio/build/${{ matrix.env }}"
+          [ -f "$env_dir/littlefs.bin" ] && cp "$env_dir/littlefs.bin" "staging/${{ matrix.env }}_littlefs.bin"
           ls -lh staging/
 
       - uses: actions/upload-artifact@v4
