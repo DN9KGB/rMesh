@@ -27,6 +27,6 @@ void displayNextPage();
 void displayForcePage(DisplayPage p, uint32_t holdMs);
 void displayButtonPoll();
 void showStatusDisplaySplash(uint32_t holdMs);
-void showStatusDisplayFlashing();
+void showStatusDisplayFlashing(const char* what);
 
 #endif // ESP32_E22_V1

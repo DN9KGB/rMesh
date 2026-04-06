@@ -164,7 +164,7 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
              settings.mycall, PIO_ENV_NAME, newVersion);
     httpUpdate.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
     #ifdef ESP32_E22_V1
-    showStatusDisplayFlashing();
+    showStatusDisplayFlashing("Filesystem");
     #endif
 
     // LittleFS – up to 3 attempts
@@ -201,6 +201,10 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
     httpUpdate.onEnd([capturedVersion]() {
         sendOtaLog("update_success", VERSION, capturedVersion, "");
     });
+
+    #ifdef ESP32_E22_V1
+    showStatusDisplayFlashing("Firmware");
+    #endif
 
     // Firmware – up to 3 attempts
     char fwUrl[256];

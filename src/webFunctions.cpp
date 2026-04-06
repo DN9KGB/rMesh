@@ -637,7 +637,7 @@ void startWebServer() {
                          logPrintf(LOG_INFO, "Web", "OTA-Upload Start: %s, type: %s", filename.c_str(),
                                        updateType == U_SPIFFS ? "SPIFFS" : "Flash");
                          #ifdef ESP32_E22_V1
-                         showStatusDisplayFlashing();
+                         showStatusDisplayFlashing(updateType == U_SPIFFS ? "Filesystem" : "Firmware");
                          #endif
                          if (!Update.begin(UPDATE_SIZE_UNKNOWN, updateType)) {
                              logPrintf(LOG_ERROR, "Web", "OTA-Upload begin() error: %s", Update.errorString());

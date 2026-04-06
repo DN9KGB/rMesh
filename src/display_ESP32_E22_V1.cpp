@@ -329,7 +329,7 @@ void showStatusDisplaySplash(uint32_t holdMs) {
     splashUntil = millis() + holdMs;
 }
 
-void showStatusDisplayFlashing() {
+void showStatusDisplayFlashing(const char* what) {
     if (!displayDetected) return;
     flashingLock = true;
     u8g2.setPowerSave(0);
@@ -338,10 +338,15 @@ void showStatusDisplayFlashing() {
     u8g2.setFont(u8g2_font_logisoso22_tr);
     const char* txt = "Flashing";
     uint8_t tw = u8g2.getStrWidth(txt);
-    u8g2.drawStr((128 - tw) / 2, 32, txt);
+    u8g2.drawStr((128 - tw) / 2, 26, txt);
     u8g2.setFont(u8g2_font_6x10_tf);
-    u8g2.drawStr((128 - u8g2.getStrWidth("...")) / 2, 50, "...");
-    u8g2.drawStr((128 - u8g2.getStrWidth("do not power off")) / 2, 62, "do not power off");
+    const char* label = (what && what[0]) ? what : "...";
+    uint8_t lw = u8g2.getStrWidth(label);
+    u8g2.drawStr((128 - lw) / 2, 44, label);
+    u8g2.setFont(u8g2_font_5x7_tf);
+    const char* warn = "do not power off";
+    uint8_t ww = u8g2.getStrWidth(warn);
+    u8g2.drawStr((128 - ww) / 2, 62, warn);
     u8g2.sendBuffer();
 }
 
