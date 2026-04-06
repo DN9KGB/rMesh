@@ -126,8 +126,13 @@ void loadRoutes() {
 
 // Worker function — runs on the shared bgWorker task, no own stack alloc.
 static void saveRoutesWork() {
+#ifdef ESP32
     uint32_t _hf0 = ESP.getFreeHeap();
     uint32_t _hm0 = ESP.getMaxAllocHeap();
+#else
+    uint32_t _hf0 = 0;
+    uint32_t _hm0 = 0;
+#endif
 
     if (!xSemaphoreTake(listMutex, pdMS_TO_TICKS(1000))) {
         logPrintf(LOG_ERROR, "FS", "listMutex timeout in saveRoutes");
@@ -280,8 +285,13 @@ void loadPeers() {
 }
 
 static void savePeersWork() {
+#ifdef ESP32
     uint32_t _hf0 = ESP.getFreeHeap();
     uint32_t _hm0 = ESP.getMaxAllocHeap();
+#else
+    uint32_t _hf0 = 0;
+    uint32_t _hm0 = 0;
+#endif
 
     if (!xSemaphoreTake(listMutex, pdMS_TO_TICKS(1000))) {
         logPrintf(LOG_ERROR, "FS", "listMutex timeout in savePeers");
