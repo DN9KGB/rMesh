@@ -1,5 +1,13 @@
 # Changelog
 
+## [v1.0.31b]
+
+- NEU: Rotierende Multi-Screen-UI (`ID` / `NET` / `LoRa` / `MSG` / `SYS`) jetzt auch auf HELTEC WiFi LoRa 32 V3, LILYGO T3 LoRa32 V1.6.1 und LILYGO T-Beam — gemeinsame Page-Renderer und Rotations-Logik für alle U8g2-Boards
+- NEU: LILYGO T-Echo nutzt dieselbe Rotation (Page-Mask + Button-Cycling, kein Auto-Advance um das E-Paper zu schonen) und zeigt jetzt Boot-Splash und Flashing-Screen
+- NEU: Boot-Splash und „Flashing"-Screen während OTA/HTTP-Updates jetzt auch auf LILYGO T-LoraPager und SEEED SenseCAP Indicator
+- NEU: Splash- und Flashing-Screens werden grundsätzlich angezeigt, auch wenn das Display in den Einstellungen deaktiviert ist
+- NEU: Anzeige verworfener Frames in der WebUI — neuer Lifetime-Counter zählt Pakete, die nach Erschöpfen aller Retries verworfen wurden (sowohl Multi-Retry-Purge bei unerreichbaren Peers als auch einmalige ACK-Drops), sichtbar als „Verworfen" / „Dropped" in der Statusleiste
+
 ## [v1.0.31a]
 
 - NEU: Routing ignoriert direkte Peers, deren SNR unter dem konfigurierten `minSnr`-Schwellwert liegt — der direkte Routen-Eintrag wird entfernt, sodass eine Mehrhop-Alternative über einen stärker empfangenen Nachbar-Node übernehmen kann
