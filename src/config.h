@@ -117,8 +117,22 @@ inline uint8_t syncWordForFrequency(float f) {
 /** Maximum length of a callsign string (1–15 characters). */
 #define MAX_CALLSIGN_LENGTH 9
 
-/** Size of the outgoing TX frame buffer (number of frames, reduced to save heap). */
-#define TX_BUFFER_SIZE 20
+/**
+ * Size of the outgoing TX frame buffer (number of frames).
+ *
+ * Hub-Nodes mit vielen Peers fluten den Buffer beim Senden einer
+ * Gruppen-Nachricht (eine Per-Peer-Kopie pro available Peer). 64 Slots
+ * geben Knoten mit ~15+ Peers ausreichend Headroom; auf nRF52840-Targets
+ * mit knappem Heap wird der Wert auf 32 reduziert. Per Board-Define
+ * überschreibbar, bevor diese Datei eingebunden wird.
+ */
+#ifndef TX_BUFFER_SIZE
+#ifdef NRF52_PLATFORM
+#define TX_BUFFER_SIZE 32
+#else
+#define TX_BUFFER_SIZE 64
+#endif
+#endif
 
 /** Maximum number of peers tracked simultaneously. */
 #define PEER_LIST_SIZE 20
