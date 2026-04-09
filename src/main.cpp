@@ -453,17 +453,13 @@ void processRxFrame(Frame &f) {
             // Update routing: the sender is reachable via nodeCall
             addRoutingList(f.srcCall, f.nodeCall, f.hopCount);
 
-            // Duplicate detected: remove any remaining relay copies from TX buffer
-            if (found) {
-                txBuffer.erase(
-                    std::remove_if(txBuffer.begin(), txBuffer.end(),
-                        [&](const Frame& txB) {
-                            return (strcmp(txB.srcCall, f.srcCall) == 0) && (txB.id == f.id)
-                                && (txB.frameType == Frame::FrameTypes::MESSAGE_FRAME);
-                        }),
-                    txBuffer.end()
-                );
-            }
+            // NOTE: We intentionally do NOT erase pending relay copies from
+            // txBuffer when a duplicate is seen here. A duplicate arriving
+            // from another relayer means "someone else also has it" — not
+            // "we already sent it". Wiping our own pending copies kills the
+            // very redundancy that the multi-path relay is meant to provide.
+            // The repeat block below uses `found` to skip enqueueing NEW
+            // copies for already-known IDs; that is the correct dedup point.
 
             // Check if this message is addressed to someone else (private message not for us)
             bool forOther = (strlen(f.dstCall) > 0) && (strcmp(f.dstCall, settings.mycall) != 0);
