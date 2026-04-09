@@ -12,6 +12,7 @@
 - PERF/FS: FileWriter drained alle pending Slots pro `fsMutex`-Hold und gruppiert Writes nach Dateiname → 1× `open`/`close` pro Datei pro Batch statt pro Slot. Bei Bursts deutlich weniger Flash-Metadata-Flushes, niedrigere Fragmentierung, kürzere Stalls.
 - NEU: FileWriter-Diagnostik in `/api/status` (`diagnostics.fileWriter`) — `pending`, `maxPending` (Lifetime-Watermark), `slots`, `writes`, `dropped`. Vom Bridgeserver in die Telemetrie-DB übernommen und im Dashboard als sechster Chart pro Node sichtbar.
 - FIX: Routing-Update-Fall logged jetzt explizit `Updated route: …` (vorher nur „new route" wurde geloggt, Updates fielen unter den Tisch).
+- FIX: Relay-Pfad löschte beim Empfang eines Duplikats *aller* noch im `txBuffer` wartenden Relay-Kopien für dieselbe Message-ID — auch der eigenen, die noch nie gesendet wurden. Dadurch gingen Messages häufig benutzter Quellen verloren, sobald innerhalb der WiFi-Retry-Wartezeit (2 s) eine zweite Relay-Quelle dieselbe Message rebroadcastete. Der Dedup beim *neuen* Enqueue über `found` reicht aus; bestehende, schon eingestellte Kopien werden jetzt nicht mehr abgewürgt.
 
 ## [v1.0.31b]
 
