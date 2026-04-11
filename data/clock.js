@@ -1,19 +1,17 @@
-// Digital clock - replaces analog canvas clock
-var _clockOffsetMs = 0;
-var _clockHasServerTime = false;
+// Digital clock - ticks locally every second, synced by server status pushes
+var _clockServerTime = 0;   // last server epoch (seconds)
+var _clockLocalBase  = 0;   // millis() when we received it
 
 function drawClock(now) {
-  if (now instanceof Date) {
-    _clockOffsetMs = now.getTime() - Date.now();
-    _clockHasServerTime = true;
-  }
-  _renderClock();
+  // Called from status push with server time — resync
+  _clockServerTime = Math.floor(now.getTime() / 1000);
+  _clockLocalBase  = Date.now();
+  _renderClock(now);
 }
 
-function _renderClock() {
+function _renderClock(now) {
   var el = document.getElementById('clock');
   if (!el) return;
-  var now = new Date(Date.now() + _clockOffsetMs);
   var h = String(now.getHours()).padStart(2, '0');
   var m = String(now.getMinutes()).padStart(2, '0');
   var s = String(now.getSeconds()).padStart(2, '0');
@@ -28,6 +26,8 @@ function _renderClock() {
   }
 }
 
-setInterval(function () {
-  if (_clockHasServerTime) _renderClock();
+setInterval(function() {
+  if (!_clockServerTime) return;
+  var elapsed = Math.floor((Date.now() - _clockLocalBase) / 1000);
+  _renderClock(new Date((_clockServerTime + elapsed) * 1000));
 }, 1000);
