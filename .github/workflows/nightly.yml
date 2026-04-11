@@ -17,12 +17,25 @@ jobs:
           ref: dev-next
           fetch-depth: 0
 
+      - name: Verify dev-next checkout
+        run: |
+          echo "Branch: $(git rev-parse --abbrev-ref HEAD)"
+          echo "Commit: $(git rev-parse --short HEAD)"
+          if [ "$(git rev-parse --abbrev-ref HEAD)" != "dev-next" ]; then
+            echo "::error::Expected dev-next but got $(git rev-parse --abbrev-ref HEAD)"
+            exit 1
+          fi
+
+      - name: Compute cache key from checked-out files
+        id: cache-key
+        run: echo "hash=$(sha256sum platformio.ini extra_scripts/patch_lilygolib.py | sha256sum | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
       - uses: actions/cache@v4
         with:
           path: |
             ~/.platformio
             .pio/libdeps
-          key: pio-${{ hashFiles('platformio.ini', 'extra_scripts/patch_lilygolib.py') }}
+          key: pio-dev-next-${{ steps.cache-key.outputs.hash }}
 
       - uses: actions/setup-python@v5
         with:
