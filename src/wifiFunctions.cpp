@@ -6,7 +6,6 @@
 #include <HTTPClient.h>
 #include "heapdbg.h"
 #include <HTTPUpdate.h>
-#include <WiFiClientSecure.h>
 
 #include "wifiFunctions.h"
 #include "serial.h"
@@ -179,8 +178,7 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
             sendUpdateStatus(retryMsg);
             delay(3000);
         }
-        WiFiClientSecure spiffsClient;
-        spiffsClient.setInsecure();
+        WiFiClient spiffsClient;
         spiffsClient.setTimeout(120000);
         spiffsResult = httpUpdate.updateSpiffs(spiffsClient, spiffsUrl);
         if (spiffsResult != HTTP_UPDATE_FAILED) break;
@@ -216,8 +214,7 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
             sendUpdateStatus(retryMsg);
             delay(3000);
         }
-        WiFiClientSecure fwClient;
-        fwClient.setInsecure();
+        WiFiClient fwClient;
         fwClient.setTimeout(120000);
         fwResult = httpUpdate.update(fwClient, fwUrl);
         if (fwResult != HTTP_UPDATE_FAILED) break;
@@ -236,6 +233,8 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
 }
 
 void showWiFiStatus() {
+    if (!wifiEnabled) return;
+
     // Process deferred WiFi scan actions from event callback
     processDeferredScanActions();
 
@@ -384,6 +383,13 @@ void onWiFiGotIP(WiFiEvent_t event, WiFiEventInfo_t info) {
     } else {
         logPrintf(LOG_ERROR, "mDNS", "failed to start");
     }
+#ifdef HAS_ETHERNET
+    // Set WiFi as default outbound route if configured as primary
+    if (primaryInterface == 1) {
+        WiFi.STA.setDefault();
+        logPrintf(LOG_INFO, "WiFi", "Set as primary interface (outbound route)");
+    }
+#endif
 }
 
 void onWiFiScanDone(WiFiEvent_t event, WiFiEventInfo_t info) {
@@ -498,6 +504,11 @@ static void processDeferredScanActions() {
 
 
 void wifiInit() {
+    if (!wifiEnabled) {
+        WiFi.mode(WIFI_OFF);
+        logPrintf(LOG_INFO, "WiFi", "WiFi disabled in settings.");
+        return;
+    }
     WiFi.mode(WIFI_STA);
     if (settings.apMode) {
         // Access Point mode
