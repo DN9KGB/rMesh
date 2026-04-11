@@ -23,7 +23,11 @@
 
 #include "wifiFunctions.h"
 #include "webFunctions.h"
+#include "ethFunctions.h"
 #include "serial.h"
+#ifdef HAS_ETHERNET
+#include <ETH.h>
+#endif
 
 // ── NTP sync tracking ──────────────────────────────────────────────────────
 static uint32_t lastNtpSyncTime = 0;
@@ -725,6 +729,109 @@ static void handleImportMessages(AsyncWebServerRequest *request, uint8_t *data, 
     request->send(200, "application/json", resp);
 }
 
+// One-shot client → node migration: a browser whose localStorage holds
+// messages that were never persisted on the node (e.g. from before the
+// server-side persistence was added) can POST them here. Duplicates are
+// detected by (srcCall, id) and skipped.
+static void handleImportMessages(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+    if (!checkApiAuth(request)) return;
+
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, data, len);
+    if (err) {
+        request->send(400, "application/json", "{\"error\":\"invalid json\"}");
+        return;
+    }
+    JsonArray arr = doc["messages"].as<JsonArray>();
+    if (arr.isNull()) {
+        request->send(400, "application/json", "{\"error\":\"messages array required\"}");
+        return;
+    }
+
+    // Open /messages.json directly under fsMutex and append all imported
+    // lines synchronously. Going through addJSONtoFile() would push them
+    // through a 16-slot queue with a non-blocking round-robin allocator
+    // that overwrites unprocessed slots when the queue fills up — exactly
+    // what happens during a bulk import of 100+ messages from a browser.
+    File msgFile;
+    bool fsLocked = false;
+    if (xSemaphoreTake(fsMutex, pdMS_TO_TICKS(5000))) {
+        fsLocked = true;
+        msgFile = LittleFS.open("/messages.json", "a");
+    }
+
+    int imported = 0, skipped = 0;
+    for (JsonObject m : arr) {
+        uint8_t mt = m["messageType"] | 0xFF;
+        if (mt != 0 && mt != 1) { skipped++; continue; }
+
+        uint32_t mid = m["id"] | 0;
+        const char* src = m["srcCall"] | "";
+        if (mid == 0 || src[0] == '\0') { skipped++; continue; }
+
+        // Duplicate check against current ring buffer
+        bool dup = false;
+        for (uint8_t i = 0; i < msgCount; i++) {
+            uint8_t idx = (msgHead - msgCount + i + API_MSG_BUFFER_SIZE) % API_MSG_BUFFER_SIZE;
+            if (msgBuffer[idx].id == mid && strcmp(msgBuffer[idx].src, src) == 0) {
+                dup = true; break;
+            }
+        }
+        if (dup) { skipped++; continue; }
+
+        ApiMessage &msg = msgBuffer[msgHead];
+        memset(&msg, 0, sizeof(msg));
+        msg.id   = mid;
+        msg.time = m["timestamp"] | 0;
+        strlcpy(msg.src,   src, sizeof(msg.src));
+        strlcpy(msg.group, m["dstGroup"] | "", sizeof(msg.group));
+        strlcpy(msg.text,  m["text"]     | "", sizeof(msg.text));
+        msg.hops  = m["hopCount"] | 0;
+        msg.dir   = (m["tx"] | false) ? 1 : 0;
+        msg.acked = false;
+
+        msgHead = (msgHead + 1) % API_MSG_BUFFER_SIZE;
+        if (msgCount < API_MSG_BUFFER_SIZE) msgCount++;
+
+        // Also append to /messages.json (durable 1000-entry archive that the
+        // web client reads on init). Direct write under fsMutex — see comment
+        // above the loop for why we do not use addJSONtoFile() here.
+        if (msgFile) {
+            JsonDocument out;
+            JsonObject mo = out["message"].to<JsonObject>();
+            mo["text"]        = msg.text;
+            mo["messageType"] = mt;
+            mo["dstCall"]     = "";
+            mo["dstGroup"]    = msg.group;
+            mo["srcCall"]     = msg.src;
+            mo["id"]          = msg.id;
+            mo["tx"]          = (msg.dir != 0);
+            mo["timestamp"]   = msg.time;
+            mo["hopCount"]    = msg.hops;
+            char line[1024];
+            size_t ln = serializeJson(out, line, sizeof(line));
+            if (ln > 0 && ln < sizeof(line)) {
+                msgFile.write((const uint8_t*)line, ln);
+                msgFile.print("\n");
+            }
+        }
+
+        imported++;
+    }
+
+    if (msgFile) msgFile.close();
+    if (fsLocked) xSemaphoreGive(fsMutex);
+
+    // Trim if we exceeded the durable cap (async, queued — single trim, fine).
+    if (imported > 0) {
+        trimFile("/messages.json", MAX_STORED_MESSAGES);
+    }
+
+    char resp[96];
+    snprintf(resp, sizeof(resp), "{\"ok\":true,\"imported\":%d,\"skipped\":%d}", imported, skipped);
+    request->send(200, "application/json", resp);
+}
+
 static void handleGroups(AsyncWebServerRequest *request) {
     if (!checkApiAuth(request)) return;
     if (!heapGuard(request)) return;
@@ -835,8 +942,8 @@ static void handleSettings(AsyncWebServerRequest *request) {
     }
 
     // LoRa settings
-    jPrintf(",\"loraFrequency\":%.4f,\"loraOutputPower\":%d,\"loraBandwidth\":%.1f",
-            settings.loraFrequency, (int)settings.loraOutputPower, settings.loraBandwidth);
+    jPrintf(",\"loraFrequency\":%.4f,\"loraOutputPower\":%d,\"loraMaxTxPower\":%d,\"loraBandwidth\":%.1f",
+            settings.loraFrequency, (int)settings.loraOutputPower, (int)LORA_MAX_TX_POWER, settings.loraBandwidth);
     jPrintf(",\"loraSyncWord\":%u,\"loraCodingRate\":%u,\"loraSpreadingFactor\":%u",
             (unsigned)settings.loraSyncWord, (unsigned)settings.loraCodingRate, (unsigned)settings.loraSpreadingFactor);
     jPrintf(",\"loraPreambleLength\":%d,\"loraRepeat\":%s,\"loraMaxMessageLength\":%u",
@@ -894,6 +1001,38 @@ static void handleSettings(AsyncWebServerRequest *request) {
     }
     jPrintf("}");
 
+    // Ethernet & per-interface settings
+#ifdef HAS_ETHERNET
+    jPrintf(",\"hasEthernet\":true");
+    jPrintf(",\"ethConnected\":%s", ethConnected ? "true" : "false");
+    if (ethConnected) {
+        jPrintf(",\"ethCurrentIP\":[%u,%u,%u,%u]",
+                ETH.localIP()[0], ETH.localIP()[1], ETH.localIP()[2], ETH.localIP()[3]);
+        jPrintf(",\"ethCurrentNetMask\":[%u,%u,%u,%u]",
+                ETH.subnetMask()[0], ETH.subnetMask()[1], ETH.subnetMask()[2], ETH.subnetMask()[3]);
+        jPrintf(",\"ethCurrentGateway\":[%u,%u,%u,%u]",
+                ETH.gatewayIP()[0], ETH.gatewayIP()[1], ETH.gatewayIP()[2], ETH.gatewayIP()[3]);
+        jPrintf(",\"ethCurrentDNS\":[%u,%u,%u,%u]",
+                ETH.dnsIP()[0], ETH.dnsIP()[1], ETH.dnsIP()[2], ETH.dnsIP()[3]);
+        jPrintf(",\"ethLinkSpeed\":%u,\"ethFullDuplex\":%s",
+                ETH.linkSpeed(), ETH.fullDuplex() ? "true" : "false");
+    }
+#else
+    jPrintf(",\"hasEthernet\":false");
+#endif
+    jPrintf(",\"wifiEnabled\":%s", wifiEnabled ? "true" : "false");
+    jPrintf(",\"ethEnabled\":%s,\"ethDhcp\":%s",
+            ethEnabled ? "true" : "false", ethDhcp ? "true" : "false");
+    jPrintf(",\"ethIP\":[%u,%u,%u,%u]", ethIP[0], ethIP[1], ethIP[2], ethIP[3]);
+    jPrintf(",\"ethNetMask\":[%u,%u,%u,%u]", ethNetMask[0], ethNetMask[1], ethNetMask[2], ethNetMask[3]);
+    jPrintf(",\"ethGateway\":[%u,%u,%u,%u]", ethGateway[0], ethGateway[1], ethGateway[2], ethGateway[3]);
+    jPrintf(",\"ethDNS\":[%u,%u,%u,%u]", ethDNS[0], ethDNS[1], ethDNS[2], ethDNS[3]);
+    jPrintf(",\"wifiNodeComm\":%s,\"wifiWebUI\":%s",
+            wifiNodeComm ? "true" : "false", wifiWebUI ? "true" : "false");
+    jPrintf(",\"ethNodeComm\":%s,\"ethWebUI\":%s",
+            ethNodeComm ? "true" : "false", ethWebUI ? "true" : "false");
+    jPrintf(",\"primaryInterface\":%u", (unsigned)primaryInterface);
+
     jPrintf("}}");
     jSend(request);
 }
@@ -927,6 +1066,15 @@ static void buildDiagnostics() {
     jPrintf(",\"channel\":%d,\"disconnects\":%lu,\"lastDisconnectReason\":%u,\"lastDisconnectTime\":%lu}",
             WiFi.channel(), (unsigned long)wifiDisconnectCount,
             lastWifiDisconnectReason, (unsigned long)lastWifiDisconnectTime);
+#ifdef HAS_ETHERNET
+    jPrintf(",\"eth\":{\"connected\":%s", ethConnected ? "true" : "false");
+    if (ethConnected) {
+        jPrintf(",\"ip\":\"%s\",\"mac\":\"%s\",\"speed\":%u,\"fullDuplex\":%s",
+                ETH.localIP().toString().c_str(), ETH.macAddress().c_str(),
+                ETH.linkSpeed(), ETH.fullDuplex() ? "true" : "false");
+    }
+    jPrintf("}");
+#endif
     jPrintf(",\"lora\":{\"txQueue\":%u,\"txTotal\":%lu,\"rxTotal\":%lu,\"dropped\":%lu",
             (unsigned)txBuffer.size(), (unsigned long)apiTxTotal, (unsigned long)apiRxTotal,
             (unsigned long)droppedFrames);
