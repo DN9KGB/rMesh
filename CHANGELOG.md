@@ -18,6 +18,7 @@
 - FIX: WiFi-Favorit wurde beim Speichern still auf das alte Netzwerk zurückgesetzt — `saveSettings()` behandelte das Legacy-Feld `settings.wifiSSID` als autoritativ und überschrieb den vom Benutzer gewählten Favoriten. Jetzt ist `wifiNetworks` die einzige Quelle der Wahrheit
 - FIX: Deaktivierte UDP-Peers wurden nur beim Senden übersprungen — eingehende Pakete von ihnen wurden weiterhin verarbeitet. Jetzt werden auch empfangene Frames von deaktivierten Peers sofort verworfen
 - FIX: T-ETH-Elite Pin-Mapping für SX1262-Shield korrigiert (CS, RST, IRQ, BUSY, SD_CS) — Quelle jetzt offizielles LilyGO `utilities.h`
+- FIX: Uhr in der WebUI tickte nur alle 3 Sekunden (synchron mit dem Status-Push) — jetzt clientseitige Interpolation jede Sekunde, Server-Sync alle 3 s
 - FIX: Redundante DOM-Lookups für `settingsMycall` in der Nachrichtenanzeige entfernt; Race-Condition beim initialen Datenabruf behoben
 - NEU: TX-Leistung wird pro Board auf das Hardware-Maximum begrenzt (`LORA_MAX_TX_POWER`) — Clamping beim Laden, in Serial, WebUI und API; WebUI zeigt den erlaubten Maximalwert als Hinweis an
 - NEU: LoRa-Recovery — schlägt die Radio-Initialisierung fehl, wird alle 30 s automatisch ein erneuter Versuch unternommen; Radio-Init auf T-ETH-Elite mit bis zu 3 Versuchen und SPI-Guard gegen blockiertes SPI-Peripheral
