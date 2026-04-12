@@ -63,19 +63,34 @@ static void stopBle() {
 void btManagerInit() {
     s_mode = (BtMode)btMode;  // loaded from NVS in loadSettings()
 
+    logPrintf(LOG_INFO, "BT", "Free heap before BLE init: %u", ESP.getFreeHeap());
+
     switch (s_mode) {
         case BtMode::OFF:
             logPrintf(LOG_INFO, "BT", "Mode OFF");
             break;
         case BtMode::COEX:
+            if (ESP.getFreeHeap() < 80000) {
+                logPrintf(LOG_WARN, "BT", "Heap too low for COEX (%u bytes) — falling back to OFF", ESP.getFreeHeap());
+                s_mode = BtMode::OFF;
+                btMode = 0;
+                break;
+            }
             logPrintf(LOG_INFO, "BT", "Mode COEX (WiFi + BLE)");
             startBle();
             break;
         case BtMode::EXCLUSIVE:
+            if (ESP.getFreeHeap() < 60000) {
+                logPrintf(LOG_WARN, "BT", "Heap too low for EXCLUSIVE (%u bytes) — falling back to OFF", ESP.getFreeHeap());
+                s_mode = BtMode::OFF;
+                btMode = 0;
+                break;
+            }
             logPrintf(LOG_INFO, "BT", "Mode EXCLUSIVE (WiFi paused on BLE connect)");
             startBle();
             break;
     }
+    logPrintf(LOG_INFO, "BT", "Free heap after BLE init: %u", ESP.getFreeHeap());
 }
 
 void btManagerSetMode(BtMode mode) {
