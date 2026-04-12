@@ -15,6 +15,7 @@ static bool   s_bleRunning = false;
 static bool   s_wifiStopped = false;
 static bool   s_pendingWifiStop = false;   // deferred WiFi shutdown
 static uint32_t s_wifiStopAt = 0;
+static bool   s_pendingWifiRestore = false; // deferred WiFi restore after BLE stop
 
 static void stopBle();
 
@@ -53,11 +54,10 @@ static void stopBle() {
     if (!s_bleRunning) return;
     bleTransportDeinit();
     s_bleRunning = false;
-    // If WiFi was stopped for EXCLUSIVE, restore it
+    // If WiFi was stopped for EXCLUSIVE, schedule restore (deferred)
     if (s_wifiStopped) {
         s_wifiStopped = false;
-        wifiInit();
-        startWebServer();
+        s_pendingWifiRestore = true;
     }
 }
 
@@ -170,10 +170,19 @@ void btManagerTick() {
             logPrintf(LOG_INFO, "BT", "Free heap after BLE start: %u", ESP.getFreeHeap());
         }
     }
+    // Deferred WiFi restore — after BLE stopped, bring WiFi back up
+    if (s_pendingWifiRestore) {
+        s_pendingWifiRestore = false;
+        logPrintf(LOG_INFO, "BT", "Restoring WiFi + WebServer...");
+        wifiInit();
+        startWebServer();
+        logPrintf(LOG_INFO, "BT", "WiFi restored, free heap: %u", ESP.getFreeHeap());
+    }
+
     bleTransportTick();
 }
 
-#else // !HAS_WIFI
+#else // !HAS_BLE
 
 #include "bt_manager.h"
 
