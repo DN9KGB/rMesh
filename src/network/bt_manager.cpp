@@ -109,9 +109,12 @@ void btManagerSetMode(BtMode mode) {
 
     switch (mode) {
         case BtMode::OFF:
-            logPrintf(LOG_INFO, "BT", "Switching to OFF");
-            stopBle();
-            break;
+            logPrintf(LOG_INFO, "BT", "Switching to OFF — rebooting to free BLE memory");
+            // NimBLEDevice::deinit() crashes lwIP, so we can't cleanly free
+            // the ~30 KB BLE stack at runtime. Reboot is the only safe way.
+            rebootTimer = millis() + 500;
+            rebootRequested = true;
+            return;  // don't fall through — reboot will apply the new mode
         case BtMode::COEX:
             if (!psramFound()) {
                 logPrintf(LOG_WARN, "BT", "COEX requires PSRAM — using EXCLUSIVE instead");
