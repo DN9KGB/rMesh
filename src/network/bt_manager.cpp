@@ -14,6 +14,8 @@ static BtMode s_mode = BtMode::OFF;
 static bool   s_bleRunning = false;
 static bool   s_wifiStopped = false;
 
+static void stopBle();
+
 // ── BLE connect/disconnect callback ─────────────────────────────────────────
 
 static void onBleConnect(bool connected) {
@@ -26,11 +28,9 @@ static void onBleConnect(bool connected) {
         s_wifiStopped = true;
     }
     if (!connected && s_wifiStopped) {
-        // BLE client disconnected → restore WiFi
-        logPrintf(LOG_INFO, "BT", "EXCLUSIVE: restoring WiFi");
-        s_wifiStopped = false;
-        wifiInit();
-        startWebServer();
+        // BLE client disconnected → stop BLE and restore WiFi
+        logPrintf(LOG_INFO, "BT", "EXCLUSIVE: stopping BLE, restoring WiFi");
+        stopBle();
     }
 }
 
@@ -71,19 +71,20 @@ void btManagerInit() {
             break;
         case BtMode::COEX:
             if (!psramFound()) {
-                logPrintf(LOG_WARN, "BT", "COEX requires PSRAM — falling back to EXCLUSIVE on this board");
+                logPrintf(LOG_WARN, "BT", "COEX requires PSRAM — BLE deferred until WiFi stops");
                 s_mode = BtMode::EXCLUSIVE;
                 btMode = (uint8_t)BtMode::EXCLUSIVE;
-            } else {
-                logPrintf(LOG_INFO, "BT", "Mode COEX (WiFi + BLE, PSRAM available)");
+                // Do NOT start BLE now — will start on demand
+                break;
             }
+            logPrintf(LOG_INFO, "BT", "Mode COEX (WiFi + BLE, PSRAM available)");
             startBle();
             break;
         case BtMode::EXCLUSIVE:
-            if (ESP.getFreeHeap() < 60000) {
-                logPrintf(LOG_WARN, "BT", "Heap too low for EXCLUSIVE (%u bytes) — falling back to OFF", ESP.getFreeHeap());
-                s_mode = BtMode::OFF;
-                btMode = 0;
+            if (!psramFound()) {
+                // On non-PSRAM boards: don't start BLE at boot — it eats 148 KB.
+                // BLE will start lazily when user triggers it (double-click or WebUI).
+                logPrintf(LOG_INFO, "BT", "Mode EXCLUSIVE (BLE deferred, starts on demand)");
                 break;
             }
             logPrintf(LOG_INFO, "BT", "Mode EXCLUSIVE (WiFi paused on BLE connect)");
@@ -113,21 +114,26 @@ void btManagerSetMode(BtMode mode) {
                 logPrintf(LOG_WARN, "BT", "COEX requires PSRAM — using EXCLUSIVE instead");
                 s_mode = BtMode::EXCLUSIVE;
                 btMode = (uint8_t)BtMode::EXCLUSIVE;
+                // Fall through to EXCLUSIVE logic below
+            } else {
+                logPrintf(LOG_INFO, "BT", "Switching to COEX");
                 if (old == BtMode::OFF) startBle();
+                if (s_wifiStopped) {
+                    s_wifiStopped = false;
+                    wifiInit();
+                    startWebServer();
+                }
                 break;
             }
-            logPrintf(LOG_INFO, "BT", "Switching to COEX");
-            if (old == BtMode::OFF) startBle();
-            // If WiFi was stopped (from EXCLUSIVE), restore
-            if (s_wifiStopped) {
-                s_wifiStopped = false;
-                wifiInit();
-                startWebServer();
-            }
-            break;
+            // fall through for non-PSRAM EXCLUSIVE
         case BtMode::EXCLUSIVE:
-            logPrintf(LOG_INFO, "BT", "Switching to EXCLUSIVE");
-            if (old == BtMode::OFF) startBle();
+            logPrintf(LOG_INFO, "BT", "Switching to EXCLUSIVE — stopping WiFi, starting BLE");
+            if (!s_wifiStopped) {
+                WiFi.mode(WIFI_OFF);
+                s_wifiStopped = true;
+            }
+            if (!s_bleRunning) startBle();
+            logPrintf(LOG_INFO, "BT", "Free heap after BLE start: %u", ESP.getFreeHeap());
             break;
     }
 }
