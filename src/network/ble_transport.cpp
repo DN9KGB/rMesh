@@ -66,7 +66,14 @@ class RxCB : public NimBLECharacteristicCallbacks {
 void bleTransportInit(const char* mycall, BleRxCallback onRx) {
     s_onRx = onRx;
 
-    // Device name: "rMesh-<mycall>"
+    // If already initialized (re-enable after stop), just restart advertising
+    if (s_server) {
+        if (s_adv) s_adv->start();
+        logPrintf(LOG_INFO, "BLE", "Re-enabled advertising as 'rMesh-%s'", mycall);
+        return;
+    }
+
+    // First-time initialization
     std::string devName = "rMesh-";
     devName += mycall;
 
@@ -163,13 +170,15 @@ void bleTransportTick() {
 }
 
 void bleTransportDeinit() {
+    // Don't call NimBLEDevice::deinit() — it tears down the BT controller
+    // which corrupts mDNS/lwIP state and causes crashes on WiFi restore.
+    // Instead, just stop advertising and disconnect any client.
+    if (s_server && s_clientConnected) {
+        s_server->disconnect(0);
+    }
     if (s_adv) s_adv->stop();
-    NimBLEDevice::deinit(true);
-    s_server = nullptr;
-    s_txChar = nullptr;
-    s_adv = nullptr;
     s_clientConnected = false;
-    logPrintf(LOG_INFO, "BLE", "Deinitialized");
+    logPrintf(LOG_INFO, "BLE", "Stopped (stack remains in memory)");
 }
 
 bool bleTransportIsConnected() {
