@@ -13,6 +13,8 @@
 static BtMode s_mode = BtMode::OFF;
 static bool   s_bleRunning = false;
 static bool   s_wifiStopped = false;
+static bool   s_pendingWifiStop = false;   // deferred WiFi shutdown
+static uint32_t s_wifiStopAt = 0;
 
 static void stopBle();
 
@@ -21,12 +23,12 @@ static void stopBle();
 static void onBleConnect(bool connected) {
     if (s_mode != BtMode::EXCLUSIVE) return;
 
-    if (connected && !s_wifiStopped) {
-        // BLE client connected in EXCLUSIVE mode → pause WiFi
-        logPrintf(LOG_INFO, "BT", "EXCLUSIVE: pausing WiFi for BLE");
+    if (connected && !s_wifiStopped && !s_pendingWifiStop) {
+        // BLE client connected in EXCLUSIVE mode → schedule WiFi shutdown
+        logPrintf(LOG_INFO, "BT", "EXCLUSIVE: scheduling WiFi stop for BLE");
         stopWebServer();
-        WiFi.mode(WIFI_OFF);
-        s_wifiStopped = true;
+        s_pendingWifiStop = true;
+        s_wifiStopAt = millis() + 500;  // let AsyncTCP drain
     }
     if (!connected && s_wifiStopped) {
         // BLE client disconnected → stop BLE and restore WiFi
@@ -128,14 +130,13 @@ void btManagerSetMode(BtMode mode) {
             }
             // fall through for non-PSRAM EXCLUSIVE
         case BtMode::EXCLUSIVE:
-            logPrintf(LOG_INFO, "BT", "Switching to EXCLUSIVE — stopping WiFi, starting BLE");
-            if (!s_wifiStopped) {
-                stopWebServer();   // close WebSocket + HTTP before killing WiFi
-                WiFi.mode(WIFI_OFF);
-                s_wifiStopped = true;
+            logPrintf(LOG_INFO, "BT", "Switching to EXCLUSIVE — scheduling WiFi stop, starting BLE");
+            if (!s_wifiStopped && !s_pendingWifiStop) {
+                stopWebServer();
+                s_pendingWifiStop = true;
+                s_wifiStopAt = millis() + 500;
             }
-            if (!s_bleRunning) startBle();
-            logPrintf(LOG_INFO, "BT", "Free heap after BLE start: %u", ESP.getFreeHeap());
+            // BLE starts in btManagerTick() after WiFi is fully down
             break;
     }
 }
@@ -157,6 +158,18 @@ bool btManagerIsConnected() {
 }
 
 void btManagerTick() {
+    // Deferred WiFi shutdown — gives AsyncTCP time to drain its event queue
+    if (s_pendingWifiStop && (int32_t)(millis() - s_wifiStopAt) >= 0) {
+        s_pendingWifiStop = false;
+        logPrintf(LOG_INFO, "BT", "WiFi OFF now");
+        WiFi.mode(WIFI_OFF);
+        s_wifiStopped = true;
+        // Now safe to start BLE (WiFi freed its heap)
+        if (!s_bleRunning && s_mode == BtMode::EXCLUSIVE) {
+            startBle();
+            logPrintf(LOG_INFO, "BT", "Free heap after BLE start: %u", ESP.getFreeHeap());
+        }
+    }
     bleTransportTick();
 }
 
