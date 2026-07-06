@@ -353,8 +353,10 @@ void checkSerialRX() {
                 }
                 #endif // HAS_WIFI
 
-                //Defaults
-                if (strncmp(serialRxBuffer, "de", 2) == 0) {
+                //Defaults - exact match only ("de" or "defaults"): a prefix
+                //match would factory-reset on any typo starting with "de"
+                if (strcmp(serialRxBuffer, "de") == 0 || strcmp(serialRxBuffer, "defaults") == 0) {
+                    logPrintf(LOG_WARN, "CLI", "Factory reset - erasing all settings...");
                     std::memset(settings.mycall, 0xff, sizeof(settings.mycall));
                     #ifdef NRF52_PLATFORM
                     nvs_flash_erase_nrf52();

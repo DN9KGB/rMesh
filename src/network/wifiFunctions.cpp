@@ -6,6 +6,7 @@
 #include <HTTPClient.h>
 #include "util/heapdbg.h"
 #include <HTTPUpdate.h>
+#include <esp_task_wdt.h>
 
 #include "network/wifiFunctions.h"
 #include "util/serial.h"
@@ -149,7 +150,10 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
     }
     http.end();
 
-    // New update found
+    // New update found.
+    // The downloads below block this task for minutes (120 s client timeout,
+    // 3 attempts each) — unsubscribe from the task watchdog for the duration.
+    bool wdtDetached = (esp_task_wdt_delete(NULL) == ESP_OK);
     char newVersion[64];
     strlcpy(newVersion, latestTag, sizeof(newVersion));
     {
@@ -230,6 +234,7 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
                  httpUpdate.getLastErrorString().c_str());
         sendOtaLog("update_failed", VERSION, newVersion, logDetail);
     }
+    if (wdtDetached) esp_task_wdt_add(NULL);
 }
 
 void showWiFiStatus() {

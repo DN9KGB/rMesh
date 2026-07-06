@@ -214,7 +214,24 @@ void sendSettings() {
 
 void loadSettings() {
     logPrintf(LOG_INFO, "Settings", "Loading settings...");
-    prefs.begin("custom_settings", false);
+    if (!prefs.begin("custom_settings", false)) {
+        // NVS unusable (corrupt partition, foreign firmware residue, version
+        // mismatch): without a successful begin() every put/get fails silently
+        // and no setting ever persists. Erase and rebuild the partition once.
+        logPrintf(LOG_ERROR, "Settings", "NVS begin failed - erasing and re-initializing NVS");
+        #ifdef NRF52_PLATFORM
+        nvs_flash_erase_nrf52();
+        nvs_flash_init_nrf52();
+        #else
+        nvs_flash_erase();
+        nvs_flash_init();
+        #endif
+        if (!prefs.begin("custom_settings", false)) {
+            logPrintf(LOG_ERROR, "Settings", "NVS begin failed after erase - settings will NOT persist!");
+        } else {
+            logPrintf(LOG_WARN, "Settings", "NVS recovered - starting with default settings");
+        }
+    }
 #ifdef HAS_WIFI
     loadPasswordHash();
 #endif
@@ -487,7 +504,9 @@ void saveWifiNetworks() {
         strlcpy((char*)(entry + WIFI_NETWORK_SSID_LEN),    wifiNetworks[i].password, WIFI_NETWORK_PW_LEN);
         entry[WIFI_NETWORK_SSID_LEN + WIFI_NETWORK_PW_LEN] = wifiNetworks[i].favorite ? 1 : 0;
     }
-    prefs.putBytes("wifiNetworks", buf, bufLen);
+    if (prefs.putBytes("wifiNetworks", buf, bufLen) != bufLen) {
+        logPrintf(LOG_ERROR, "Settings", "saveWifiNetworks: putBytes failed - WiFi networks NOT saved");
+    }
     delete[] buf;
     prefs.putString("apName",     apName);
     prefs.putString("apPassword", apPassword);
@@ -511,7 +530,9 @@ void saveUdpPeers() {
         buf[5+i*6] = udpPeerLegacy[i] ? 1 : 0;
         buf[6+i*6] = udpPeerEnabled[i] ? 1 : 0;
     }
-    prefs.putBytes("udpPeers", buf, bufLen);
+    if (prefs.putBytes("udpPeers", buf, bufLen) != bufLen) {
+        logPrintf(LOG_ERROR, "Settings", "saveUdpPeers: putBytes failed - UDP peers NOT saved");
+    }
     delete[] buf;
     sendSettings();
 }
@@ -557,7 +578,9 @@ void saveSettings() {
         logPrintf(LOG_ERROR, "Settings", "saveSettings: putBytes(\"config\") wrote %u of %u bytes",
                        (unsigned)written, (unsigned)sizeof(settings));
     }
-    prefs.putBytes("extSettings", &extSettings, sizeof(extSettings));
+    if (prefs.putBytes("extSettings", &extSettings, sizeof(extSettings)) != sizeof(extSettings)) {
+        logPrintf(LOG_ERROR, "Settings", "saveSettings: putBytes(\"extSettings\") failed");
+    }
     prefs.putUChar("updateChannel", updateChannel);
     prefs.putBool("loraEnabled", loraEnabled);
     prefs.putBool("batEnabled", batteryEnabled);
@@ -573,5 +596,13 @@ void saveSettings() {
     saveUdpPeers();
     saveEthSettings();
 #endif
+
+    // Read back the config blob so persistence failures (full/corrupt NVS)
+    // are visible in the console instead of silently losing settings.
+    if (prefs.getBytesLength("config") == sizeof(settings)) {
+        logPrintf(LOG_INFO, "Settings", "Settings saved.");
+    } else {
+        logPrintf(LOG_ERROR, "Settings", "SETTINGS SAVE FAILED - NVS not writable! Try 'defaults' to reset the config storage.");
+    }
     pendingLoraReinit = true;
 }

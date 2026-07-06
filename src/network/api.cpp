@@ -995,6 +995,7 @@ static void buildDiagnostics() {
     jPrintf(",\"cpuFreqMHz\":%u", (unsigned)ESP.getCpuFreqMHz());
     jPrintf(",\"flashSizeKB\":%lu", (unsigned long)(ESP.getFlashChipSize() / 1024));
     jPrintf(",\"sdkVersion\":\"%s\"", ESP.getSdkVersion());
+    jPrintf(",\"loopAgeMs\":%lu", (unsigned long)(millis() - lastLoopMillis));
     jPrintf(",\"compileTime\":\"%s %s\"}", __DATE__, __TIME__);
     time_t now = time(nullptr);
     jPrintf(",\"ntp\":{\"synced\":%s,\"lastSyncTime\":%lu",

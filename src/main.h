@@ -113,5 +113,8 @@ extern uint16_t messagesHead;
 /** Set to true when LittleFS free space is critically low; triggers an immediate trim in the main loop. */
 extern volatile bool trimNeeded;
 
+/** millis() of the last loop() iteration — loop-health heartbeat for diagnostics. */
+extern volatile uint32_t lastLoopMillis;
+
 /// Global board configuration — set once in setup() via BoardFactory::create().
 extern IBoardConfig* board;

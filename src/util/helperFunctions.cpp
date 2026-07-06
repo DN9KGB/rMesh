@@ -290,6 +290,11 @@ static void fileWriteWorkerTask(void *) {
                 fwSlots[indices[i]].inUse = false;
                 fwAccountDequeue();
             }
+            // Count skipped writes as drops so a full filesystem is visible
+            // in /api/status diagnostics instead of failing silently.
+            FW_ENTER_CRITICAL();
+            fwDroppedFull = fwDroppedFull + n;
+            FW_EXIT_CRITICAL();
             continue;
         }
         #endif
@@ -413,14 +418,25 @@ void trimFileTask(void * pvParameters) {
         return;
     }
 
-    if (lineCount <= p->maxLines) {
+    // maxLines == 0: emergency trim (filesystem low on space) — halve the
+    // file regardless of the regular line limit. A fixed limit alone can
+    // deadlock: the FS fills up while the file is still under maxLines, all
+    // writes get skipped, and the regular trim never removes anything.
+    size_t targetLines = p->maxLines;
+    if (targetLines == 0) {
+        targetLines = lineCount / 2;
+        logPrintf(LOG_WARN, "FS", "Emergency trim %s: %u -> %u lines",
+                  p->fileName, (unsigned)lineCount, (unsigned)targetLines);
+    }
+
+    if (lineCount <= targetLines || lineCount == 0) {
         free(p);
         vTaskDelete(NULL);
         return;
     }
 
     // Phase 2: Trim file (separate mutex hold)
-    size_t linesToSkip = lineCount - p->maxLines;
+    size_t linesToSkip = lineCount - targetLines;
     if (xSemaphoreTake(fsMutex, pdMS_TO_TICKS(10000))) {
         File srcFile = LittleFS.open(p->fileName, "r");
         File dstFile = LittleFS.open("/temp_trim.json", "w");

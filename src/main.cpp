@@ -198,6 +198,9 @@ uint32_t messagesDeleteTimer = 30 * 60 * 1000;
 /** Filesystem low-space flag — set by addJSONtoFileTask, consumed by main loop. */
 volatile bool trimNeeded = false;
 
+/** millis() of the last loop() iteration — loop-health heartbeat for /api/diagnostics. */
+volatile uint32_t lastLoopMillis = 0;
+
 /** First topology report fires 5 minutes after boot. */
 uint32_t reportingTimer = 5 * 60 * 1000;
 
@@ -861,6 +864,27 @@ void setup() {
     // Start the async web server and WebSocket endpoint
     startWebServer();
 
+    #ifndef NRF52_PLATFORM
+    // Subscribe loopTask to the task watchdog: if the main loop wedges,
+    // the node reboots instead of staying half-dead (HTTP/WS alive, mesh
+    // processing stopped).
+    {
+        esp_task_wdt_config_t wdtConfig = {
+            .timeout_ms    = LOOP_WDT_TIMEOUT_MS,
+            .idle_core_mask = 0,      // don't watch idle tasks
+            .trigger_panic = true,    // panic → reboot with backtrace
+        };
+        esp_err_t wdtErr = esp_task_wdt_reconfigure(&wdtConfig);
+        if (wdtErr != ESP_OK) wdtErr = esp_task_wdt_init(&wdtConfig);
+        if (wdtErr == ESP_OK && esp_task_wdt_add(NULL) == ESP_OK) {
+            logPrintf(LOG_INFO, "System", "Loop watchdog armed (%u s)", (unsigned)(LOOP_WDT_TIMEOUT_MS / 1000));
+        } else {
+            logPrintf(LOG_WARN, "System", "Loop watchdog init failed (%d)", (int)wdtErr);
+        }
+    }
+    #endif
+    lastLoopMillis = millis();
+
     logPrintf(LOG_INFO, "System", "");
     logPrintf(LOG_INFO, "System", "%s", PIO_ENV_NAME);
     logPrintf(LOG_INFO, "System", "%s %s", NAME, VERSION);
@@ -896,6 +920,14 @@ void setup() {
  * 11. Topology reporting (hourly + change-driven 30 s debounce).
  */
 void loop() {
+    // Heartbeat: feeds the task watchdog and lets /api/diagnostics report
+    // loop health. A wedged loop now reboots after WDT timeout instead of
+    // leaving the node half-dead (HTTP alive, mesh processing stopped).
+    #ifndef NRF52_PLATFORM
+    esp_task_wdt_reset();
+    #endif
+    lastLoopMillis = millis();
+
     // ── 0. Deferred sends from background tasks (e.g. WebSocket) ────────────
     processPendingSends();
 
@@ -1263,7 +1295,10 @@ void loop() {
     if (trimNeeded) {
         trimNeeded = false;
         messagesDeleteTimer = millis() + 24 * 60 * 60 * 1000; // reset 24 h timer
-        trimFile("/messages.json", MAX_STORED_MESSAGES);
+        // Low space: emergency trim (maxLines=0 → halve) — the fixed limit
+        // may already be satisfied while the filesystem is still full.
+        trimFile("/messages.json", 0);
+        trimFile("/ack.json", 0);
     }
     if (timerExpired(messagesDeleteTimer)) {
         messagesDeleteTimer = millis() + 24 * 60 * 60 * 1000; // repeat every 24 h

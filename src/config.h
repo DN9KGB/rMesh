@@ -90,11 +90,17 @@ inline uint8_t syncWordForFrequency(float f) {
  */
 #define PEER_RETRY_COOLDOWN (90 * 1000UL)
 
-/** Maximum number of messages persisted in messages.json (flash). */
-#define MAX_STORED_MESSAGES 1000
+/** Maximum number of messages persisted in messages.json (flash).
+ *  Keep well below what the smallest LittleFS partition can hold: on boards
+ *  with a 448 KB partition (partitions.csv) the WebUI assets plus ~860
+ *  messages already exhausted free space and stalled all file writes. */
+#define MAX_STORED_MESSAGES 500
 
 /** Minimum free bytes on LittleFS before writes are skipped and a trim is triggered. */
 #define FS_MIN_FREE_BYTES (50 * 1024)
+
+/** Task-watchdog timeout for the main loop (ms). A wedged loop reboots the node. */
+#define LOOP_WDT_TIMEOUT_MS (120 * 1000)
 
 /** Maximum number of messages held in the RAM message cache (dedup ring buffer). */
 #define MAX_STORED_MESSAGES_RAM 60

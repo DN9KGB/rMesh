@@ -1,5 +1,17 @@
 # Changelog
 
+## [v26.4.3]
+
+- FIX: LittleFS-voll-Deadlock — war das Dateisystem einmal voll (z.B. messages.json + WebUI-Assets auf der 448-KB-Partition des Heltec V3), wurden alle Datei-Writes dauerhaft übersprungen, ohne dass der Trim je etwas entfernte (Zeilenlimit noch nicht erreicht). Nachrichten erschienen ab dann nie mehr in der WebUI. Jetzt: Notfall-Trim halbiert messages.json bei Platzmangel unabhängig vom Zeilenlimit
+- FIX: Wegen Platzmangel übersprungene Datei-Writes werden jetzt im `fileWriter.dropped`-Zähler (`/api/status`) gezählt — ein volles Dateisystem ist damit in der Diagnose sichtbar statt still zu scheitern
+- GEÄNDERT: `MAX_STORED_MESSAGES` von 1000 auf 500 gesenkt — 1000 Nachrichten passen neben den WebUI-Assets nicht auf die kleinste LittleFS-Partition (448 KB)
+- GEÄNDERT: Heltec V3 / V4 / Wireless Stick Lite V3 / HT-Tracker V1.2 nutzen jetzt `partitions_8MB.csv` — LittleFS wächst von 448 KB auf 3,9 MB, App-Slots von 1,75 MB auf 2 MB (die bisherige Tabelle nutzte nur 4 MB des 8-MB-Flash). Gilt nur für per USB/Web-Flasher neu geflashte Geräte; per OTA aktualisierte Geräte behalten das alte Layout (Firmware-OTA funktioniert weiter, das LittleFS-Update wird auf Altgeräten übersprungen)
+- NEU: Task-Watchdog (120 s) auf der Main-Loop — hängt die Loop (HTTP/WebSocket laufen dann weiter, während Mesh-Verarbeitung, Status-Push und Nachrichtenempfang stehen), rebootet der Node jetzt automatisch; während OTA-Downloads wird der Watchdog temporär ausgesetzt
+- NEU: Loop-Heartbeat `system.loopAgeMs` in `/api/diagnostics` — Loop-Gesundheit ist remote prüfbar
+- FIX: Fehlgeschlagenes `prefs.begin()` (NVS korrupt / Fremd-Firmware-Reste) wird jetzt erkannt: NVS wird einmalig gelöscht und neu initialisiert statt dass alle Speichervorgänge still scheitern — Ursache für „CLI speichert keine Einstellungen"
+- FIX: `saveSettings()` verifiziert den geschriebenen Config-Blob und meldet „Settings saved." bzw. „SETTINGS SAVE FAILED" in der Konsole; auch `saveWifiNetworks()`/`saveUdpPeers()` melden Schreibfehler
+- FIX: Factory-Reset-Befehl `de`/`defaults` reagiert nur noch auf exakte Eingabe — vorher löste JEDE Eingabe, die mit „de" beginnt (z.B. „debug", Tippfehler), einen kompletten NVS-Wipe mit Reboot aus
+
 ## [v26.4.2]
 
 - NEU: Board Support Package (BSP) — abstraktes `IBoardConfig`-Interface ersetzt verstreute `#ifdef BOARD_XYZ`-Abfragen; Board-Fähigkeiten werden zur Laufzeit abgefragt statt zur Compile-Zeit
