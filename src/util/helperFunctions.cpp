@@ -169,7 +169,7 @@ void sendFrame(Frame &f) {
     #ifdef HAS_WIFI
     wsBroadcast(jsonBuffer, len);
     #endif
-    addJSONtoFile(jsonBuffer, len, "/messages.json", MAX_STORED_MESSAGES);
+    addJSONtoFile(jsonBuffer, len, "/messages.json", maxStoredMessages);
 }
 
 void sendMessage(const char* dst, const char* text, uint8_t messageType) {

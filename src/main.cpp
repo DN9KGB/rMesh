@@ -201,6 +201,10 @@ volatile bool trimNeeded = false;
 /** millis() of the last loop() iteration — loop-health heartbeat for /api/diagnostics. */
 volatile uint32_t lastLoopMillis = 0;
 
+/** Effective messages.json line limit — computed at boot from the LittleFS
+ *  partition size (see setup()); falls back to MAX_STORED_MESSAGES. */
+uint16_t maxStoredMessages = MAX_STORED_MESSAGES;
+
 /** First topology report fires 5 minutes after boot. */
 uint32_t reportingTimer = 5 * 60 * 1000;
 
@@ -482,7 +486,7 @@ void processRxFrame(Frame &f) {
                 #ifdef HAS_WIFI
                 wsBroadcast(jsonBuffer, len);
                 #endif
-                addJSONtoFile(jsonBuffer, len, "/messages.json", MAX_STORED_MESSAGES);
+                addJSONtoFile(jsonBuffer, len, "/messages.json", maxStoredMessages);
                 // Archive to SD card (no-op on boards without SD)
                 pagerAddMessageToSD(jsonBuffer, len);
 
@@ -779,6 +783,20 @@ void setup() {
         if (!LittleFS.begin(true)) {
             logPrintf(LOG_ERROR, "FS", "Format failed!");
         }
+    }
+    // Size the message store from the actual partition: old 448 KB layouts
+    // keep the small limit, freshly (USB/web-flasher) flashed 3.9 MB layouts
+    // get more headroom — soft migration, no reflash required.
+    {
+        size_t total = LittleFS.totalBytes();
+        if (total > MSG_STORE_FS_RESERVE) {
+            size_t limit = (total - MSG_STORE_FS_RESERVE) / MSG_STORE_AVG_LINE;
+            if (limit > MSG_STORE_MAX_LIMIT) limit = MSG_STORE_MAX_LIMIT;
+            if (limit < MAX_STORED_MESSAGES) limit = MAX_STORED_MESSAGES;
+            maxStoredMessages = (uint16_t)limit;
+        }
+        logPrintf(LOG_INFO, "FS", "LittleFS %u KB — message store limit: %u",
+                  (unsigned)(total / 1024), (unsigned)maxStoredMessages);
     }
     #endif
     fsMutex = xSemaphoreCreateMutex();
@@ -1302,7 +1320,7 @@ void loop() {
     }
     if (timerExpired(messagesDeleteTimer)) {
         messagesDeleteTimer = millis() + 24 * 60 * 60 * 1000; // repeat every 24 h
-        trimFile("/messages.json", MAX_STORED_MESSAGES);
+        trimFile("/messages.json", maxStoredMessages);
     }
 
     #ifdef HAS_WIFI

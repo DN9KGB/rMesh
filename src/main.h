@@ -116,5 +116,8 @@ extern volatile bool trimNeeded;
 /** millis() of the last loop() iteration — loop-health heartbeat for diagnostics. */
 extern volatile uint32_t lastLoopMillis;
 
+/** Effective messages.json line limit — sized at boot from the LittleFS partition. */
+extern uint16_t maxStoredMessages;
+
 /// Global board configuration — set once in setup() via BoardFactory::create().
 extern IBoardConfig* board;

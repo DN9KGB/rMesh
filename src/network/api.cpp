@@ -721,7 +721,7 @@ static void handleImportMessages(AsyncWebServerRequest *request, uint8_t *data, 
 
     // Trim if we exceeded the durable cap (async, queued — single trim, fine).
     if (imported > 0) {
-        trimFile("/messages.json", MAX_STORED_MESSAGES);
+        trimFile("/messages.json", maxStoredMessages);
     }
 
     char resp[96];

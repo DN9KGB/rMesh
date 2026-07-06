@@ -90,11 +90,19 @@ inline uint8_t syncWordForFrequency(float f) {
  */
 #define PEER_RETRY_COOLDOWN (90 * 1000UL)
 
-/** Maximum number of messages persisted in messages.json (flash).
- *  Keep well below what the smallest LittleFS partition can hold: on boards
- *  with a 448 KB partition (partitions.csv) the WebUI assets plus ~860
- *  messages already exhausted free space and stalled all file writes. */
+/** Fallback/minimum number of messages persisted in messages.json (flash).
+ *  The effective limit (maxStoredMessages) is computed at boot from the
+ *  actual LittleFS partition size, so old 448 KB layouts and new 3.9 MB
+ *  layouts coexist during the migration. This value is used when the size
+ *  cannot be determined (nRF52 InternalFS) and as the lower bound. */
 #define MAX_STORED_MESSAGES 500
+
+/** Sizing inputs for the boot-time message-limit calculation:
+ *  reserve for WebUI assets + peers/routes/api buffers + LittleFS overhead,
+ *  average JSONL line size, and a hard upper cap. */
+#define MSG_STORE_FS_RESERVE   (300 * 1024)
+#define MSG_STORE_AVG_LINE     300
+#define MSG_STORE_MAX_LIMIT    5000
 
 /** Minimum free bytes on LittleFS before writes are skipped and a trim is triggered. */
 #define FS_MIN_FREE_BYTES (50 * 1024)
