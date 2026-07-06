@@ -11,6 +11,8 @@
 - FIX: Fehlgeschlagenes `prefs.begin()` (NVS korrupt / Fremd-Firmware-Reste) wird jetzt erkannt: NVS wird einmalig gelöscht und neu initialisiert statt dass alle Speichervorgänge still scheitern — Ursache für „CLI speichert keine Einstellungen"
 - FIX: `saveSettings()` verifiziert den geschriebenen Config-Blob und meldet „Settings saved." bzw. „SETTINGS SAVE FAILED" in der Konsole; auch `saveWifiNetworks()`/`saveUdpPeers()` melden Schreibfehler
 - FIX: Factory-Reset-Befehl `de`/`defaults` reagiert nur noch auf exakte Eingabe — vorher löste JEDE Eingabe, die mit „de" beginnt (z.B. „debug", Tippfehler), einen kompletten NVS-Wipe mit Reboot aus
+- FIX: Serielle Konsole filtert Terminal-Steuerzeichen — Backspace/DEL editieren jetzt den Eingabepuffer, ANSI-Escape-Sequenzen (Pfeiltasten) werden verworfen. Vorher landeten die Bytes ungefiltert in gespeicherten Einstellungen (z.B. Backspaces im Rufzeichen) und machten jeden WebSocket-Frame zu ungültigem JSON — die WebUI blieb komplett leer
+- FIX: Beim Settings-Laden werden Steuerzeichen aus gespeicherten Strings entfernt (Rufzeichen, Position, NTP, SSIDs) — bereits betroffene Geräte heilen sich mit dem Update selbst
 - FIX: `/ota`-Upload prüft die Image-Größe gegen die Ziel-Partition BEVOR geschrieben wird — ein zu großes Filesystem-Image (z.B. 3,9-MB-littlefs.bin auf 448-KB-Altlayout) hinterließ vorher einen halbgeschriebenen Superblock, LittleFS panicte bei jedem Boot (`lfs_fs_grow`-Assert) und der Node war bis zum USB-Neuflash gebrickt
 
 ## [v26.4.2]

@@ -40,6 +40,31 @@ char serialRxBuffer[200] = {0};
 void checkSerialRX() {
     if (Serial.available() > 0) {
         char rx = Serial.read();
+
+        // Terminal input filtering: stray control bytes used to end up in the
+        // command buffer and were SAVED into settings (e.g. backspaces inside
+        // the callsign), producing invalid JSON on every WebSocket frame and
+        // a dead WebUI. Handle backspace properly, swallow ANSI escape
+        // sequences (arrow keys), drop all other control characters.
+        static uint8_t escState = 0;  // 0=normal, 1=after ESC, 2=in CSI sequence
+        if (escState != 0) {
+            if (escState == 1) {
+                escState = (rx == '[' || rx == 'O') ? 2 : 0;
+            } else if ((uint8_t)rx >= 0x40 && (uint8_t)rx <= 0x7E) {
+                escState = 0;  // final byte of the sequence
+            }
+            return;
+        }
+        if (rx == 27) { escState = 1; return; }
+        if (rx == 8 || rx == 127) {  // backspace / DEL: edit the buffer
+            size_t len = strlen(serialRxBuffer);
+            if (len > 0) {
+                serialRxBuffer[len - 1] = '\0';
+                Serial.print("\b \b");
+            }
+            return;
+        }
+
         //Echo
         Serial.write(rx);
         if ((rx == 13) || (rx == 10)) {
@@ -818,8 +843,8 @@ void checkSerialRX() {
             }
             //Clear buffer
             serialRxBuffer[0] = '\0';
-        } else {
-            //RX byte into buffer
+        } else if ((uint8_t)rx >= 0x20) {
+            //RX byte into buffer (printable characters only)
             size_t len = strlen(serialRxBuffer);
             if (len < sizeof(serialRxBuffer) - 1) {
                 serialRxBuffer[len] = rx;

@@ -67,6 +67,18 @@ int8_t   oledButtonPin    = -1;
 
 // webPasswordHash is defined in auth.cpp for both WiFi and non-WiFi builds
 
+/** Removes ASCII control characters (and DEL) from a string in place.
+ *  Stored strings must never contain them: they end up unescaped in
+ *  WebSocket JSON frames and break the WebUI's JSON.parse. */
+static void stripControlChars(char* s) {
+    if (s == nullptr) return;
+    char* w = s;
+    for (char* r = s; *r; r++) {
+        if ((uint8_t)*r >= 0x20 && (uint8_t)*r != 0x7F) *w++ = *r;
+    }
+    *w = '\0';
+}
+
 char groupNames[MAX_CHANNELS + 1][MAX_GROUP_NAME_LEN] = {0};  // index 1-10
 
 void saveGroupNames() {
@@ -236,6 +248,14 @@ void loadSettings() {
     loadPasswordHash();
 #endif
     prefs.getBytes("config", &settings, sizeof(settings));
+    // Heal control characters that older firmware let through the serial
+    // console into stored strings (e.g. backspaces inside the callsign) —
+    // they produced invalid JSON on every WebSocket frame and a dead WebUI.
+    stripControlChars(settings.mycall);
+    stripControlChars(settings.position);
+    stripControlChars(settings.ntpServer);
+    stripControlChars(settings.wifiSSID);
+    stripControlChars(settings.wifiPassword);
     uint8_t defaultChannel = (strstr(VERSION, "-dev") != nullptr) ? 1 : 0;
     updateChannel      = prefs.getUChar("updateChannel", defaultChannel);
     loraEnabled        = prefs.getBool("loraEnabled", true);
@@ -373,6 +393,8 @@ void loadSettings() {
                     memset(&net, 0, sizeof(net));
                     strlcpy(net.ssid,     (const char*)(entry),                              WIFI_NETWORK_SSID_LEN);
                     strlcpy(net.password, (const char*)(entry + WIFI_NETWORK_SSID_LEN),      WIFI_NETWORK_PW_LEN);
+                    stripControlChars(net.ssid);
+                    stripControlChars(net.password);
                     net.favorite = entry[WIFI_NETWORK_SSID_LEN + WIFI_NETWORK_PW_LEN] != 0;
                     wifiNetworks.push_back(net);
                 }
