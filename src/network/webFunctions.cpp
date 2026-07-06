@@ -3,6 +3,8 @@
 #include <WiFi.h>
 #include <LittleFS.h>
 #include <Update.h>
+#include <esp_ota_ops.h>
+#include <esp_partition.h>
 
 #include "config.h"
 #include "hal/settings.h"
@@ -23,6 +25,10 @@
 AsyncWebServer webServer(80);
 AsyncWebSocketMessageHandler wsHandler;
 AsyncWebSocket ws("/socket", wsHandler.eventHandler());
+
+// Set when an /ota upload was rejected (image larger than target partition);
+// checked by the completion handler to report the error instead of "OK".
+static bool otaUploadRejected = false;
 
 /**
  * Broadcasts a WebSocket message.
@@ -644,8 +650,9 @@ void startWebServer() {
                              return;
                          }
                      }
-                     bool ok = !Update.hasError();
-                     String msg = ok ? "OK" : String(Update.errorString());
+                     bool ok = !otaUploadRejected && !Update.hasError();
+                     String msg = ok ? "OK" : (otaUploadRejected ? String("Image too large for target partition")
+                                                                 : String(Update.errorString()));
                      AsyncWebServerResponse *resp = request->beginResponse(200, "text/plain", msg);
                      resp->addHeader("Connection", "close");
                      request->send(resp);
@@ -662,16 +669,36 @@ void startWebServer() {
                          }
                      } else {
                          char buf[128];
-                         snprintf(buf, sizeof(buf), "{\"updateStatus\":\"Upload failed: %s\"}", Update.errorString());
+                         snprintf(buf, sizeof(buf), "{\"updateStatus\":\"Upload failed: %s\"}",
+                                  otaUploadRejected ? "Image too large for target partition" : Update.errorString());
                          wsBroadcast(buf, strlen(buf));
                      }
                  },
                  [](AsyncWebServerRequest *request, const String &filename, size_t index, uint8_t *data, size_t len,
                     bool final) {
                      if (!index) {
+                         otaUploadRejected = false;
                          int updateType = U_FLASH;
                          if (request->hasParam("type")) {
                              if (request->getParam("type")->value() == "spiffs") updateType = U_SPIFFS;
+                         }
+                         // Reject images that cannot fit the target partition BEFORE
+                         // writing anything: a partial U_SPIFFS write leaves a
+                         // filesystem superblock that claims more blocks than the
+                         // partition has — LittleFS then asserts on every boot
+                         // (lfs_fs_grow) and the node is bricked until USB reflash.
+                         const esp_partition_t* target = (updateType == U_SPIFFS)
+                             ? esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_SPIFFS, NULL)
+                             : esp_ota_get_next_update_partition(NULL);
+                         size_t contentLen = request->contentLength();  // upload size incl. small multipart overhead
+                         if (target && contentLen > target->size + 16384) {
+                             otaUploadRejected = true;
+                             logPrintf(LOG_ERROR, "Web", "OTA-Upload rejected: %u bytes > %s partition (%u bytes)",
+                                       (unsigned)contentLen, updateType == U_SPIFFS ? "spiffs" : "app",
+                                       (unsigned)target->size);
+                             char buf[] = "{\"updateStatus\":\"Upload failed: image too large for target partition\"}";
+                             wsBroadcast(buf, strlen(buf));
+                             return;
                          }
                          logPrintf(LOG_INFO, "Web", "OTA-Upload Start: %s, type: %s", filename.c_str(),
                                        updateType == U_SPIFFS ? "SPIFFS" : "Flash");
@@ -682,6 +709,7 @@ void startWebServer() {
                          char buf[] = "{\"updateStatus\":\"Upload in progress...\"}";
                          wsBroadcast(buf, strlen(buf));
                      }
+                     if (otaUploadRejected) return;
                      if (len && Update.write(data, len) != len) {
                          logPrintf(LOG_ERROR, "Web", "OTA-Upload write() error: %s", Update.errorString());
                      }
