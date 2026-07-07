@@ -8,6 +8,7 @@
 #endif
 
 #include "hal/settings.h"
+#include "util/lora_math.h"
 #include "util/heapdbg.h"
 #include "config.h"
 #include "version.h"
@@ -592,16 +593,9 @@ void sanitizeLoraParams() {
     // this, a bad value from WS/CLI (e.g. SF 0 or 200) is persisted and fed to
     // getTOA() → undefined shift / divide-by-zero → garbage retry/duty-cycle timing,
     // while RadioLib silently rejects it and keeps the old modem config.
-    if (settings.loraSpreadingFactor < 6)  settings.loraSpreadingFactor = 6;
-    if (settings.loraSpreadingFactor > 12) settings.loraSpreadingFactor = 12;
-    if (settings.loraCodingRate < 5) settings.loraCodingRate = 5;   // 4/5 .. 4/8
-    if (settings.loraCodingRate > 8) settings.loraCodingRate = 8;
-    if (settings.loraPreambleLength < 6) settings.loraPreambleLength = 6;
-    static const float bwValid[] = {7.8f, 10.4f, 15.6f, 20.8f, 31.25f,
-                                    41.7f, 62.5f, 125.0f, 250.0f, 500.0f};
-    bool bwOk = false;
-    for (float b : bwValid) { if (fabsf(settings.loraBandwidth - b) < 0.01f) { bwOk = true; break; } }
-    if (!bwOk) settings.loraBandwidth = 125.0f;
+    // The clamp logic is pure (util/lora_math.cpp) so it can be unit-tested.
+    clampLoraParams(settings.loraSpreadingFactor, settings.loraCodingRate,
+                    settings.loraBandwidth, settings.loraPreambleLength);
 }
 
 void saveSettings() {

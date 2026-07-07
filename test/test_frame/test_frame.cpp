@@ -95,12 +95,69 @@ void test_export_preserves_messageLength(void) {
     TEST_ASSERT_EQUAL_size_t(260, f.messageLength);
 }
 
+// An ANNOUNCE frame (no payload, carries nodeCall) survives a round trip.
+void test_roundtrip_announce(void) {
+    Frame f;
+    f.frameType = Frame::ANNOUNCE_FRAME;
+    strcpy(f.nodeCall, "NODE1");
+    f.hopCount = 1;
+    uint8_t buf[64];
+    size_t n = f.exportBinary(buf, sizeof(buf));
+    Frame g;
+    g.importBinary(buf, n);
+    TEST_ASSERT_EQUAL_UINT8(Frame::ANNOUNCE_FRAME, g.frameType);
+    TEST_ASSERT_EQUAL_STRING("NODE1", g.nodeCall);
+    TEST_ASSERT_EQUAL_UINT8(1, g.hopCount);
+}
+
+// hopCount is a 4-bit wire field: values >15 are masked, never overflow.
+void test_hopcount_wire_masking(void) {
+    Frame f;
+    f.frameType = Frame::MESSAGE_FRAME;
+    strcpy(f.srcCall, "AB1CD");
+    const char* t = "x";
+    memcpy(f.message, t, 1); f.messageLength = 1;
+    f.hopCount = 200;
+    uint8_t buf[64];
+    size_t n = f.exportBinary(buf, sizeof(buf));
+    Frame g;
+    g.importBinary(buf, n);
+    TEST_ASSERT_LESS_OR_EQUAL(15, g.hopCount);
+    TEST_ASSERT_EQUAL_UINT8(200 & 0x0F, g.hopCount);
+}
+
+// Fuzz: thousands of random buffers must never overflow a field or crash
+// (with -fsanitize=address any OOB access aborts the test).
+void test_fuzz_import_invariants(void) {
+    unsigned seed = 0x1234567u;
+    for (int iter = 0; iter < 20000; iter++) {
+        seed = seed * 1103515245u + 12345u;
+        size_t len = (seed >> 8) % 301;          // 0..300 bytes
+        uint8_t buf[301];
+        for (size_t i = 0; i < len; i++) {
+            seed = seed * 1103515245u + 12345u;
+            buf[i] = (uint8_t)(seed >> 16);
+        }
+        Frame g;
+        g.importBinary(buf, len);
+        TEST_ASSERT_TRUE(g.messageLength <= sizeof(g.message));
+        TEST_ASSERT_TRUE(strlen(g.srcCall)  <= (size_t)MAX_CALLSIGN_LENGTH);
+        TEST_ASSERT_TRUE(strlen(g.nodeCall) <= (size_t)MAX_CALLSIGN_LENGTH);
+        TEST_ASSERT_TRUE(strlen(g.viaCall)  <= (size_t)MAX_CALLSIGN_LENGTH);
+        TEST_ASSERT_TRUE(strlen(g.dstCall)  <= (size_t)MAX_CALLSIGN_LENGTH);
+        TEST_ASSERT_TRUE(strlen(g.dstGroup) <= (size_t)MAX_CALLSIGN_LENGTH);
+    }
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_roundtrip_message);
+    RUN_TEST(test_roundtrip_announce);
     RUN_TEST(test_oversized_callsign_clamped);
+    RUN_TEST(test_hopcount_wire_masking);
     RUN_TEST(test_short_buffer);
     RUN_TEST(test_export_tiny_buffer_no_overflow);
     RUN_TEST(test_export_preserves_messageLength);
+    RUN_TEST(test_fuzz_import_invariants);
     return UNITY_END();
 }

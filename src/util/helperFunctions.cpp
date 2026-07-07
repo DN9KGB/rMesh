@@ -12,6 +12,7 @@
 
 #include "hal/settings.h"
 #include "util/helperFunctions.h"
+#include "util/lora_math.h"
 #include "mesh/frame.h"
 #include "main.h"
 #include "network/webFunctions.h"
@@ -537,20 +538,9 @@ void trimFile(const char* fileName, size_t maxLines) {
 
 
 uint32_t getTOA(uint16_t payloadBytes) {
-    uint8_t SF  = settings.loraSpreadingFactor;
-    uint32_t BW = settings.loraBandwidth * 1000;
-    uint8_t CR = (settings.loraCodingRate > 4) ? (settings.loraCodingRate - 4) : settings.loraCodingRate;
-    // Guard against out-of-range params: SF<6/>12 would make `1<<SF` overflow or
-    // `bitsPerSymbol` zero (divide-by-inf → UB). sanitizeLoraParams() normally
-    // prevents this, but never let the airtime math produce garbage.
-    if (BW == 0 || SF < 6 || SF > 12) return 0;
-    bool DE = ( ( (1 << SF) * 1000 / BW ) > 16 ); 
-    float Tsym = (float)(1 << SF) / (float)BW * 1000.0f;
-    float Tpreamble = (settings.loraPreambleLength + 4.25f) * Tsym;
-    float payloadBits = 8.0f * payloadBytes - 4.0f * SF + 28.0f + 16.0f; // +16 for CRC
-    float bitsPerSymbol = 4.0f * (SF - (DE ? 2 : 0));
-    float payloadSymbols = 8.0f + fmaxf(ceilf(payloadBits / bitsPerSymbol) * (CR + 4), 0.0f);
-    return (uint32_t)roundf(Tpreamble + (payloadSymbols * Tsym));
+    // Pure math lives in util/lora_math.cpp so it can be unit-tested on the host.
+    return computeToA(payloadBytes, settings.loraSpreadingFactor, settings.loraBandwidth,
+                      settings.loraCodingRate, settings.loraPreambleLength);
 }
 
 uint32_t calculateAckTime() {
