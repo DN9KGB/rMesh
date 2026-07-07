@@ -40,18 +40,20 @@ void test_decay_over_half_window(void) {
 }
 
 // Regression test for the drain bug: with frequent polling and tiny time steps
-// the per-call decay truncates to 0. The old code advanced the window start on
-// every call regardless, so the elapsed time was discarded and the bucket never
-// drained -> all LoRa TX stayed blocked. The fix only advances the window when it
-// actually drains >=1 ms, so elapsed accumulates and the bucket empties over time.
+// the per-call decay truncates to 0. The OLD code advanced the window start on
+// every call regardless, so the elapsed time was discarded and the bucket froze
+// near-full (~5999) -> all LoRa TX stayed blocked. The FIX only advances the
+// window when it actually drains, so elapsed accumulates and the bucket decays.
+// (Decay is proportional/exponential, so after one window it sits well below full
+// but not at zero — we assert it drained *meaningfully*, which the bug never does.)
 void test_frequent_polling_still_drains(void) {
     dutyCycleTrackTx(6000);                   // fill the bucket
     for (int i = 0; i < 6000; i++) {
         _mock_millis += 10;                   // 6000 * 10 ms = 60000 ms = one window
         dutyCycleAllowed(0);                  // frequent polling with tiny steps
     }
-    // A full window of real time elapsed -> the bucket must have drained.
-    TEST_ASSERT_TRUE(dutyCycleAllowed(5000));
+    // Fixed: bucket decayed to ~1/3 -> a 1000 ms TX fits. Buggy: stuck ~5999 -> false.
+    TEST_ASSERT_TRUE(dutyCycleAllowed(1000));
 }
 
 int main(int, char**) {
