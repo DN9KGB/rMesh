@@ -126,6 +126,7 @@ void loadRoutes() {
 
 // Worker function — runs on the shared bgWorker task, no own stack alloc.
 static void saveRoutesWork() {
+    if (otaFsFreeze) return;  // FS partition being reflashed (U_SPIFFS OTA)
 #ifdef ESP32
     uint32_t _hf0 = ESP.getFreeHeap();
     uint32_t _hm0 = ESP.getMaxAllocHeap();
@@ -134,15 +135,30 @@ static void saveRoutesWork() {
     uint32_t _hm0 = 0;
 #endif
 
+    // Snapshot the routes under a SHORT listMutex hold, then release it before the
+    // slow flash write (fsMutex, up to 30 s). Holding listMutex across the write
+    // would freeze all peer/route list access (reporting, display) for that long.
     if (!xSemaphoreTake(listMutex, pdMS_TO_TICKS(1000))) {
         logPrintf(LOG_ERROR, "FS", "listMutex timeout in saveRoutes");
         heapRecord("saveRoutes/listTO", _hf0, _hm0);
         saveRoutesInProgress = false;
         return;
     }
+    std::vector<RouteEntry> snap;
+    snap.reserve(routingList.size());
+    for (const auto& r : routingList) {
+        RouteEntry entry;
+        memset(&entry, 0, sizeof(entry));
+        memcpy(entry.srcCall, r.srcCall, sizeof(entry.srcCall));
+        memcpy(entry.viaCall, r.viaCall, sizeof(entry.viaCall));
+        entry.hopCount = r.hopCount;
+        entry._pad = 0;
+        snap.push_back(entry);
+    }
+    xSemaphoreGive(listMutex);
+
     if (!xSemaphoreTake(fsMutex, pdMS_TO_TICKS(30000))) {
         logPrintf(LOG_ERROR, "FS", "fsMutex timeout in saveRoutes");
-        xSemaphoreGive(listMutex);
         heapRecord("saveRoutes/fsTO", _hf0, _hm0);
         saveRoutesInProgress = false;
         return;
@@ -152,29 +168,20 @@ static void saveRoutesWork() {
     if (!f) {
         logPrintf(LOG_ERROR, "FS", "Failed to open routes file for writing");
         xSemaphoreGive(fsMutex);
-        xSemaphoreGive(listMutex);
         heapRecord("saveRoutes/openFail", _hf0, _hm0);
         saveRoutesInProgress = false;
         return;
     }
 
     f.write(&FILE_VERSION, 1);
-    uint16_t count = routingList.size();
+    uint16_t count = snap.size();
     f.write((uint8_t*)&count, 2);
-
-    RouteEntry entry;
-    memset(&entry, 0, sizeof(entry));
-    for (const auto& r : routingList) {
-        memcpy(entry.srcCall, r.srcCall, sizeof(entry.srcCall));
-        memcpy(entry.viaCall, r.viaCall, sizeof(entry.viaCall));
-        entry.hopCount = r.hopCount;
-        entry._pad = 0;
+    for (const auto& entry : snap) {
         f.write((uint8_t*)&entry, sizeof(entry));
     }
 
     f.close();
     xSemaphoreGive(fsMutex);
-    xSemaphoreGive(listMutex);
 
     routesDirty = false;
     logPrintf(LOG_INFO, "FS", "Saved %d routes to %s", count, ROUTES_FILE);
@@ -285,6 +292,7 @@ void loadPeers() {
 }
 
 static void savePeersWork() {
+    if (otaFsFreeze) return;  // FS partition being reflashed (U_SPIFFS OTA)
 #ifdef ESP32
     uint32_t _hf0 = ESP.getFreeHeap();
     uint32_t _hm0 = ESP.getMaxAllocHeap();
@@ -293,15 +301,30 @@ static void savePeersWork() {
     uint32_t _hm0 = 0;
 #endif
 
+    // Snapshot under a short listMutex hold, then release before the slow flash write.
     if (!xSemaphoreTake(listMutex, pdMS_TO_TICKS(1000))) {
         logPrintf(LOG_ERROR, "FS", "listMutex timeout in savePeers");
         heapRecord("savePeers/listTO", _hf0, _hm0);
         savePeersInProgress = false;
         return;
     }
+    std::vector<PeerEntry> snap;
+    snap.reserve(peerList.size());
+    for (const auto& p : peerList) {
+        PeerEntry entry;
+        memset(&entry, 0, sizeof(entry));
+        memcpy(entry.nodeCall, p.nodeCall, sizeof(entry.nodeCall));
+        entry.port = p.port;
+        entry.available = p.available ? 1 : 0;
+        entry.rssi = p.rssi;
+        entry.snr = p.snr;
+        entry.frqError = p.frqError;
+        snap.push_back(entry);
+    }
+    xSemaphoreGive(listMutex);
+
     if (!xSemaphoreTake(fsMutex, pdMS_TO_TICKS(30000))) {
         logPrintf(LOG_ERROR, "FS", "fsMutex timeout in savePeers");
-        xSemaphoreGive(listMutex);
         heapRecord("savePeers/fsTO", _hf0, _hm0);
         savePeersInProgress = false;
         return;
@@ -311,31 +334,20 @@ static void savePeersWork() {
     if (!f) {
         logPrintf(LOG_ERROR, "FS", "Failed to open peers file for writing");
         xSemaphoreGive(fsMutex);
-        xSemaphoreGive(listMutex);
         heapRecord("savePeers/openFail", _hf0, _hm0);
         savePeersInProgress = false;
         return;
     }
 
     f.write(&FILE_VERSION, 1);
-    uint16_t count = peerList.size();
+    uint16_t count = snap.size();
     f.write((uint8_t*)&count, 2);
-
-    PeerEntry entry;
-    memset(&entry, 0, sizeof(entry));
-    for (const auto& p : peerList) {
-        memcpy(entry.nodeCall, p.nodeCall, sizeof(entry.nodeCall));
-        entry.port = p.port;
-        entry.available = p.available ? 1 : 0;
-        entry.rssi = p.rssi;
-        entry.snr = p.snr;
-        entry.frqError = p.frqError;
+    for (const auto& entry : snap) {
         f.write((uint8_t*)&entry, sizeof(entry));
     }
 
     f.close();
     xSemaphoreGive(fsMutex);
-    xSemaphoreGive(listMutex);
 
     peersDirty = false;
     logPrintf(LOG_INFO, "FS", "Saved %d peers to %s", count, PEERS_FILE);

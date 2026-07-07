@@ -27,6 +27,7 @@ public:
 
     // E-Paper display — SPI, not I2C. Display driver manages its own pins.
     bool hasDisplay()           const override { return true;    }
+    bool isEPaper()             const override { return true;    }
     int  pinSDA()               const override { return -1;      }
     int  pinSCL()               const override { return -1;      }
     int  pinDisplayRST()        const override { return 2;       }  // EINK_RES

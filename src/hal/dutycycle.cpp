@@ -13,11 +13,19 @@ static void resetIfExpired() {
     uint32_t elapsed = now - dcWindowStart;
     if (elapsed >= DC_WINDOW_MS) {
         dcAirtimeMs = 0;
+        dcWindowStart = now;
     } else {
         uint32_t decay = (uint32_t)((uint64_t)dcAirtimeMs * elapsed / DC_WINDOW_MS);
-        dcAirtimeMs = (dcAirtimeMs > decay) ? dcAirtimeMs - decay : 0;
+        // Only advance the window when we actually drained ≥1 ms. This function is
+        // called on every ready TX (sub-ms apart under load); with integer division
+        // `decay` truncates to 0 for small `elapsed`, so unconditionally resetting
+        // dcWindowStart would discard that elapsed time and the bucket would never
+        // drain — postponing all LoRa TX indefinitely exactly when the mesh is busy.
+        if (decay > 0) {
+            dcAirtimeMs -= decay;
+            dcWindowStart = now;
+        }
     }
-    dcWindowStart = now;
 }
 
 bool dutyCycleAllowed(uint32_t toaMs) {

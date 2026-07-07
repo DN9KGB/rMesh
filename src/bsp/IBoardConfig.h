@@ -28,6 +28,10 @@ public:
 
     // ── Display ──────────────────────────────────────────────────────────────
     virtual bool hasDisplay()           const = 0;
+    // True for e-paper panels (slow, wear-sensitive full refresh). Such displays
+    // are driven only by their own displayUpdateLoop() throttle, never by the 5 s
+    // status-display timer. Non-pure so only e-paper boards override it.
+    virtual bool isEPaper()             const { return false; }
     virtual int  pinSDA()               const = 0;  // -1 if no display
     virtual int  pinSCL()               const = 0;
     virtual int  pinDisplayRST()        const = 0;  // -1 if no dedicated reset

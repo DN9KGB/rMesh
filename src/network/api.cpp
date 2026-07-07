@@ -251,12 +251,13 @@ static void loadMessagesFromJson() {
 
     int loaded = 0;
     char line[1024];
+    JsonDocument doc;  // reused across lines — allocating one per line churns the heap
     while (f.available()) {
         size_t n = f.readBytesUntil('\n', line, sizeof(line) - 1);
         if (n == 0) continue;
         line[n] = '\0';
 
-        JsonDocument doc;
+        doc.clear();
         if (deserializeJson(doc, line)) continue;
         JsonObject m = doc["message"];
         if (m.isNull()) continue;
@@ -327,6 +328,7 @@ void apiLoadBuffers() {
 }
 
 static void apiSaveBuffersWork() {
+    if (otaFsFreeze) { apiSaveInProgress = false; return; }  // FS partition being reflashed
     if (!xSemaphoreTake(fsMutex, pdMS_TO_TICKS(30000))) {
         logPrintf(LOG_ERROR, "API", "fsMutex timeout in apiSaveBuffers");
         apiSaveInProgress = false;
@@ -589,6 +591,7 @@ static void handleGetMessages(AsyncWebServerRequest *request) {
 
 static void handlePostMessage(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
     if (!checkApiAuth(request)) return;
+    if (!heapGuard(request)) return;  // shed load under heap pressure, like the other endpoints
 
     // ArduinoJson to parse the body
     JsonDocument doc;
@@ -633,8 +636,33 @@ static void handlePostMessage(AsyncWebServerRequest *request, uint8_t *data, siz
 static void handleImportMessages(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
     if (!checkApiAuth(request)) return;
 
+    // Accumulate the full body across TCP fragments. ESPAsyncWebServer delivers the
+    // body in ~1.4KB chunks; a bulk import (100+ messages) always spans several, and
+    // the previous code parsed each fragment as if it were the whole body — so the
+    // import failed on exactly the payloads it exists for. Assumes one import at a
+    // time (a client→node one-shot migration), which is the only way it is used.
+    static uint8_t* accBuf = nullptr;
+    static size_t   accCap = 0;
+    if (index == 0) {
+        if (accBuf) { free(accBuf); accBuf = nullptr; accCap = 0; }
+        if (total == 0 || total > 128UL * 1024UL) {
+            request->send(400, "application/json", "{\"error\":\"invalid body size\"}");
+            return;
+        }
+        accBuf = (uint8_t*)malloc(total);
+        if (!accBuf) {
+            request->send(507, "application/json", "{\"error\":\"out of memory\"}");
+            return;
+        }
+        accCap = total;
+    }
+    if (!accBuf || index + len > accCap) return;  // no buffer (alloc failed) / overflow guard
+    memcpy(accBuf + index, data, len);
+    if (index + len < total) return;              // wait for the remaining chunks
+
     JsonDocument doc;
-    DeserializationError err = deserializeJson(doc, data, len);
+    DeserializationError err = deserializeJson(doc, accBuf, total);
+    free(accBuf); accBuf = nullptr; accCap = 0;
     if (err) {
         request->send(400, "application/json", "{\"error\":\"invalid json\"}");
         return;
@@ -802,7 +830,7 @@ static void handleSettings(AsyncWebServerRequest *request) {
     jPrintf(",\"wifiPassword\":"); jStr((settings.wifiPassword[0] != '\0') ? "***" : "");
 
     jPrintf(",\"apName\":"); jStr(apName.c_str());
-    jPrintf(",\"apPassword\":"); jStr(apPassword.c_str());
+    jPrintf(",\"apPassword\":"); jStr((apPassword.length() > 0) ? "***" : "");
 
     // WiFi networks array
     jPrintf(",\"wifiNetworks\":[");
@@ -876,6 +904,7 @@ static void handleSettings(AsyncWebServerRequest *request) {
 #endif
     jPrintf(",\"batteryEnabled\":%s,\"batteryFullVoltage\":%.1f",
             batteryEnabled ? "true" : "false", batteryFullVoltage);
+    jPrintf(",\"statusLedEnabled\":%s", statusLedEnabled ? "true" : "false");
     jPrintf(",\"wifiTxPower\":%u,\"wifiMaxTxPower\":%u",
             (unsigned)wifiTxPower, (unsigned)WIFI_MAX_TX_POWER_DBM);
     jPrintf(",\"displayBrightness\":%u,\"cpuFrequency\":%u",

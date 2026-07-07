@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 
+#include "main.h"
 #include "mesh/routing.h"
 #include "mesh/reporting.h"
 #include "network/webFunctions.h"
@@ -32,6 +33,7 @@ void getRoute(const char* dstCall, char* viaCall, size_t len) {
 }
 
 void removeDirectRoute(const char* call) {
+    ListLock _ll;  // guard routingList against concurrent bgWorker reads
     // Remove a direct-neighbor route entry (srcCall == viaCall == call, hopCount 0)
     // so that an alternative multi-hop route can be learned via another peer.
     auto it = std::find_if(routingList.begin(), routingList.end(), [&](const Route& r) {
@@ -60,6 +62,7 @@ void sendRoutingList() {
 }
 
 void addRoutingList(const char* srcCall, const char* viaCall, uint8_t hopCount) {
+    ListLock _ll;  // guard routingList against concurrent bgWorker reads
     if (strlen(srcCall) == 0 || strlen(viaCall) == 0) return;
     if (strcmp(settings.mycall, srcCall) == 0) return;
     // Loop detection: reject routes that point back to ourselves.
@@ -114,8 +117,12 @@ void addRoutingList(const char* srcCall, const char* viaCall, uint8_t hopCount) 
             it->timestamp = time(NULL);
             it->hopCount = hopCount;
         } else if (strcmp(it->viaCall, viaCall) == 0) {
-            // Same via node -> only refresh timestamp
+            // Same via node -> only refresh timestamp. This is the common steady-state
+            // case (every overheard frame refreshes an existing route). Return early:
+            // re-sorting the whole table and firing a routes WS-notify (→ every WebUI
+            // re-GETs /api/routes) on an unchanged topology is pure CPU/heap/REST churn.
             it->timestamp = time(NULL);
+            return;
         } else {
             // New path is longer or equal via different node -> ignore
             return;

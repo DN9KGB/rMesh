@@ -103,12 +103,17 @@ void sendFrame(Frame &f) {
     getRoute(f.dstCall, viaCall, MAX_CALLSIGN_LENGTH + 1);    
     if (strlen(viaCall) > 0) { routing = true; }
 
-    // Check if the routed destination is reachable via WiFi
+    // Check if the routed destination is reachable via WiFi. Require a recent (<60s)
+    // heartbeat — otherwise a stale-but-still-"available" WiFi entry (e.g. right after
+    // a WiFi drop, before the inactivity timeout) would make us skip LoRa entirely and
+    // send only into the void, losing the message. Mirrors the relay path's gate.
     bool routeViaWifi = false;
     if (routing) {
+        time_t nowTs = time(NULL);
         for (size_t pi = 0; pi < peerList.size(); pi++) {
             if (strcmp(peerList[pi].nodeCall, viaCall) == 0 &&
-                peerList[pi].port == 1 && peerList[pi].available) {
+                peerList[pi].port == 1 && peerList[pi].available &&
+                (nowTs - peerList[pi].timestamp) < 60) {
                 routeViaWifi = true;
                 break;
             }
@@ -138,6 +143,10 @@ void sendFrame(Frame &f) {
                     }
                     if (txBuffer.size() == 0) {f.syncFlag = true;} else {f.syncFlag = false;}
                     txBuffer.push_back(f);
+                    // Backward-compatible LoRa flood: one copy to the best-SNR neighbor
+                    // (peerList is SNR-sorted) floods identically at ~1/N the airtime;
+                    // the frame is wire-identical, so older-firmware nodes are unaffected.
+                    if (extSettings.loraFloodSingle && port == 0 && routing == false) break;
                 }
             }
         }
@@ -267,6 +276,8 @@ static void fileWriteWorkerTask(void *) {
     uint8_t indices[FW_SLOTS];
     bool    handled[FW_SLOTS];
     for (;;) {
+        // Suspend all writes while a U_SPIFFS OTA is overwriting the FS partition.
+        if (otaFsFreeze) { vTaskDelay(pdMS_TO_TICKS(200)); continue; }
         uint8_t n = drainQueue(indices, FW_SLOTS);
         if (n == 0) continue;
 
@@ -349,6 +360,7 @@ void initFileWriteWorker() {
 
 void addJSONtoFile(char* buffer, size_t length, const char* file, const uint16_t lines) {
     if (!fwQueue) return;
+    if (otaFsFreeze) return;  // FS partition is being reflashed — drop, node reboots after
     if (length > FW_CONTENT) {
         logPrintf(LOG_WARN, "FS", "addJSONtoFile: content too large (%u > %u)", length, FW_CONTENT);
         length = FW_CONTENT;
@@ -445,13 +457,16 @@ void trimFileTask(void * pvParameters) {
             // Stack buffer (task has 8192 stack) avoids heap malloc/free
             char lineBuffer[1024];
             size_t currentLine = 0;
+            bool writeOk = true;
 
-            while (srcFile.available()) {
+            while (srcFile.available() && writeOk) {
                 int len = srcFile.readBytesUntil('\n', lineBuffer, sizeof(lineBuffer));
 
                 if (currentLine >= linesToSkip) {
-                    dstFile.write((const uint8_t*)lineBuffer, len);
-                    dstFile.print("\n");
+                    if (dstFile.write((const uint8_t*)lineBuffer, len) != (size_t)len ||
+                        dstFile.print("\n") != 1) {
+                        writeOk = false;  // FS full: writes fail silently otherwise
+                    }
                 }
                 currentLine++;
             }
@@ -459,8 +474,32 @@ void trimFileTask(void * pvParameters) {
             srcFile.close();
             dstFile.close();
 
-            LittleFS.remove(p->fileName);
-            LittleFS.rename("/temp_trim.json", p->fileName);
+            // Only replace the original if the trimmed copy is complete. A partial
+            // write (the trim runs precisely when the FS is nearly full) would
+            // otherwise silently truncate messages.json — data loss with no log.
+            if (writeOk) {
+                LittleFS.remove(p->fileName);
+                LittleFS.rename("/temp_trim.json", p->fileName);
+            } else {
+                LittleFS.remove("/temp_trim.json");
+                // The copy could not fit — the FS is genuinely full. For an emergency
+                // trim (maxLines==0) this is a wedge: keeping the original means the FS
+                // stays full and every write batch drops. Last resort: truncate the
+                // file to recover space. Data loss, but it beats a permanently full FS
+                // that drops all new messages forever.
+                #ifndef NRF52_PLATFORM
+                size_t freeSpace = LittleFS.totalBytes() - LittleFS.usedBytes();
+                #else
+                size_t freeSpace = FS_MIN_FREE_BYTES;  // no metric; don't force-truncate
+                #endif
+                if (p->maxLines == 0 && freeSpace < (FS_MIN_FREE_BYTES / 4)) {
+                    File tf = LittleFS.open(p->fileName, "w");
+                    if (tf) { tf.close(); logPrintf(LOG_ERROR, "FS", "trimFile: FS full, truncated %s to recover space", p->fileName); }
+                    else    { logPrintf(LOG_ERROR, "FS", "trimFile: write failed and truncate failed for %s", p->fileName); }
+                } else {
+                    logPrintf(LOG_ERROR, "FS", "trimFile: write failed, keeping original");
+                }
+            }
 
         } else {
             if (srcFile) srcFile.close();
@@ -487,17 +526,24 @@ void trimFile(const char* fileName, size_t maxLines) {
     p->length = 0;
 
     // Start task (slightly lower priority since it's a background job)
-    xTaskCreate(trimFileTask, "trimFileTask", 8192, p, 1, NULL);
+    if (xTaskCreate(trimFileTask, "trimFileTask", 8192, p, 1, NULL) != pdPASS) {
+        // On failure the task never runs and never frees p — free it here.
+        logPrintf(LOG_ERROR, "FS", "trimFile: task create failed");
+        free(p);
+    }
 }
 
 
 
 
 uint32_t getTOA(uint16_t payloadBytes) {
-    uint8_t SF  = settings.loraSpreadingFactor; 
-    uint32_t BW = settings.loraBandwidth * 1000; 
+    uint8_t SF  = settings.loraSpreadingFactor;
+    uint32_t BW = settings.loraBandwidth * 1000;
     uint8_t CR = (settings.loraCodingRate > 4) ? (settings.loraCodingRate - 4) : settings.loraCodingRate;
-    if (BW == 0) return 0;
+    // Guard against out-of-range params: SF<6/>12 would make `1<<SF` overflow or
+    // `bitsPerSymbol` zero (divide-by-inf → UB). sanitizeLoraParams() normally
+    // prevents this, but never let the airtime math produce garbage.
+    if (BW == 0 || SF < 6 || SF > 12) return 0;
     bool DE = ( ( (1 << SF) * 1000 / BW ) > 16 ); 
     float Tsym = (float)(1 << SF) / (float)BW * 1000.0f;
     float Tpreamble = (settings.loraPreambleLength + 4.25f) * Tsym;

@@ -54,6 +54,13 @@ struct ExtSettings {
     uint8_t maxHopPosition = 1;
     uint8_t maxHopTelemetry = 3;
     int8_t minSnr = -30;           // Minimum SNR (dB) for peer availability; -30 = disabled
+    // LoRa flood fan-out: when true, a flooded (unrouted) LoRa message is enqueued
+    // as ONE copy to the best-SNR neighbor instead of one copy per neighbor. A single
+    // LoRa transmission already reaches every neighbor (relay + consume are viaCall-
+    // independent, and neighbors overheard-ACK), so this floods identically at ~1/N
+    // the airtime. The frame is byte-identical to the per-peer copy, so older-firmware
+    // nodes are unaffected. Set false to restore the legacy per-neighbor fan-out.
+    bool loraFloodSingle = true;
 };
 
 #ifdef HAS_WIFI
@@ -84,6 +91,7 @@ extern String apPassword;  // AP password, empty = open network
 
 void loadSettings();
 void saveSettings();
+void sanitizeLoraParams();  // clamp LoRa SF/CR/BW/preamble to SX126x-valid ranges
 #ifdef HAS_WIFI
 void saveUdpPeers();      // Save peers only + notify WebUI (no initHal)
 void saveWifiNetworks();  // Save WiFi network list + AP settings + notify WebUI (no initHal)
@@ -98,6 +106,7 @@ extern uint8_t updateChannel; // 0=release (default), 1=dev
 extern bool loraEnabled;      // RF transmitter active (false = LoRa completely disabled)
 extern bool loraReady;  // true = RF module initialized and operational
 extern bool batteryEnabled;       // Show battery level
+extern bool statusLedEnabled;     // Blinking WiFi/status LED on/off (default off)
 extern float batteryFullVoltage;  // Voltage at 100% (V)
 
 // WiFi TX power (dBm, persisted, clamped to WIFI_MAX_TX_POWER_DBM per HAL)

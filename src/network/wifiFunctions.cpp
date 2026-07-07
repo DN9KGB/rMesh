@@ -17,6 +17,7 @@
 #include "config.h"
 #include "network/webFunctions.h"
 #include "network/udp.h"
+#include "network/ethFunctions.h"
 #include "main.h"
 #include "esp_wifi.h"
 
@@ -72,7 +73,7 @@ static void sendUpdateStatus(const char* msg) {
 
 void checkForUpdates(bool force, uint8_t forceChannel) {
     HEAP_SCOPE("checkForUpdates");
-    if (WiFi.status() != WL_CONNECTED) return;
+    if (WiFi.status() != WL_CONNECTED && !ethConnected) return;  // uplink via WiFi or Ethernet
     if (strcmp(VERSION, "unknown") == 0) {
         sendUpdateStatus("No update: dev build (unknown).");
         return;
@@ -175,6 +176,8 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
              "http://www.rMesh.de:8082/update.php?file=%s_littlefs.bin%s",
              PIO_ENV_NAME, callParam);
     t_httpUpdate_return spiffsResult = HTTP_UPDATE_FAILED;
+    // Suspend background LittleFS writes while the FS partition is overwritten raw.
+    otaFsFreeze = true;
     for (int attempt = 1; attempt <= 3; attempt++) {
         if (attempt > 1) {
             char retryMsg[64];
@@ -187,6 +190,12 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
         spiffsResult = httpUpdate.updateSpiffs(spiffsClient, spiffsUrl);
         if (spiffsResult != HTTP_UPDATE_FAILED) break;
     }
+    // Keep otaFsFreeze set past the flash: once a new FS image is on flash, the
+    // still-mounted OLD filesystem must not be written again until a reboot remounts
+    // the new image. The firmware phase writes the APP partition (FS writes would be
+    // harmless there) but leaving writes frozen until the guaranteed reboot is simplest
+    // and safe. It is lifted/handled at the end of this function.
+    bool spiffsFlashed = (spiffsResult == HTTP_UPDATE_OK);
     if (spiffsResult == HTTP_UPDATE_FAILED) {
         char warnMsg[192];
         snprintf(warnMsg, sizeof(warnMsg),
@@ -233,6 +242,15 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
         snprintf(logDetail, sizeof(logDetail), "Firmware: %s",
                  httpUpdate.getLastErrorString().c_str());
         sendOtaLog("update_failed", VERSION, newVersion, logDetail);
+    }
+    // Reached only when the firmware update did NOT reboot (failure / no firmware).
+    if (spiffsFlashed) {
+        // A new FS image was flashed but we're still running the old mount — reboot
+        // now so the new image is mounted cleanly instead of being written over.
+        sendUpdateStatus("Filesystem updated – rebooting...");
+        rebootTimer = millis() + 1500; rebootRequested = true;
+    } else {
+        otaFsFreeze = false;  // nothing flashed to the FS partition; resume writes
     }
     if (wdtDetached) esp_task_wdt_add(NULL);
 }
@@ -312,9 +330,15 @@ void showWiFiStatus() {
     }
 
     //Status LED
+    // When the status LED is disabled (default), force it off once on the
+    // enabled→disabled transition (and at boot) and skip all blinking below.
+    static bool ledPrevEnabled = true;
+    if (!statusLedEnabled && ledPrevEnabled) { setWiFiLED(false); wiFiLED = false; }
+    ledPrevEnabled = statusLedEnabled;
+
     if (settings.apMode) {
         //AP mode
-        if ((int32_t)(millis() - ledTimer) >= 0) {
+        if (statusLedEnabled && (int32_t)(millis() - ledTimer) >= 0) {
             wiFiLED = !wiFiLED;
             setWiFiLED (wiFiLED);
             ledTimer = millis() + 750;
@@ -328,13 +352,19 @@ void showWiFiStatus() {
             wifiStatus = newStatus;
             if (newStatus == WL_CONNECTED) {
                 initUDP();
-                pendingManualUpdate = true;
+                // Only auto-check for updates on the FIRST connect after boot.
+                // checkForUpdates() runs synchronously in loop() (≥10s HTTP, minutes
+                // if an update is found), so firing it on every reconnect would make
+                // flaky WiFi repeatedly stall the loop and deafen the mesh. The 24h
+                // periodic timer covers steady-state.
+                static bool firstConnect = true;
+                if (firstConnect) { pendingManualUpdate = true; firstConnect = false; }
             }
         }
 
         if (WiFi.status() == WL_CONNECTED) {
         //Connected -> short blink
-            if ((int32_t)(millis() - ledTimer) >= 0) {
+            if (statusLedEnabled && (int32_t)(millis() - ledTimer) >= 0) {
                 if (wiFiLED == true) {
                     wiFiLED = false;
                     ledTimer = millis() + 950;

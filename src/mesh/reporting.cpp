@@ -12,6 +12,7 @@
 #include "util/logging.h"
 #include "mesh/peer.h"
 #include "mesh/routing.h"
+#include "network/ethFunctions.h"
 #include "config.h"
 #include "main.h"
 
@@ -20,10 +21,11 @@ static volatile uint32_t changeDebounceTimer = 0xFFFFFFFF;
 static volatile bool reportingInProgress = false;
 
 // Returns true if the node has internet uplink
-// (WiFi client connected, not in AP mode)
+// (WiFi client connected OR Ethernet up; not in AP mode). ethConnected is a
+// compile-time `false` stub on non-Ethernet boards, so this stays correct there.
 static bool hasInternetUplink() {
     if (settings.apMode) return false;
-    return (WiFi.status() == WL_CONNECTED);
+    return (WiFi.status() == WL_CONNECTED) || ethConnected;
 }
 
 // Persistent WiFiClient — keeping this as a file-level static means lwIP
@@ -126,7 +128,11 @@ void reportTopology() {
 // Must be called regularly from the main loop
 void reportTopologyIfChanged() {
     if (topologyChanged && (int32_t)(millis() - changeDebounceTimer) >= 0) {
-        changeDebounceTimer = millis() + 0x7FFFFFFF; // effectively disabled
+        // Arm a bounded retry window instead of disabling the timer for ~24.8 days.
+        // reportTopologyWork clears topologyChanged only on HTTP 200, so a transient
+        // POST failure left the report un-resent until the next markTopologyChanged().
+        // reportingInProgress guards against overlapping in-flight reports.
+        changeDebounceTimer = millis() + 60000;
         reportTopology();
     }
 }

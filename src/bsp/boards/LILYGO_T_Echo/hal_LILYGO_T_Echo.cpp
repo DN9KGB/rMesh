@@ -61,6 +61,12 @@ void initHal() {
         pinMode(board->pinUserButton(), INPUT_PULLUP);
     }
 
+    // Power down the L76K GPS: rMesh does not use it, and leaving it in its
+    // power-on default draws ~20-30 mA continuously on this battery-only board.
+    // GPS_EN is active-high (HIGH = powered); drive LOW to keep it off.
+    pinMode(GPS_EN_PIN, OUTPUT);
+    digitalWrite(GPS_EN_PIN, LOW);
+
     // Start LoRa SPI bus (SPIM3, separate from display on SPIM2)
     loraSPI.begin();
 

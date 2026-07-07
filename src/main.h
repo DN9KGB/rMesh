@@ -90,6 +90,33 @@ extern SemaphoreHandle_t fsMutex;
 extern SemaphoreHandle_t listMutex;
 
 /**
+ * @brief When true, all LittleFS writes are suspended.
+ *
+ * Set during a U_SPIFFS OTA so background tasks (FileWriter, peer/route/API save
+ * workers) don't write into the filesystem partition while it is being overwritten
+ * raw by the Update library — which would corrupt the freshly flashed image.
+ */
+extern volatile bool otaFsFreeze;
+
+/**
+ * @brief RAII guard for listMutex.
+ *
+ * Takes listMutex on construction and releases it on scope exit, so every
+ * early return from a peerList/routingList mutator releases the lock. The
+ * loop() task is the only writer; background tasks (reporting, persistence)
+ * only read under this lock, so guarding the loop-side mutations is what
+ * makes their reader-side locking actually protect against use-after-free.
+ */
+struct ListLock {
+    bool held;
+    explicit ListLock(TickType_t wait = portMAX_DELAY)
+        : held(listMutex != NULL && xSemaphoreTake(listMutex, wait) == pdTRUE) {}
+    ~ListLock() { if (held) xSemaphoreGive(listMutex); }
+    ListLock(const ListLock&) = delete;
+    ListLock& operator=(const ListLock&) = delete;
+};
+
+/**
  * @brief FreeRTOS task handle identifying the Arduino loop() task.
  *
  * Used by sendFrame() to detect when it is called from a background task

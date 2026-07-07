@@ -1,5 +1,59 @@
 # Changelog
 
+## [v26.7.0]
+
+Ergebnis von drei tiefen Code-Review-Durchgängen (Datei-Review, Flow-/Mesh-Analyse, Stabilität/Ressourcen/Power). Alle Änderungen bauen über ESP32-S3, klassischen ESP32 und nRF52.
+
+### NEU
+
+- NEU: Abwärtskompatibler LoRa-Broadcast-Relay (`loraFloodSingle`, Default an) — ein geflooded (unrouted) LoRa-Frame wird als EINE Kopie an den besten Nachbarn eingereiht statt als eine Kopie pro Nachbar. Eine LoRa-Übertragung erreicht physisch ohnehin alle Nachbarn (Relay/Consume sind viaCall-unabhängig, Mithören-ACK greift), daher identische Flood-Abdeckung bei ~1/N Airtime. Das Frame ist byteidentisch zur bisherigen Einzelkopie → ältere Firmware im Netz merkt keinen Unterschied. Abschaltbar per `lora floodsingle 0`
+- NEU: Status-LED (blinkende WiFi-/Status-LED) als Einstellung — Default AUS zum Stromsparen; schaltbar in der WebUI (System-Sektion), per Serial `led 0|1` und über die API
+- NEU: Boot-Loop-Schutz / Safe-Mode (ESP32) — nach mehreren schnellen Reboots in Folge (RTC-Zähler) wird das Wiederherstellen von Peers/Routes/Nachrichten übersprungen, sodass der Node mit erreichbarer WebUI/AP hochkommt statt in einer Endlos-Reboot-Schleife zu bricken; der Zähler wird nach stabiler Laufzeit zurückgesetzt (ein bewusstes Power-Cycle setzt ihn ohnehin zurück)
+- NEU: TX-Watchdog — ein hängendes `txFlag`/`rxFlag` (fehlgeschlagenes `startTransmit()` oder verpasster TX_DONE/RX_DONE-IRQ) legte bisher die gesamte Übertragung auf ALLEN Ports (LoRa, WiFi, Ethernet) dauerhaft still, ohne dass Loop-Watchdog oder Recovery griffen; wird jetzt nach 15 s erkannt, zurückgesetzt und das Radio neu initialisiert
+
+### GEÄNDERT
+
+- GEÄNDERT: Peer-/Route-Wartung läuft jetzt auch vor NTP-Sync — bisher wurde die komplette Wartung übersprungen, solange die Zeit nicht plausibel war, sodass LoRa-only-, AP-Mode- und nRF52-Nodes (die nie NTP bekommen) tote Peers nie entfernten und die Peer-Liste voll lief (Boot-Sekunden dienen als Zeitbasis, der NTP-Sprung wird weiterhin korrigiert)
+- GEÄNDERT: Routen altern jetzt aus und werden beim endgültigen Peer-Timeout entfernt (wenn das Callsign auf keinem Transport mehr erreichbar ist) — behebt dauerhafte Black-Holes, wenn ein Next-Hop lebt, aber seine Weiterleitung zum Ziel gestorben ist
+- GEÄNDERT: Uplink-Erkennung berücksichtigt Ethernet — `hasInternetUplink()` und der OTA-Update-Check galten nur bei WiFi-Verbindung; ein T-ETH-Elite über LAN (WiFi aus) meldete keine Topologie, führte keine Remote-Commands aus und updatete nie
+- GEÄNDERT: LoRa-Modem-Parameter (SF/CR/BW/Preamble) werden aus WS/CLI/NVS auf SX126x-gültige Bereiche geklemmt — ein ungültiger Wert (z.B. SF 0) wurde bisher gespeichert und in die Airtime-Berechnung gefüttert (UB), während das Radio still den alten Modem-Zustand behielt
+- GEÄNDERT: Duty-Cycle-Zähler (869,4–869,65 MHz) rechnet mit Worst-Case-Header — der bisherige Schätzwert unterschätzte die reale Time-on-Air relayter Frames (bis zu 5 Callsign-Felder), wodurch das 10%-Budget zu niedrig verbucht wurde
+- GEÄNDERT: Reliable-Frames (Sync) werden pro Port serialisiert statt global — ein zähes LoRa-Sync-Frame blockierte bisher neue Sync-Frames auf WiFi/LAN
+- GEÄNDERT: OTA-Update-Check läuft nur noch beim ersten WiFi-Connect nach dem Boot — bei instabilem WiFi stallte er sonst bei jedem Reconnect den Loop (≥10 s, bei gefundenem Update Minuten) und machte das Mesh taub; der 24-h-Timer deckt den Steady-State
+- GEÄNDERT: API-Event-Ringpuffer (`api_evts.bin`) wird auf einer eigenen ~30-Minuten-Kadenz persistiert statt alle 5 Minuten bei jeglichem Traffic — deutlich weniger Flash-Verschleiß für volatile Diagnostikdaten
+- GEÄNDERT: Peer-/Route-Persistenz kopiert die Listen unter kurzem `listMutex`-Halten und schreibt danach ins Flash — bisher blockierte ein bis zu 30 s langer Flash-Write jeden Listen-Zugriff (Reporting, Display)
+- GEÄNDERT: Loop gibt im Leerlauf eine Tick ab (lässt Idle-Task/Power-Management laufen); T-Echo schaltet den ungenutzten L76K-GPS ab (~20–30 mA gespart)
+- GEÄNDERT: PRNG wird beim Boot geseedet — identische Boards nach gemeinsamem Stromausfall erzeugten sonst dieselbe Announce-/ACK-/Retry-Jitter-Sequenz und kollidierten wiederholt
+
+### FIX
+
+- FIX (kritisch): OTA-Upload-Endpoint prüfte die Authentifizierung erst im Completion-Handler — das Firmware-Image wurde bereits geschrieben und als Boot-Partition gesetzt, bevor der 401 kam. Auth erfolgt jetzt VOR `Update.begin()` im Body-Handler; ein unauthentifizierter Upload wird abgewiesen, bevor irgendetwas geschrieben wird
+- FIX (kritisch): U_SPIFFS-OTA überschrieb die gemountete LittleFS-Partition, während Hintergrund-Tasks weiter hineinschrieben — jetzt werden alle FS-Writes während eines Filesystem-Updates ausgesetzt und ein Reboot erzwungen (auch im `noreboot`-Pfad), damit das frische Image sauber gemountet wird
+- FIX (kritisch): Data-Race auf `peerList`/`routingList` — der Loop-Task mutierte die Listen ohne `listMutex`, während der Hintergrund-Task (Reporting/Persistenz) unter Lock darüber iterierte (Use-after-free bei Reallokation). Alle loop-seitigen Mutatoren sperren jetzt (RAII-Guard `ListLock`)
+- FIX: Callsign-Overflow — der serielle `call`-Befehl akzeptierte bis zu 16 Zeichen, die Frame-Felder fassen aber nur `MAX_CALLSIGN_LENGTH` (9); ein längeres Rufzeichen wurde ohne Nullterminator kopiert (korrupte On-Air-Frames, kaputte Dedup/ACK-Vergleiche). Jetzt geklemmt
+- FIX: VLA-Stack-Overflow in `Frame::messageJSON()` — `char text[messageLength+1]` mit einer ungeprüften uint16-Länge (bis 65535) konnte den Task-Stack sprengen; jetzt fester Puffer + Clamp, und `messageLength` wird auch am WS-Eingang geklemmt
+- FIX: Out-of-Bounds-Bit-Write auf `udpPeerLegacy[-1]` bei einem Legacy-UDP-Paket von unbekannter IP bei vollem Peer-Table (Heap-Korruption) — jetzt `peerIdx >= 0`-Guard
+- FIX: `Frame`-Objekt wurde zwischen LoRa- und UDP-Empfang im selben Loop-Durchlauf ohne Reset wiederverwendet — ein kürzeres UDP-Frame erbte stale `dstCall`/`message`/`id` des vorherigen LoRa-Frames (Fehlklassifikation, falsche Dedup/ACK). Frame wird jetzt vor dem UDP-Parse zurückgesetzt
+- FIX: ACK-Purge im TX-Buffer ignorierte `srcCall` — da IDs nur pro Quelle eindeutig sind, konnte ein kollidierendes `(nodeCall,id)` einer fremden Quelle ein unbeteiligtes wartendes Relay löschen. Jetzt Match über das volle `(srcCall,viaCall,id)`-Tupel
+- FIX: `Frame::exportBinary()` — fehlende Längenprüfung vor Message-Header/ID, und die Truncation überschrieb das `messageLength`-Member (verkürzte Retransmits dauerhaft); jetzt Bounds-Check und lokale Clamp-Variable
+- FIX: Duty-Cycle-Bucket entleerte sich unter Last kaum — durch Integer-Truncation und unbedingtes Vorrücken des Fensteranfangs verpuffte die abzubauende Zeit, sodass alle LoRa-Sendungen dauerhaft um 5 s verschoben wurden, gerade wenn das Mesh ausgelastet war
+- FIX: Flux-Guard (`break` statt `continue`) hielt sendebereite WiFi-/LAN-Frames zurück, während er nur das LoRa-Pacing betreffen sollte
+- FIX: Topologie-Report wurde nach einem fehlgeschlagenen POST für ~24,8 Tage unterdrückt statt in 60 s erneut versucht
+- FIX: Originierendes `sendFrame()` übersprang LoRa bei einer veralteten WiFi-Route (fehlender Freshness-Check) — nach einem WiFi-Drop ging die Nachricht ins Leere; jetzt derselbe 60-s-Freshness-Gate wie im Relay-Pfad
+- FIX: Bulk-Import (`/api/import`) akkumuliert jetzt den über mehrere TCP-Fragmente ankommenden Body — bisher wurde jedes Fragment als kompletter JSON-Body geparst, wodurch das Feature bei seiner eigentlichen Nutzlast (100+ Nachrichten) scheiterte
+- FIX: `POST /api/messages` fehlte der `heapGuard` der übrigen Endpunkte; `batteryFullVoltage` aus der WS wird geklemmt (verhinderte Division durch ~0 in der Akku-Prozentberechnung); AP-Passwort mit 1–7 Zeichen wird abgelehnt (WPA braucht ≥8, sonst startet der AP nicht → Selbst-Aussperrung); AP-Passwort wird in `/api/settings` maskiert
+- FIX: `strlen(nullptr)`-Absturz im `sendFrame`-WS-Handler bei nicht-String-`messageText`
+- FIX: udpPeers-Vektoren in den Display-`doSave()`-Funktionen (Pager/SenseCAP) wurden nur teilweise neu aufgebaut → unterschiedliche Längen der Parallel-Vektoren und OOB-Zugriff; jetzt werden alle vier synchron gebaut
+- FIX: `trimFileTask` prüft jetzt Schreibfehler und den `xTaskCreate`-Rückgabewert (kein stiller Datenverlust/Leak); der Notfall-Trim hat einen Debounce und einen Last-Resort-Truncate, damit ein voll gelaufenes Dateisystem keinen Task-Respawn-Sturm mehr auslöst
+- FIX: Heap-Watchdog wird auf ~1 Hz gedrosselt statt in jedem Loop-Durchlauf `getMaxAllocHeap()` (Freelist-Scan) aufzurufen
+- FIX (Display): SenseCAP zeigte den ältesten Bildschirminhalt statt der neuesten Nachrichten und invertiert; Gruppen-Tab-Touch-Trefferzone stimmte nicht mit den gezeichneten Tabs überein; „Nachr. löschen"-Menüpunkt war tot; Pager-Chat konnte bei kleiner Schriftgröße den Stack überlaufen (`tmp[]`-Puffer geklemmt); Pager warnt jetzt bei leerem Rufzeichen statt still zu verwerfen; Pager-Monitor-Frame-Labels ans Frame-Enum angeglichen
+- FIX (Display/Strom): T-Echo-E-Paper wurde durch den 5-s-Status-Timer zu ständigen Full-Refreshes getrieben (~17k/Tag, Batterie-/Panel-Verschleiß) — E-Paper läuft jetzt nur noch über die eigene Update-Loop
+- FIX: Doppelte Display-Initialisierung beim Boot (2,5-s-Splash/Freeze pro Speichern/Reinit) durch Once-Guard in `initDisplay()` behoben; doppelte Radio-Initialisierung beim Boot behoben (`pendingLoraReinit` wird nach dem Setup gelöscht)
+- FIX: SPI-Lock für den „Flashing"-Bildschirm des Pagers während OTA (paralleler Radio-SPI-Zugriff aus dem AsyncTCP-Task hätte den Bus korrumpieren können)
+- FIX: T-ETH-Elite hatte eine 16-MB-Partitionstabelle bei 8-MB-deklariertem Board — LittleFS jenseits 8 MB unbenutzbar und SPIFFS-OTA-Brick-Gefahr; `flash_size`/`maximum_size` korrigiert
+- FIX: Nightly-CI verglich zum Skip-Check den Branchnamen statt der Commit-SHA (`--target dev-next`) und schnitt daher jede Nacht ein Release, auch ohne Commits — jetzt Vergleich der aufgelösten Commit-SHA
+- FIX: Boot-Preload und weitere file-gespeiste Callsign-Kopien nutzen `strlcpy` (garantierte Nullterminierung)
+
 ## [v26.4.3]
 
 - FIX: LittleFS-voll-Deadlock — war das Dateisystem einmal voll (z.B. messages.json + WebUI-Assets auf der 448-KB-Partition des Heltec V3), wurden alle Datei-Writes dauerhaft übersprungen, ohne dass der Trim je etwas entfernte (Zeilenlimit noch nicht erreicht). Nachrichten erschienen ab dann nie mehr in der WebUI. Jetzt: Notfall-Trim halbiert messages.json bei Platzmangel unabhängig vom Zeilenlimit

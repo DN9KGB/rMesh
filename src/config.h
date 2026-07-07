@@ -110,6 +110,14 @@ inline uint8_t syncWordForFrequency(float f) {
 /** Task-watchdog timeout for the main loop (ms). A wedged loop reboots the node. */
 #define LOOP_WDT_TIMEOUT_MS (120 * 1000)
 
+/**
+ * Max time (ms) txFlag/rxFlag may stay latched before the TX watchdog force-clears
+ * them and reinitialises the radio. Guards against a missed TX_DONE/RX_DONE IRQ or a
+ * failed startTransmit() leaving the node unable to transmit on ANY port. Must exceed
+ * the longest legitimate Time-on-Air (≈8 s for a max frame at SF12/BW125).
+ */
+#define RADIO_FLAG_STUCK_TIMEOUT_MS (15 * 1000)
+
 /** Maximum number of messages held in the RAM message cache (dedup ring buffer). */
 #define MAX_STORED_MESSAGES_RAM 60
 
@@ -153,6 +161,14 @@ inline uint8_t syncWordForFrequency(float f) {
 
 /** Capacity of the routing table (number of callsign entries). */
 #define ROUTING_BUFFER_SIZE 1000
+
+/**
+ * Max age (s, for time()) of a routing entry before it is evicted.
+ * A live path is refreshed on every overheard frame from its destination, so
+ * only genuinely stale routes expire — this lets a longer/alternate path be
+ * relearned after a next hop's onward link dies (prevents permanent black-holes).
+ */
+#define ROUTE_MAX_AGE PEER_TIMEOUT
 
 /**
  * Grace period (s) for flash-restored peers before they are marked unavailable.

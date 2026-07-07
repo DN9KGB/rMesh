@@ -105,7 +105,10 @@ bool checkUDP(Frame &f) {
                 saveUdpPeers();
                 logPrintf(LOG_INFO, "UDP", "UDP legacy peer auto-registered: %d.%d.%d.%d (%s)",
                     senderIP[0], senderIP[1], senderIP[2], senderIP[3], f.nodeCall);
-            } else if (!(bool)udpPeerLegacy[peerIdx]) {
+            } else if (peerIdx >= 0 && !(bool)udpPeerLegacy[peerIdx]) {
+                // Guard peerIdx: a legacy packet from an unknown IP while the peer
+                // table is full reaches here with peerIdx == -1 → udpPeerLegacy[-1]
+                // is an out-of-bounds vector<bool> bit write (heap corruption).
                 udpPeerLegacy[peerIdx] = true;
                 saveUdpPeers();
             }

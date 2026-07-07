@@ -405,6 +405,9 @@ void checkSerialRX() {
                     } else if (strncmp(sub, "minsnr", 6) == 0 && (sub[6] == ' ' || sub[6] == '\0')) {
                         if (sub[6] == ' ') { extSettings.minSnr = (int8_t)atoi(parameter + 7); saveSettings(); }
                         logPrintf(LOG_INFO, "Config", "minSnr: %d dB", extSettings.minSnr);
+                    } else if (strncmp(sub, "floodsingle", 11) == 0 && (sub[11] == ' ' || sub[11] == '\0')) {
+                        if (sub[11] == ' ') { extSettings.loraFloodSingle = (atoi(parameter + 12) != 0); saveSettings(); }
+                        logPrintf(LOG_INFO, "Config", "loraFloodSingle: %s", extSettings.loraFloodSingle ? "true" : "false");
                     } else if (strncmp(sub, "freq ", 5) == 0) {
                         if (strncmp(sub + 5, "433", 3) == 0) {
                             settings.loraFrequency = 434.850f; settings.loraBandwidth = 62.5f;
@@ -449,8 +452,15 @@ void checkSerialRX() {
                 // Callsign
                 if (strncmp(serialRxBuffer, "call", 4) == 0) {
                     if (strlen(parameter) > 0) {
-                        strncpy(settings.mycall, parameter, sizeof(settings.mycall) - 1);
-                        settings.mycall[sizeof(settings.mycall) - 1] = '\0';
+                        // Clamp to MAX_CALLSIGN_LENGTH: the frame fields (srcCall,
+                        // nodeCall, ...) are only MAX_CALLSIGN_LENGTH+1 bytes. A longer
+                        // callsign would be strncpy'd without a terminator into those
+                        // fields, corrupting on-air frames and dedup/ACK comparisons.
+                        if (strlen(parameter) > MAX_CALLSIGN_LENGTH) {
+                            logPrintf(LOG_WARN, "Config", "Callsign truncated to %d chars", MAX_CALLSIGN_LENGTH);
+                        }
+                        strncpy(settings.mycall, parameter, MAX_CALLSIGN_LENGTH);
+                        settings.mycall[MAX_CALLSIGN_LENGTH] = '\0';
                         for (size_t i = 0; settings.mycall[i]; i++) settings.mycall[i] = toupper(settings.mycall[i]);
                         saveSettings();
                     }
@@ -722,6 +732,15 @@ void checkSerialRX() {
                         saveSettings();
                     }
                     logPrintf(LOG_INFO, "Debug", "serialDebug: %s", serialDebug ? "true" : "false");
+                }
+
+                // Status LED on/off: "led 0|1"
+                if (strncmp(serialRxBuffer, "led", 3) == 0 && (serialRxBuffer[3] == ' ' || serialRxBuffer[3] == '\0')) {
+                    if (strlen(parameter) > 0) {
+                        statusLedEnabled = (parameter[0] == '1' || parameter[0] == 'e' || parameter[0] == 't');
+                        saveSettings();
+                    }
+                    logPrintf(LOG_INFO, "Config", "statusLedEnabled: %s", statusLedEnabled ? "true" : "false");
                 }
 
                 // Send direct message: "msg <CALL> <TEXT>"

@@ -709,12 +709,17 @@ static void drawMonitor() {
 
 // ─── Chat drawing functions ───────────────────────────────────────────
 #define MSG_GAP 3   // pixels of spacing between messages
+#define MAX_LINE_CHARS 160  // max wrapped chars/line; bounds the tmp[] draw buffer
 
 static void drawMessages() {
     float ts         = dispTextSize;
     int lineH        = max(1, (int)(10.0f * ts + 0.5f));
     int charW        = max(1, (int)(6.0f  * ts + 0.5f));
     int charsPerLine = max(1, DISP_W / charW);
+    // Bound the per-line char count to the draw buffer below. At the smallest
+    // text size (ts=0.5, charW=3) charsPerLine reaches DISP_W/3 = 160; without
+    // this clamp a wide line overflows the tmp[] stack buffer in the draw loop.
+    if (charsPerLine > MAX_LINE_CHARS) charsPerLine = MAX_LINE_CHARS;
 
     instance.lockSPI();
     lcd.startWrite();
@@ -790,7 +795,7 @@ static void drawMessages() {
         int len = (int)strlen(buf), pos = 0;
         while (pos < len && y < MSG_AREA_Y + MSG_AREA_H) {
             int take = min(len - pos, charsPerLine);
-            char tmp[82];
+            char tmp[MAX_LINE_CHARS + 1];
             memcpy(tmp, buf + pos, take);
             tmp[take] = '\0';
             drawStr(tmp, 0, y);
@@ -1196,16 +1201,43 @@ static void doAnnounce() {
 static void doSave() {
     IPAddress parsedIPs[5];
     for (int i = 0; i < 5; i++) strToIP(tmpPeerIP[i], parsedIPs[i]);
+    // Back up per-slot metadata for the 5 editable slots. All four parallel
+    // vectors (udpPeers/Legacy/Enabled/Call) must stay the same length — they are
+    // indexed together by saveUdpPeers() and udp.cpp; rebuilding only two of them
+    // desynchronises the lengths and causes OOB access on the shorter vectors.
     bool legacyBak[5] = {};
-    for (int i = 0; i < 5 && (size_t)i < udpPeerLegacy.size(); i++) legacyBak[i] = (bool)udpPeerLegacy[i];
-    std::vector<IPAddress> tail;
-    std::vector<bool> tailLegacy;
-    for (size_t i = 5; i < udpPeers.size(); i++) { tail.push_back(udpPeers[i]); tailLegacy.push_back((bool)udpPeerLegacy[i]); }
-    udpPeers.clear(); udpPeerLegacy.clear();
+    bool enabledBak[5] = {};
+    UdpPeerCallsign callBak[5];
     for (int i = 0; i < 5; i++) {
-        if (parsedIPs[i] != IPAddress(0,0,0,0)) { udpPeers.push_back(parsedIPs[i]); udpPeerLegacy.push_back(legacyBak[i]); }
+        if ((size_t)i < udpPeerLegacy.size())  legacyBak[i]  = (bool)udpPeerLegacy[i];
+        enabledBak[i] = ((size_t)i < udpPeerEnabled.size()) ? (bool)udpPeerEnabled[i] : true;
+        if ((size_t)i < udpPeerCall.size())    callBak[i]    = udpPeerCall[i];
     }
-    for (size_t i = 0; i < tail.size(); i++) { udpPeers.push_back(tail[i]); udpPeerLegacy.push_back(tailLegacy[i]); }
+    // Preserve entries beyond the 5 editable slots
+    std::vector<IPAddress> tail;
+    std::vector<bool> tailLegacy, tailEnabled;
+    std::vector<UdpPeerCallsign> tailCall;
+    for (size_t i = 5; i < udpPeers.size(); i++) {
+        tail.push_back(udpPeers[i]);
+        tailLegacy.push_back(i < udpPeerLegacy.size() ? (bool)udpPeerLegacy[i] : false);
+        tailEnabled.push_back(i < udpPeerEnabled.size() ? (bool)udpPeerEnabled[i] : true);
+        tailCall.push_back(i < udpPeerCall.size() ? udpPeerCall[i] : UdpPeerCallsign());
+    }
+    udpPeers.clear(); udpPeerLegacy.clear(); udpPeerEnabled.clear(); udpPeerCall.clear();
+    for (int i = 0; i < 5; i++) {
+        if (parsedIPs[i] != IPAddress(0,0,0,0)) {
+            udpPeers.push_back(parsedIPs[i]);
+            udpPeerLegacy.push_back(legacyBak[i]);
+            udpPeerEnabled.push_back(enabledBak[i]);
+            udpPeerCall.push_back(callBak[i]);
+        }
+    }
+    for (size_t i = 0; i < tail.size(); i++) {
+        udpPeers.push_back(tail[i]);
+        udpPeerLegacy.push_back(tailLegacy[i]);
+        udpPeerEnabled.push_back(tailEnabled[i]);
+        udpPeerCall.push_back(tailCall[i]);
+    }
     uiMode = UI_CHAT; needRedraw = true;
     saveSettings();
 }
@@ -1516,6 +1548,13 @@ static void scrollListTo(int newSel) {
 
 // ─── Public API ───────────────────────────────────────────────────────
 void initDisplay() {
+    // Init once. initHal() calls this, then setup() calls it again, and every
+    // LoRa reinit (pendingLoraReinit / 30s recovery) re-enters initHal(). Without
+    // this guard the display re-runs instance.begin()+lcd.init()+2.5s splash on
+    // every save and every 30s while the radio is down — a repeating UI freeze.
+    static bool displayInited = false;
+    if (displayInited) return;
+    displayInited = true;
     logPrintf(LOG_INFO, "Display", "instance.begin() ...");
     Serial.flush();
     uint32_t probe = instance.begin(NO_INIT_FATFS);
@@ -1634,14 +1673,16 @@ void displayMonitorFrame(const Frame& f) {
     // Decide frame-type label
     const char* ftype;
     switch (f.frameType) {
-        case 0x00: ftype = "ANN"; break;
-        case 0x01: ftype = "ACK"; break;
-        case 0x02: ftype = "TUN"; break;
-        case 0x04: ftype = "MAC"; break;
-        default:   ftype = "MSG"; break;
+        case Frame::FrameTypes::ANNOUNCE_FRAME:     ftype = "ANN"; break;
+        case Frame::FrameTypes::ANNOUNCE_ACK_FRAME: ftype = "AAK"; break;
+        case Frame::FrameTypes::TUNE_FRAME:         ftype = "TUN"; break;
+        case Frame::FrameTypes::MESSAGE_FRAME:      ftype = "MSG"; break;
+        case Frame::FrameTypes::MESSAGE_ACK_FRAME:  ftype = "MAC"; break;
+        default:                                    ftype = "?";   break;
     }
 
-    bool isMsg = (f.frameType == 0x03 || f.frameType == 0x05 || f.frameType == 0x00);
+    bool isMsg = (f.frameType == Frame::FrameTypes::MESSAGE_FRAME ||
+                  f.frameType == Frame::FrameTypes::ANNOUNCE_FRAME);
     if (isMsg && (strlen(f.srcCall) > 0)) {
         snprintf(line, MON_LINE_W, "%s %s %s %-8s>%-8s H%d %.0fdB",
                  ts, dir, ftype,
@@ -1684,6 +1725,10 @@ void showStatusDisplaySplash(uint32_t holdMs) {
 
 void showStatusDisplayFlashing(const char* what) {
     flashingLock = true;
+    // Called from the AsyncTCP task during OTA while loop() still drives radio SPI
+    // on the shared bus. Take the SPI lock like every other draw path here, or the
+    // concurrent locked-radio + unlocked-display access corrupts the bus mid-flash.
+    instance.lockSPI();
     lcd.fillScreen(TFT_BLACK);
     lcd.setTextColor(TFT_RED, TFT_BLACK);
     lcd.setTextSize(5);
@@ -1696,6 +1741,7 @@ void showStatusDisplayFlashing(const char* what) {
     lcd.setTextSize(2);
     lcd.setCursor(DISP_W / 2 - 100, 170);
     lcd.print("do not power off");
+    instance.unlockSPI();
 }
 
 // ─── Main loop ────────────────────────────────────────────────────────
@@ -1744,7 +1790,12 @@ void displayUpdateLoop() {
         // Keyboard → chat input
         if (keyAvail) {
             if (c == '\n' || c == '\r') {
-                if (inputLen > 0) {
+                if (inputLen > 0 && strlen(settings.mycall) == 0) {
+                    // Without a callsign transmitFrame() silently drops the frame,
+                    // but the message would still be appended to the chat — mismatch.
+                    addLine("!", "Kein Rufzeichen! Bitte in Setup konfigurieren.", false, "");
+                    inputLen = 0; inputBuf[0] = '\0'; needRedraw = true;
+                } else if (inputLen > 0) {
                     inputBuf[inputLen] = '\0';
                     if (activeGroup >= 0 && strlen(groupNames[activeGroup]) > 0) {
                         sendGroup(groupNames[activeGroup], inputBuf);

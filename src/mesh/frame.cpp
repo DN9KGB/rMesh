@@ -63,18 +63,26 @@ size_t Frame::exportBinary(uint8_t* data, size_t length) {
         case Frame::FrameTypes::MESSAGE_FRAME:
         case Frame::FrameTypes::MESSAGE_ACK_FRAME:
             //Normal message frames
+            //Bounds: the callsign blocks above are all length-checked, but the
+            //1-byte message header + 4-byte id were not. Guard before writing.
+            if (position + 1 + sizeof(id) > length) return position;
             //Type
-            data[position] = Frame::HeaderTypes::MESSAGE_HEADER << 4;     
-            data[position] = data[position] | messageType;               
+            data[position] = Frame::HeaderTypes::MESSAGE_HEADER << 4;
+            data[position] = data[position] | messageType;
             position ++;
             //ID
             memcpy(&data[position], &id, sizeof(id)); //Payload
             position += sizeof(id);
-            //Copy message
-            if (messageLength > (length - position)) { messageLength = length - position; }
-            memcpy(&data[position], &message, messageLength); //Payload
-            position += messageLength;    
-            break;        
+            //Copy message — clamp to remaining space via a LOCAL. Assigning to the
+            //messageLength member here would permanently truncate the Frame, so any
+            //later retransmit from txBuffer would carry the shortened length too.
+            {
+                size_t copyLen = messageLength;
+                if (copyLen > (length - position)) { copyLen = length - position; }
+                memcpy(&data[position], &message, copyLen); //Payload
+                position += copyLen;
+            }
+            break;
         case Frame::FrameTypes::TUNE_FRAME:
             while (position < 255) {
                 data[position] = 0xFF;
@@ -197,8 +205,12 @@ size_t Frame::messageJSON(char* buffer, size_t length) {
     pos += snprintf(buffer + pos, length - pos, "{\"message\":{");
 
     if ((messageLength > 0) && (messageType == Frame::MessageTypes::TEXT_MESSAGE || messageType == Frame::MessageTypes::TRACE_MESSAGE)) {
-        char text[messageLength + 1];
-        safeUtf8Copy(text, (uint8_t*)message, messageLength, messageLength + 1);
+        // Fixed buffer + clamp, NOT a VLA: messageLength is a uint16 that can reach
+        // 65535 from an unvalidated WS/API sender, and `char text[messageLength+1]`
+        // would blow the caller's stack (loopTask = 8 KB) and over-read message[260].
+        size_t mlen = (messageLength > sizeof(message)) ? sizeof(message) : messageLength;
+        char text[sizeof(message) + 1];
+        safeUtf8Copy(text, (uint8_t*)message, mlen, sizeof(text));
         jsonEscape(escapedText, sizeof(escapedText), text);
         pos += snprintf(buffer + pos, length - pos, "\"text\":\"%s\",", escapedText);
     }

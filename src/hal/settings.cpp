@@ -36,6 +36,7 @@ String apPassword = "";
 Preferences prefs;
 bool loraReady = false;
 bool batteryEnabled = true;
+bool statusLedEnabled = false;   // Blinking WiFi/status LED — default off to save power
 float batteryFullVoltage = 4.2f;
 int8_t wifiTxPower = WIFI_MAX_TX_POWER_DBM;
 
@@ -180,10 +181,12 @@ void showSettings() {
     logRaw("    maxHopPosition: %d", extSettings.maxHopPosition);
     logRaw("    maxHopTelemetry: %d", extSettings.maxHopTelemetry);
     logRaw("    minSnr: %d dB", extSettings.minSnr);
+    logRaw("    loraFloodSingle: %s", extSettings.loraFloodSingle ? "true" : "false");
     logRaw("");
     logRaw("  System:");
     logRaw("    serialDebug: %s", serialDebug ? "true" : "false");
     logRaw("    batteryEnabled: %s", batteryEnabled ? "true" : "false");
+    logRaw("    statusLedEnabled: %s", statusLedEnabled ? "true" : "false");
     logRaw("    batteryFullVoltage: %.2f V", batteryFullVoltage);
     logRaw("    displayBrightness: %d", displayBrightness);
     logRaw("    cpuFrequency: %d MHz", cpuFrequency);
@@ -260,6 +263,7 @@ void loadSettings() {
     updateChannel      = prefs.getUChar("updateChannel", defaultChannel);
     loraEnabled        = prefs.getBool("loraEnabled", true);
     batteryEnabled     = prefs.getBool("batEnabled", true);
+    statusLedEnabled   = prefs.getBool("statusLed", false);
     batteryFullVoltage = prefs.getFloat("batFullV", 4.2f);
     wifiTxPower        = prefs.getChar("wifiTxPow", WIFI_MAX_TX_POWER_DBM);
     if (wifiTxPower < 2) wifiTxPower = 2;
@@ -364,10 +368,17 @@ void loadSettings() {
         } else
 #endif
         {
-            extSettings.maxHopMessage = 15;
-            extSettings.maxHopPosition = 1;
-            extSettings.maxHopTelemetry = 3;
-            extSettings.minSnr = -30;
+            // A 4-byte blob is the immediately-previous layout (maxHopMessage/
+            // Position/Telemetry + minSnr) and was already read correctly by the
+            // getBytes() above; newly-appended fields (loraFloodSingle) keep their
+            // struct defaults. Only fall back to full defaults for truly unknown sizes,
+            // so an upgrade does not silently wipe minSnr / maxHop settings.
+            if (extSettingsLen != 4) {
+                extSettings.maxHopMessage = 15;
+                extSettings.maxHopPosition = 1;
+                extSettings.maxHopTelemetry = 3;
+                extSettings.minSnr = -30;
+            }
         }
         prefs.putBytes("extSettings", &extSettings, sizeof(extSettings));
     }
@@ -463,6 +474,10 @@ void loadSettings() {
             settings.loraOutputPower = PUBLIC_MAX_TX_POWER;
         }
     }
+
+    // Clamp any out-of-range RF params loaded from NVS (e.g. written by an older or
+    // buggy build) before they reach the radio and getTOA().
+    sanitizeLoraParams();
 
     // Calculate maximum message length
     settings.loraMaxMessageLength = 255 - (4 * (MAX_CALLSIGN_LENGTH + 1)) - 8;
@@ -572,8 +587,26 @@ void saveOledSettings() {
     prefs.putChar("oledBtnPin", oledButtonPin);
 }
 
+void sanitizeLoraParams() {
+    // Clamp LoRa modem parameters to values the SX126x actually accepts. Without
+    // this, a bad value from WS/CLI (e.g. SF 0 or 200) is persisted and fed to
+    // getTOA() → undefined shift / divide-by-zero → garbage retry/duty-cycle timing,
+    // while RadioLib silently rejects it and keeps the old modem config.
+    if (settings.loraSpreadingFactor < 6)  settings.loraSpreadingFactor = 6;
+    if (settings.loraSpreadingFactor > 12) settings.loraSpreadingFactor = 12;
+    if (settings.loraCodingRate < 5) settings.loraCodingRate = 5;   // 4/5 .. 4/8
+    if (settings.loraCodingRate > 8) settings.loraCodingRate = 8;
+    if (settings.loraPreambleLength < 6) settings.loraPreambleLength = 6;
+    static const float bwValid[] = {7.8f, 10.4f, 15.6f, 20.8f, 31.25f,
+                                    41.7f, 62.5f, 125.0f, 250.0f, 500.0f};
+    bool bwOk = false;
+    for (float b : bwValid) { if (fabsf(settings.loraBandwidth - b) < 0.01f) { bwOk = true; break; } }
+    if (!bwOk) settings.loraBandwidth = 125.0f;
+}
+
 void saveSettings() {
     logPrintf(LOG_INFO, "Settings", "Saving settings...");
+    sanitizeLoraParams();  // clamp RF params before persisting / radio reinit
 
 #ifdef HAS_WIFI
     // Sync wifiNetworks -> settings.wifiSSID (wifiNetworks is authoritative)
@@ -606,6 +639,7 @@ void saveSettings() {
     prefs.putUChar("updateChannel", updateChannel);
     prefs.putBool("loraEnabled", loraEnabled);
     prefs.putBool("batEnabled", batteryEnabled);
+    prefs.putBool("statusLed", statusLedEnabled);
     prefs.putFloat("batFullV", batteryFullVoltage);
     prefs.putChar("wifiTxPow", wifiTxPower);
     prefs.putUChar("dispBrightW", displayBrightness);

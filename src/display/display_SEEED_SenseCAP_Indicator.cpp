@@ -299,6 +299,7 @@ static void doForceUpdateDev();
 static void doSaveGroups();
 static void doNewGroup();
 static void doAnnounce();
+static void doDeleteMessages();
 static void buildGroupMenu();
 static void deleteGroup(int idx);
 static void fullRedraw();
@@ -366,7 +367,7 @@ static MenuItem setupItems[] = {
     {"Update",          FTYPE_ACTION,       nullptr,            0, nullptr, nullptr, 0.f, 0.f, 0.f, doUpdate},
     {"Update Release",  FTYPE_ACTION,       nullptr,            0, nullptr, nullptr, 0.f, 0.f, 0.f, doForceUpdateRelease},
     {"Update Dev",      FTYPE_ACTION,       nullptr,            0, nullptr, nullptr, 0.f, 0.f, 0.f, doForceUpdateDev},
-    {"Nachr. loeschen", FTYPE_ACTION,       nullptr,            0, nullptr, nullptr, 0.f, 0.f, 0.f, nullptr},
+    {"Nachr. loeschen", FTYPE_ACTION,       nullptr,            0, nullptr, nullptr, 0.f, 0.f, 0.f, doDeleteMessages},
 };
 
 static MenuItem groupItemsBuf[MAX_GROUPS * 4 + 2];
@@ -413,18 +414,42 @@ static void doSave() {
     // Trim empty / 0.0.0.0 entries at the end, keep existing legacy flags
     IPAddress parsedIPs[5];
     for (int i = 0; i < 5; i++) strToIP(tmpPeerIP[i], parsedIPs[i]);
-    // Rebuild vector: remember existing legacy flags for the first 5 slots
+    // All four parallel vectors (udpPeers/Legacy/Enabled/Call) must stay the same
+    // length — they are indexed together by saveUdpPeers() and udp.cpp. Rebuilding
+    // only two of them desynchronises the lengths and causes OOB access.
     bool legacyBak[5] = {};
-    for (int i = 0; i < 5 && (size_t)i < udpPeerLegacy.size(); i++) legacyBak[i] = (bool)udpPeerLegacy[i];
-    // Rescue peers >5 from old vector
-    std::vector<IPAddress> tail;
-    std::vector<bool> tailLegacy;
-    for (size_t i = 5; i < udpPeers.size(); i++) { tail.push_back(udpPeers[i]); tailLegacy.push_back((bool)udpPeerLegacy[i]); }
-    udpPeers.clear(); udpPeerLegacy.clear();
+    bool enabledBak[5] = {};
+    UdpPeerCallsign callBak[5];
     for (int i = 0; i < 5; i++) {
-        if (parsedIPs[i] != IPAddress(0,0,0,0)) { udpPeers.push_back(parsedIPs[i]); udpPeerLegacy.push_back(legacyBak[i]); }
+        if ((size_t)i < udpPeerLegacy.size())  legacyBak[i]  = (bool)udpPeerLegacy[i];
+        enabledBak[i] = ((size_t)i < udpPeerEnabled.size()) ? (bool)udpPeerEnabled[i] : true;
+        if ((size_t)i < udpPeerCall.size())    callBak[i]    = udpPeerCall[i];
     }
-    for (size_t i = 0; i < tail.size(); i++) { udpPeers.push_back(tail[i]); udpPeerLegacy.push_back(tailLegacy[i]); }
+    // Rescue peers >5 from old vectors
+    std::vector<IPAddress> tail;
+    std::vector<bool> tailLegacy, tailEnabled;
+    std::vector<UdpPeerCallsign> tailCall;
+    for (size_t i = 5; i < udpPeers.size(); i++) {
+        tail.push_back(udpPeers[i]);
+        tailLegacy.push_back(i < udpPeerLegacy.size() ? (bool)udpPeerLegacy[i] : false);
+        tailEnabled.push_back(i < udpPeerEnabled.size() ? (bool)udpPeerEnabled[i] : true);
+        tailCall.push_back(i < udpPeerCall.size() ? udpPeerCall[i] : UdpPeerCallsign());
+    }
+    udpPeers.clear(); udpPeerLegacy.clear(); udpPeerEnabled.clear(); udpPeerCall.clear();
+    for (int i = 0; i < 5; i++) {
+        if (parsedIPs[i] != IPAddress(0,0,0,0)) {
+            udpPeers.push_back(parsedIPs[i]);
+            udpPeerLegacy.push_back(legacyBak[i]);
+            udpPeerEnabled.push_back(enabledBak[i]);
+            udpPeerCall.push_back(callBak[i]);
+        }
+    }
+    for (size_t i = 0; i < tail.size(); i++) {
+        udpPeers.push_back(tail[i]);
+        udpPeerLegacy.push_back(tailLegacy[i]);
+        udpPeerEnabled.push_back(tailEnabled[i]);
+        udpPeerCall.push_back(tailCall[i]);
+    }
     saveSettings();
     uiMode = UI_CHAT; needRedraw = true;
 }
@@ -470,6 +495,11 @@ static void doAnnounce() {
     f.port = 0; txBuffer.push_back(f);
     f.port = 1; txBuffer.push_back(f);
     announceTimer = millis() + ANNOUNCE_TIME;
+    uiMode = UI_CHAT; needRedraw = true;
+}
+static void doDeleteMessages() {
+    historyCount = 0; historyHead = 0;
+    for (int i = 0; i < MAX_GROUPS; i++) groupUnread[i] = 0;
     uiMode = UI_CHAT; needRedraw = true;
 }
 
@@ -947,7 +977,11 @@ static void drawMessages(int msgH) {
     int y = MSG_Y + (maxLines - (count - start)) * lineH;
 
     for (int i = start; i < count; i++, y += lineH) {
-        int idx = indices[count - 1 - i];
+        // indices[] is ordered oldest→newest. Draw the newest `maxLines` window
+        // (indices[start..count-1]) top-to-bottom = oldest-in-window to newest.
+        // The old indices[count-1-i] drew the OLDEST screenful, inverted, so new
+        // messages never appeared once history exceeded one screen.
+        int idx = indices[i];
         const ChatLine& cl = history[idx];
         lcd.setTextColor(cl.own ? COL_OWN : COL_RX, COL_BG);
         char cbuf[MAX_CALLSIGN_LENGTH + 3]; utf8ToCP437(cl.call, cbuf, sizeof(cbuf));
@@ -1575,10 +1609,12 @@ static void handleTouch(int16_t tx, int16_t ty) {
         }
         // Groups-Tabs
         if (ty >= HDR_H && ty < HDR_H + TAB_H) {
+            // Must match drawTabs() exactly (same !groupInSammel filter), or the
+            // tab count/width differ and taps select the wrong group.
             int tabList[MAX_GROUPS + 1]; int tabCount = 0;
             tabList[tabCount++] = -1;
             for (int i = 0; i < groupCount; i++)
-                if (strlen(groupNames[i]) > 0) tabList[tabCount++] = i;
+                if (strlen(groupNames[i]) > 0 && !groupInSammel[i]) tabList[tabCount++] = i;
             int tabW = DISP_W / tabCount;
             int tapped = tx / tabW;
             if (tapped < tabCount) {
@@ -1726,6 +1762,12 @@ static void loadGroups() {
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 void initDisplay() {
+    // Init once — the RGB bus cannot handle lcd.init() a 2nd time, and setup()
+    // calls this after initHal() already did. Guarding here (not just in initHal)
+    // covers the direct setup() call and every later LoRa-reinit path too.
+    static bool displayInited = false;
+    if (displayInited) return;
+    displayInited = true;
     Wire.begin(SENSECAP_I2C_SDA, SENSECAP_I2C_SCL, 400000);
     pca9535_init();
 

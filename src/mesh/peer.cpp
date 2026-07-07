@@ -45,6 +45,7 @@ bool peerListDirty = false;
  * if anything was modified.
  */
 void checkPeerList() {
+    ListLock _ll;  // guard peerList/routingList against concurrent bgWorker reads
     bool update = false;
     time_t now = time(NULL);
 
@@ -69,11 +70,12 @@ void checkPeerList() {
         }
     }
 
-    // Don't evaluate timeouts before NTP sync (time base unreliable)
-    if (now < NTP_PLAUSIBLE) {
-        if (update) { sendPeerList(); markTopologyChanged(); }
-        return;
-    }
+    // Pre-NTP the time base is boot-seconds (time(NULL) counts from ~0) and peer/
+    // route timestamps are stamped from the same clock, so (now - timestamp) deltas
+    // are valid for aging even before NTP. The post-NTP jump is corrected above, so
+    // we no longer skip maintenance entirely — otherwise LoRa-only / AP-mode / nRF52
+    // nodes that never get NTP would never expire dead peers or evict stale routes,
+    // and peerList would wedge full of dead entries.
 
     // Mark peers as unavailable after inactivity timeout
     for (auto& peer : peerList) {
@@ -84,16 +86,38 @@ void checkPeerList() {
         }
     }
 
-    // Remove peers after full timeout
+    // Remove peers after full timeout. If the removed callsign is no longer reachable
+    // on any transport, purge routes that used it as next hop — they are dead and
+    // would otherwise block relearning an alternate path (permanent black-hole).
     for (auto it = peerList.begin(); it != peerList.end();) {
         if ((now - it->timestamp) > PEER_TIMEOUT) {
+            char goneCall[MAX_CALLSIGN_LENGTH + 1];
+            strlcpy(goneCall, it->nodeCall, sizeof(goneCall));
             logPrintf(LOG_DEBUG, "Peer", "{\"event\":\"peer\",\"action\":\"removed\",\"call\":\"%s\",\"port\":%d,\"reason\":\"timeout\"}", it->nodeCall, it->port);
             it = peerList.erase(it);
             update = true;
             peersDirty = true;
+            bool stillReachable = false;
+            for (auto& pp : peerList) {
+                if (strcmp(pp.nodeCall, goneCall) == 0 && pp.available) { stillReachable = true; break; }
+            }
+            if (!stillReachable) {
+                for (auto rt = routingList.begin(); rt != routingList.end();) {
+                    if (strcmp(rt->viaCall, goneCall) == 0) { rt = routingList.erase(rt); routesDirty = true; }
+                    else { ++rt; }
+                }
+            }
         } else {
             ++it;
         }
+    }
+
+    // Age out stale routes so a dead next hop's entry can be relearned via another
+    // path. A live route is refreshed on every overheard frame from its destination
+    // (addRoutingList), so only genuinely stale entries expire here.
+    for (auto rt = routingList.begin(); rt != routingList.end();) {
+        if ((now - rt->timestamp) > ROUTE_MAX_AGE) { rt = routingList.erase(rt); routesDirty = true; }
+        else { ++rt; }
     }
 
     // Filter LoRa peers below minimum SNR threshold
@@ -181,6 +205,7 @@ void sendPeerList() {
  * @param port       Transport to match (0 = LoRa, 1 = WiFi/UDP).
  */
 void availablePeerList(const char* call, bool available, uint8_t port) {
+    ListLock _ll;  // guard peerList against concurrent bgWorker reads
     bool update = false;
 
     auto it = std::find_if(peerList.begin(), peerList.end(), [&](const Peer& peer) {
@@ -252,6 +277,7 @@ void availablePeerList(const char* call, bool available, uint8_t port) {
  * @param f  Received frame; nodeCall, port, rssi, snr, frqError are consumed.
  */
 void addPeerList(Frame &f) {
+    ListLock _ll;  // guard peerList against concurrent bgWorker reads
     if (strlen(f.nodeCall) == 0) {
         return;
     }
@@ -299,7 +325,18 @@ void addPeerList(Frame &f) {
         // checkPeerList() will reconcile that on its next pass.
         bool snrBlocks = (extSettings.minSnr > -20) && (it->port == 0) &&
                          (it->snr < extSettings.minSnr);
-        if (!it->available && !snrBlocks) {
+        // Don't re-enable a LoRa (port 0) entry when the same callsign is already
+        // available via WiFi (port 1): checkPeerList() prefers WiFi and would just
+        // disable it again next pass, so the entry would flap available↔unavailable
+        // every frame and churn topology reports.
+        bool wifiPreferred = false;
+        if (it->port == 0) {
+            for (auto& pp : peerList) {
+                if (&pp != &(*it) && strcmp(pp.nodeCall, it->nodeCall) == 0 &&
+                    pp.port == 1 && pp.available) { wifiPreferred = true; break; }
+            }
+        }
+        if (!it->available && !snrBlocks && !wifiPreferred) {
             it->available = true;
             peerListDirty = true;
             markTopologyChanged();

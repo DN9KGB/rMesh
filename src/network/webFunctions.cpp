@@ -29,6 +29,8 @@ AsyncWebSocket ws("/socket", wsHandler.eventHandler());
 // Set when an /ota upload was rejected (image larger than target partition);
 // checked by the completion handler to report the error instead of "OK".
 static bool otaUploadRejected = false;
+static bool otaUploadUnauthorized = false;
+static bool otaIsSpiffs = false;
 
 /**
  * Broadcasts a WebSocket message.
@@ -247,7 +249,17 @@ void startWebServer() {
                 apName = json["settings"]["apName"] | "rMesh";
             }
             if (json["settings"]["apPassword"].is<JsonVariant>()) {
-                apPassword = json["settings"]["apPassword"] | "";
+                String newApPw = json["settings"]["apPassword"] | "";
+                // WPA needs >=8 chars (or empty = open). A 1-7 char key makes softAP()
+                // fail to start → self-lockout on an AP-only node. Mirror the CLI check:
+                // keep the sentinel "***" (unchanged) and reject too-short values.
+                if (newApPw == "***") {
+                    // unchanged sentinel from the masked GET — leave apPassword as-is
+                } else if (newApPw.length() == 0 || newApPw.length() >= 8) {
+                    apPassword = newApPw;
+                } else {
+                    logPrintf(LOG_WARN, "Web", "AP password rejected: must be >=8 chars");
+                }
             }
             // Update WiFi network list
             if (json["settings"]["wifiNetworks"].is<JsonArray>()) {
@@ -378,8 +390,17 @@ void startWebServer() {
             if (json["settings"]["batteryEnabled"].is<JsonVariant>()) {
                 batteryEnabled = json["settings"]["batteryEnabled"].as<bool>();
             }
+            if (json["settings"]["statusLedEnabled"].is<JsonVariant>()) {
+                statusLedEnabled = json["settings"]["statusLedEnabled"].as<bool>();
+            }
             if (json["settings"]["batteryFullVoltage"].is<JsonVariant>()) {
-                batteryFullVoltage = json["settings"]["batteryFullVoltage"].as<float>();
+                float bfv = json["settings"]["batteryFullVoltage"].as<float>();
+                // Clamp to a sane Li-ion "full" range. Consumers compute
+                // (v - vEmpty) / (batteryFullVoltage - vEmpty); a value at/below the
+                // empty voltage (~3.0-3.3) would divide by ~0 → inf% battery.
+                if (bfv < 3.4f) bfv = 3.4f;
+                if (bfv > 4.5f) bfv = 4.5f;
+                batteryFullVoltage = bfv;
             }
             if (json["settings"]["wifiTxPower"].is<JsonVariant>()) {
                 wifiTxPower = json["settings"]["wifiTxPower"].as<int8_t>();
@@ -498,14 +519,18 @@ void startWebServer() {
                 f.messageType = json["sendFrame"]["messageType"].as<uint8_t>();
             }
             if (json["sendFrame"]["messageLength"].is<JsonVariant>()) {
-                f.messageLength = json["sendFrame"]["messageLength"].as<uint16_t>();
+                uint16_t ml = json["sendFrame"]["messageLength"].as<uint16_t>();
+                if (ml > sizeof(f.message)) ml = sizeof(f.message);  // never exceed the payload buffer
+                f.messageLength = ml;
             }
-            if (json["sendFrame"]["messageText"].is<JsonVariant>()) {
+            if (json["sendFrame"]["messageText"].is<const char*>()) {
                 const char *tempText = json["sendFrame"]["messageText"];
-                size_t textLen = strlen(tempText);
-                if (textLen > sizeof(f.message)) textLen = sizeof(f.message);
-                memcpy((char *) f.message, tempText, textLen);
-                f.messageLength = textLen;
+                if (tempText) {
+                    size_t textLen = strlen(tempText);
+                    if (textLen > sizeof(f.message)) textLen = sizeof(f.message);
+                    memcpy((char *) f.message, tempText, textLen);
+                    f.messageLength = textLen;
+                }
             }
             if (json["sendFrame"]["message"].is<JsonArray>()) {
                 JsonArray jsonMsg = json["sendFrame"]["message"].as<JsonArray>();
@@ -644,11 +669,9 @@ void startWebServer() {
     // OTA upload endpoint
     webServer.on("/ota", HTTP_POST,
                  [](AsyncWebServerRequest *request) {
-                     if (!webPasswordHash.isEmpty()) {
-                         if (!request->hasHeader("X-OTA-Token") || request->getHeader("X-OTA-Token")->value() != webPasswordHash) {
-                             request->send(401, "text/plain", "Unauthorized");
-                             return;
-                         }
+                     if (otaUploadUnauthorized) {
+                         request->send(401, "text/plain", "Unauthorized");
+                         return;
                      }
                      bool ok = !otaUploadRejected && !Update.hasError();
                      String msg = ok ? "OK" : (otaUploadRejected ? String("Image too large for target partition")
@@ -657,7 +680,10 @@ void startWebServer() {
                      resp->addHeader("Connection", "close");
                      request->send(resp);
 
-                     bool noreboot = request->hasParam("noreboot") && request->getParam("noreboot")->value() == "1";
+                     // A filesystem update MUST reboot so the freshly flashed image is
+                     // remounted cleanly — never honor noreboot for U_SPIFFS, otherwise
+                     // the still-mounted old FS writes stale metadata over the new image.
+                     bool noreboot = request->hasParam("noreboot") && request->getParam("noreboot")->value() == "1" && !otaIsSpiffs;
                      if (ok) {
                          if (noreboot) {
                              char buf[] = "{\"updateStatus\":\"Partial upload OK, continuing...\"}";
@@ -668,6 +694,9 @@ void startWebServer() {
                              rebootTimer = millis() + 2000; rebootRequested = true;
                          }
                      } else {
+                         // Failed/aborted: no reboot happens, so lift the FS-write freeze
+                         // (set for a SPIFFS attempt) or writes would stay suspended forever.
+                         otaFsFreeze = false;
                          char buf[128];
                          snprintf(buf, sizeof(buf), "{\"updateStatus\":\"Upload failed: %s\"}",
                                   otaUploadRejected ? "Image too large for target partition" : Update.errorString());
@@ -678,6 +707,19 @@ void startWebServer() {
                     bool final) {
                      if (!index) {
                          otaUploadRejected = false;
+                         otaUploadUnauthorized = false;
+                         // Authenticate BEFORE touching Update.* — the completion
+                         // handler runs only after the whole image is written and
+                         // committed, so an auth check there cannot prevent an
+                         // unauthenticated flash. Reject here, before Update.begin().
+                         if (!webPasswordHash.isEmpty() &&
+                             (!request->hasHeader("X-OTA-Token") ||
+                              request->getHeader("X-OTA-Token")->value() != webPasswordHash)) {
+                             otaUploadRejected = true;
+                             otaUploadUnauthorized = true;
+                             logPrintf(LOG_ERROR, "Web", "OTA-Upload rejected: unauthorized");
+                             return;
+                         }
                          int updateType = U_FLASH;
                          if (request->hasParam("type")) {
                              if (request->getParam("type")->value() == "spiffs") updateType = U_SPIFFS;
@@ -702,6 +744,11 @@ void startWebServer() {
                          }
                          logPrintf(LOG_INFO, "Web", "OTA-Upload Start: %s, type: %s", filename.c_str(),
                                        updateType == U_SPIFFS ? "SPIFFS" : "Flash");
+                         // For a filesystem update, suspend all LittleFS writes: the
+                         // background workers must not write into the partition while
+                         // Update overwrites it raw (would corrupt the new image).
+                         otaIsSpiffs = (updateType == U_SPIFFS);
+                         if (otaIsSpiffs) otaFsFreeze = true;
                          showStatusDisplayFlashing(updateType == U_SPIFFS ? "Filesystem" : "Firmware");
                          if (!Update.begin(UPDATE_SIZE_UNKNOWN, updateType)) {
                              logPrintf(LOG_ERROR, "Web", "OTA-Upload begin() error: %s", Update.errorString());
