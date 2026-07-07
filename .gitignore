@@ -13,3 +13,8 @@ data_gz/
 
 # HIL test node config (machine-specific; use nodes.example.yaml as template)
 test/nodes.yaml
+
+# Python bytecode / pytest cache
+__pycache__/
+*.pyc
+.pytest_cache/
