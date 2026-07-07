@@ -182,8 +182,10 @@ class RMeshNode:
         """
         self.send_command(f"call {callsign}")
         time.sleep(0.3)
-        self.send_command(f"freq {freq_preset}")
-        time.sleep(0.3)
+        # Frequency preset lives under the 'lora' command group; bare 'freq 433'
+        # is a no-op (leaves the radio unconfigured / on freq 0).
+        self.send_command(f"lora freq {freq_preset}")
+        time.sleep(0.5)
         if wifi is None:
             # Disable WiFi to prevent NTP sync killing peers
             self.send_command("wifi clear")
