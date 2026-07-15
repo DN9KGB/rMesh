@@ -83,7 +83,9 @@ jobs:
                   continue
               opts = dict(section[1])
               platform = opts.get('platform', '')
-              if 'nrf' not in platform.lower():
+              # 'native' is the host unit-test env (build_src_filter = -<*>),
+              # pio run on it fails with 'Nothing to build'
+              if 'nrf' not in platform.lower() and platform != 'native':
                   print(name.split(':',1)[1])
           ")
           nrf52_envs=$(pio project config --json-output \
