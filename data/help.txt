@@ -16,6 +16,7 @@ Befehlsuebersicht:
   wifi scan                    Wifi scannen
   wifi list                    Alle WLAN-Netzwerke anzeigen
   wifi add <SSID> [<PW>]       Netzwerk hinzufuegen (PW optional)
+                               SSID mit Leerzeichen: wifi add "Mein WLAN" <PW>
   wifi del <N>                 Netzwerk N loeschen (1-basiert)
   wifi fav <N>                 Netzwerk N als Favorit setzen
   wifi pw <N> <PW>             Passwort von Netzwerk N aendern

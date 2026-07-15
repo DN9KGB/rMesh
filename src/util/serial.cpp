@@ -29,6 +29,7 @@
 #include "main.h"
 #include "mesh/frame.h"
 #include "util/helperFunctions.h"
+#include "util/cli_parse.h"
 #include "mesh/peer.h"
 #include "mesh/routing.h"
 #include "mesh/ack.h"
@@ -256,25 +257,21 @@ void checkSerialRX() {
                         saveWifiNetworks();
                         logPrintf(LOG_INFO, "WiFi", "All WiFi networks deleted.");
                     } else if (strncmp(sub, "add ", 4) == 0) {
-                        const char* rest = parameter + 4;
+                        // SSIDs (or passwords) with spaces: wrap in double quotes,
+                        // e.g. wifi add "My Home Net" secret
                         WifiNetwork net;
                         memset(&net, 0, sizeof(net));
                         net.favorite = wifiNetworks.empty();
-                        const char* sp = strchr(rest, ' ');
-                        if (sp) {
-                            size_t ssidLen = sp - rest;
-                            if (ssidLen >= sizeof(net.ssid)) ssidLen = sizeof(net.ssid) - 1;
-                            strncpy(net.ssid, rest, ssidLen);
-                            net.ssid[ssidLen] = '\0';
-                            strlcpy(net.password, sp + 1, sizeof(net.password));
+                        if (!parseWifiAddArgs(parameter + 4, net.ssid, sizeof(net.ssid),
+                                              net.password, sizeof(net.password))) {
+                            logPrintf(LOG_ERROR, "WiFi", "Usage: wifi add <SSID> [<PW>] (SSID with spaces: \"in quotes\")");
                         } else {
-                            strlcpy(net.ssid, rest, sizeof(net.ssid));
+                            wifiNetworks.push_back(net);
+                            saveSettings();
+                            wifiInit();
+                            logPrintf(LOG_INFO, "WiFi", "WiFi %zu added: %s%s", wifiNetworks.size(),
+                                net.ssid, net.favorite ? " [favorite]" : "");
                         }
-                        wifiNetworks.push_back(net);
-                        saveSettings();
-                        wifiInit();
-                        logPrintf(LOG_INFO, "WiFi", "WiFi %zu added: %s%s", wifiNetworks.size(),
-                            net.ssid, net.favorite ? " [favorite]" : "");
                     } else if (strncmp(sub, "del ", 4) == 0) {
                         int idx = atoi(parameter + 4) - 1;
                         if (idx >= 0 && (size_t)idx < wifiNetworks.size()) {
