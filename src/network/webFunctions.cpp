@@ -20,6 +20,7 @@
 #include "util/heapdbg.h"
 #include "network/api.h"
 #include "network/apiAuth.h"
+#include "util/fsCheck.h"
 #include "display/statusDisplay.h"
 
 AsyncWebServer webServer(80);
@@ -124,6 +125,43 @@ static void sendInitialDataToClient(AsyncWebSocketClient *client) {
     client->text("{\"notify\":\"settings\"}");
     client->text("{\"notify\":\"peers\"}");
     client->text("{\"notify\":\"routes\"}");
+}
+
+// Fallback page served for "/" when the LittleFS has no WebUI files (e.g.
+// littlefs.bin flashed to a wrong offset). Offers a restore via the update
+// server (/restorefs) and a littlefs.bin upload to /ota?type=spiffs.
+static const char FS_MISSING_PAGE[] PROGMEM = R"HTML(<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>rMesh - WebUI fehlt</title>
+<style>body{font-family:sans-serif;max-width:36em;margin:1em auto;padding:0 1em;line-height:1.4}code{background:#eee;padding:0 .2em}button,input{margin:.3em 0}#st{font-weight:bold}</style></head><body>
+<h2>rMesh: WebUI-Dateien fehlen</h2>
+<p>Die Node l&auml;uft, aber das Dateisystem (LittleFS) ist leer. Meist wurde <code>littlefs.bin</code> an eine falsche Adresse geflasht.</p>
+<p>Version <b>{{VER}}</b>, Board <b>{{ENV}}</b><br>Richtige Adresse f&uuml;r <code>littlefs.bin</code>: <b>{{OFF}}</b></p>
+<p id="pwr" style="display:{{PW}}">Web-Passwort: <input type="password" id="pw"></p>
+<h3>1. Vom Update-Server laden</h3>
+<p>Braucht Internet. L&auml;dt Firmware und WebUI des eingestellten Update-Kanals, danach Neustart (1-2 min).</p>
+<button onclick="rf()">WebUI-Dateien vom Update-Server laden</button>
+<h3>2. littlefs.bin hochladen</h3>
+<p>Datei <code>{{ENV}}_littlefs.bin</code> aus dem Release-ZIP:</p>
+<input type="file" id="f" accept=".bin"> <button onclick="up()">Hochladen</button>
+<p id="st"></p>
+<p>Alternativ an der seriellen Konsole: <code>updf</code></p>
+<script>function H(s){var b=unescape(encodeURIComponent(s)),l=b.length,K=[],h=[],i,j,w=[],n=[];function P(x){for(var d=2;d*d<=x;d++)if(x%d==0)return 0;return 1}for(i=2,j=0;j<64;i++)if(P(i)){if(j<8)h[j]=Math.pow(i,.5)*4294967296|0;K[j++]=Math.pow(i,1/3)*4294967296|0}for(i=0;i<l;i++)n[i>>2]|=b.charCodeAt(i)<<(24-i%4*8);n[l>>2]|=128<<(24-l%4*8);var L=((l+8>>6)+1)*16;n[L-1]=l*8;for(j=0;j<L;j+=16){var a=h.slice(0);for(i=0;i<64;i++){var R=function(x,c){return x>>>c|x<<32-c},e=a[4],t;if(i<16)w[i]=n[j+i]|0;else{var u=w[i-15],v=w[i-2];w[i]=(R(u,7)^R(u,18)^u>>>3)+w[i-7]+(R(v,17)^R(v,19)^v>>>10)+w[i-16]|0}t=a[7]+(R(e,6)^R(e,11)^R(e,25))+(e&a[5]^~e&a[6])+K[i]+w[i];var t2=(R(a[0],2)^R(a[0],13)^R(a[0],22))+(a[0]&a[1]^a[0]&a[2]^a[1]&a[2]);a=[t+t2|0].concat(a);a[4]=a[4]+t|0;a.pop()}for(i=0;i<8;i++)h[i]=h[i]+a[i]|0}var o='';for(i=0;i<8;i++)o+=('0000000'+(h[i]>>>0).toString(16)).slice(-8);return o}
+function tk(){var p=document.getElementById('pw').value;return p?H(p):''}
+function st(t){document.getElementById('st').textContent=t}
+function rf(){var x=new XMLHttpRequest(),t=tk();x.open('POST','/restorefs');if(t)x.setRequestHeader('Authorization','Bearer '+t);x.onload=function(){st(x.status==200?'Download gestartet, Node startet danach neu...':'Fehler '+x.status+(x.status==401?' (Passwort?)':''))};x.onerror=function(){st('Verbindung fehlgeschlagen')};x.send()}
+function up(){var f=document.getElementById('f').files[0],t=tk();if(!f)return;var d=new FormData(),x=new XMLHttpRequest();d.append('firmware',f,f.name);x.open('POST','/ota?type=spiffs');if(t)x.setRequestHeader('X-OTA-Token',t);x.upload.onprogress=function(e){if(e.lengthComputable)st('Upload '+Math.round(e.loaded*100/e.total)+'%')};x.onload=function(){st(x.status==200&&x.responseText=='OK'?'OK, Neustart... Seite in 20 s neu laden.':'Fehler: '+x.status+' '+x.responseText)};x.onerror=function(){st('Verbindung fehlgeschlagen')};x.send(d)}
+</script></body></html>)HTML";
+
+static void sendFsMissingPage(AsyncWebServerRequest *request) {
+    String html = FPSTR(FS_MISSING_PAGE);
+    char off[16];
+    snprintf(off, sizeof(off), "0x%X", (unsigned)fsPartitionOffset());
+    html.replace("{{VER}}", VERSION);
+    html.replace("{{ENV}}", PIO_ENV_NAME);
+    html.replace("{{OFF}}", off);
+    html.replace("{{PW}}", webPasswordHash.isEmpty() ? "none" : "block");
+    AsyncWebServerResponse *response = request->beginResponse(200, "text/html", html);
+    response->addHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    request->send(response);
 }
 
 /**
@@ -637,6 +675,7 @@ void startWebServer() {
         if (path == "/") path = "/index.html";
 
         // Shorter timeout (2s) — prevents long UI hangs during trim operations
+        bool fsMissing = false;
         if (xSemaphoreTake(fsMutex, pdMS_TO_TICKS(2000))) {
             bool gzipped = !LittleFS.exists(path) && LittleFS.exists(path + ".gz");
             String servePath = gzipped ? path + ".gz" : path;
@@ -657,13 +696,26 @@ void startWebServer() {
                 response->addHeader("Expires", "0");
 
                 request->send(response);
+            } else if (path == "/index.html") {
+                fsMissing = true;
             } else {
                 request->send(404, "text/plain", "Not Found");
             }
             xSemaphoreGive(fsMutex);
+            if (fsMissing) sendFsMissingPage(request);
         } else {
             request->send(503, "text/plain", "FS Busy");
         }
+    });
+
+    // Restore WebUI files from the update server (used by the fallback page):
+    // same path as the "updf" console command / forceUpdate WS command.
+    webServer.on("/restorefs", HTTP_POST, [](AsyncWebServerRequest *request) {
+        if (!checkApiAuth(request)) return;
+        pendingForceChannel = updateChannel;
+        pendingForceUpdate = true;
+        logPrintf(LOG_INFO, "Web", "Filesystem restore requested (channel: %s)...", updateChannel == 1 ? "dev" : "release");
+        request->send(200, "text/plain", "OK");
     });
 
     // OTA upload endpoint

@@ -26,10 +26,12 @@ Erstes Dev-Release seit v26.4.1a-dev (April 2026). Bündelt die bisher nur als N
 
 - FIX: Announce-ACKs der Gegenstationen wurden im Monitor nie angezeigt (#55) — ein Announce erzeugt TX-Monitor-Frames auf WiFi UND LoRa im selben Rate-Limit-Fenster (max. 2 pro 500 ms), das Millisekunden später eintreffende ACK war immer das dritte Frame und wurde still verworfen. ACK-Frames sind jetzt vom Monitor-Rate-Limit ausgenommen; zusätzlich wird ein Announce-ACK wie ein Message-ACK im API-Event-Puffer registriert und als Debug-Event (`announce_ack`) ausgegeben
 - FIX: `wifi add` akzeptiert SSIDs (und Passwörter) mit Leerzeichen über Anführungszeichen-Syntax, z.B. `wifi add "Mein Netz" geheim`
+- FIX: Leeres Dateisystem wird jetzt sichtbar statt nur „Not Found“ (RME-1). Wurde `littlefs.bin` per esptool an eine falsche Adresse geflasht (z.B. den veralteten Wiki-Offset `0x290000`), lief die Node ohne WebUI und ohne Konsolen-Hilfe, ohne Hinweis auf die Ursache. Jetzt gibt es beim Boot eine Warnung mit dem richtigen Offset aus der Partitionstabelle, und `settings` zeigt `webUI files: present/MISSING`. Die WebUI liefert unter `/` eine eingebettete Notfallseite: Dateien vom Update-Server laden (neuer Endpoint `POST /restorefs`, authentifiziert) oder `littlefs.bin` hochladen. `h` zeigt eine Notfall-Hilfe mit den wichtigsten Befehlen (`settings`, `call`, `wifi add`, `updf`, `reboot`)
 
 ### CI
 
 - CI: native Test-Environment von der Nightly-/Release-Build-Matrix ausgenommen (Host-Tests laufen im eigenen Test-Workflow)
+- CI: Release- und Nightly-ZIPs enthalten `<Board>_flash.txt` mit dem fertigen esptool-Befehl und den korrekten Offsets aus `devices.json` (erzeugt von `gen_manifests.py`)
 
 ## [v26.7.0]
 

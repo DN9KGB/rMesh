@@ -153,7 +153,16 @@ jobs:
           done
 
       - name: Generate esp-web-tools manifests
-        run: python extra_scripts/gen_manifests.py "${{ github.ref_name }}" release
+        run: |
+          set -euo pipefail
+          python extra_scripts/gen_manifests.py "${{ github.ref_name }}" release flashcmd
+
+          # Add the generated esptool command (correct offsets) to each ZIP
+          for f in flashcmd/*_flash.txt; do
+            [ -f "$f" ] || continue
+            env_name=$(basename "$f" _flash.txt)
+            if [ -f "release/${env_name}.zip" ]; then zip -j "release/${env_name}.zip" "$f"; fi
+          done
 
       - name: Extract release notes from CHANGELOG.md
         run: python extra_scripts/extract_changelog.py "${{ github.ref_name }}" > release_notes.md
