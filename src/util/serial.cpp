@@ -30,6 +30,7 @@
 #include "mesh/frame.h"
 #include "util/helperFunctions.h"
 #include "util/cli_parse.h"
+#include "util/fsCheck.h"
 #include "mesh/peer.h"
 #include "mesh/routing.h"
 #include "mesh/ack.h"
@@ -117,7 +118,19 @@ void checkSerialRX() {
                         }
                         file.close();
                     } else {
+                        // Filesystem empty (e.g. littlefs.bin at a wrong offset):
+                        // at least show the commands needed to recover.
                         logPrintf(LOG_ERROR, "CLI", "Error: /help.txt not found. Reflash filesystem?");
+                        const char* p = EMERGENCY_HELP;
+                        while (*p) {
+                            const char* nl = strchr(p, '\n');
+                            int len = nl ? (int)(nl - p) : (int)strlen(p);
+                            logRaw("%.*s", len, p);
+                            p += len + (nl ? 1 : 0);
+                        }
+                        #ifndef NRF52_PLATFORM
+                        logFsMissingHint();
+                        #endif
                     }
                 }
 

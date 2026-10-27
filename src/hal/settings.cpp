@@ -17,6 +17,7 @@
 #include "util/serial.h"
 #include "main.h"
 #include "util/logging.h"
+#include "util/fsCheck.h"
 
 Settings settings;
 ExtSettings extSettings;
@@ -108,6 +109,9 @@ void showSettings() {
     logRaw("  position: %s", settings.position);
     logRaw("  version: %s", VERSION);
     logRaw("  updateChannel: %d", updateChannel);
+#ifndef NRF52_PLATFORM
+    logRaw("  webUI files: %s", webUiFilesPresent() ? "present" : "MISSING (run 'updf' or reflash littlefs.bin)");
+#endif
     logRaw("");
 #ifdef HAS_WIFI
     logRaw("  WiFi:");

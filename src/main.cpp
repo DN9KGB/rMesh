@@ -47,6 +47,7 @@
 #include "util/logging.h"
 #include "util/heapdbg.h"
 #include "util/bgWorker.h"
+#include "util/fsCheck.h"
 #include "network/api.h"
 #include "bsp/BoardFactory.h"
 #include "display/statusDisplay.h"
@@ -885,10 +886,12 @@ void setup() {
     #else
     if (!LittleFS.begin(false)) {
         logPrintf(LOG_WARN, "FS", "Mount failed — formatting...");
+        fsWasFormatted = true;
         if (!LittleFS.begin(true)) {
             logPrintf(LOG_ERROR, "FS", "Format failed!");
         }
     }
+    if (!webUiFilesPresent()) logFsMissingHint();
     // Size the message store from the actual partition: old 448 KB layouts
     // keep the small limit, freshly (USB/web-flasher) flashed 3.9 MB layouts
     // get more headroom — soft migration, no reflash required.

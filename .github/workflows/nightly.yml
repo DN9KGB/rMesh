@@ -205,7 +205,16 @@ jobs:
 
       - name: Generate esp-web-tools manifests
         if: steps.check.outputs.skip != 'true'
-        run: python extra_scripts/gen_manifests.py "${{ steps.check.outputs.tag }}" release
+        run: |
+          set -euo pipefail
+          python extra_scripts/gen_manifests.py "${{ steps.check.outputs.tag }}" release flashcmd
+
+          # Add the generated esptool command (correct offsets) to each ZIP
+          for f in flashcmd/*_flash.txt; do
+            [ -f "$f" ] || continue
+            env_name=$(basename "$f" _flash.txt)
+            if [ -f "release/${env_name}.zip" ]; then zip -j "release/${env_name}.zip" "$f"; fi
+          done
 
       - name: Create nightly release
         if: steps.check.outputs.skip != 'true'
