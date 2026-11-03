@@ -24,6 +24,7 @@ struct ApiMessage {
     int8_t snr;
     uint8_t dir;      // 0=rx, 1=tx
     bool acked;
+    bool failed;      // own message: retries ran out without an ACK (#56)
 };
 
 // Event type discriminator (replaces former char event[8] field).
@@ -74,6 +75,11 @@ void apiRecordAckEvent(const Frame &f);
  * @brief Mark a message as ACKed in the ring buffer.
  */
 void apiMarkMessageAcked(const char* srcCall, uint32_t id);
+
+/**
+ * @brief Set or clear the "not confirmed" flag of an own message (#56).
+ */
+void apiMarkMessageFailed(const char* srcCall, uint32_t id, bool failed);
 
 /**
  * @brief Load persisted message/event ring buffers from LittleFS.

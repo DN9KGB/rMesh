@@ -91,12 +91,98 @@ function mergeWithCache(deviceMessages) {
         return m.id && !knownIds[m.srcCall + "_" + m.id];
     });
 
+    // keep the delivery state of own messages known from the cache (#56)
+    var cachedState = {};
+    cached.forEach(function(m) { if (m.id && m.state) cachedState[m.srcCall + "_" + m.id] = m; });
+    deviceMessages.forEach(function(m) {
+        var c = cachedState[m.srcCall + "_" + m.id];
+        if (c && !m.state) { m.state = c.state; m.stateBy = c.stateBy || ""; }
+    });
+
     if (extra.length === 0) return deviceMessages;
 
     // append missing messages and sort by timestamp
     var merged = deviceMessages.concat(extra);
     merged.sort(function(a, b) { return (a.timestamp || 0) - (b.timestamp || 0); });
     return merged;
+}
+
+// --- Delivery state of own messages (#56) ---
+// pending: still in the node's TX queue, acked: confirmed by a station,
+// failed: all retries ran out without an ACK. Unknown state = no marker.
+var msgStates = {};
+
+function msgKey(m) { return m.srcCall + "_" + m.id; }
+
+function msgStateOf(m) {
+    var s = msgStates[msgKey(m)];
+    if (s) return s;
+    return m.state ? {state: m.state, by: m.stateBy || ""} : null;
+}
+
+function msgStateHtml(m) {
+    var s = msgStateOf(m);
+    if (!s) return "";
+    if (s.state === "pending") return "<span class='msg-state'>⏳ " + esc(t('msg.state_pending')) + "</span>";
+    if (s.state === "acked") {
+        var tip = s.by ? " title='" + esc(t('msg.state_acked_by') + " " + s.by) + "'" : "";
+        return "<span class='msg-state'" + tip + ">✓ " + esc(t('msg.state_acked')) + "</span>";
+    }
+    if (s.state === "failed") {
+        return "<span class='msg-state'>✗ " + esc(t('msg.state_failed')) + "</span>" +
+               "<button class='msg-retry' onclick='retryMessage(\"" + esc(msgKey(m)) + "\")'>↻ " + esc(t('msg.retry')) + "</button>";
+    }
+    return "";
+}
+
+function msgStateClass(m) {
+    var s = msgStateOf(m);
+    return s ? " msg-" + s.state : "";
+}
+
+function applyMsgState(ms) {
+    if (!ms || !ms.srcCall || !ms.id || !ms.state) return;
+    var key = ms.srcCall + "_" + ms.id;
+    msgStates[key] = {state: ms.state, by: ms.by || ""};
+    messages.forEach(function(m) {
+        if (m.id && msgKey(m) === key) {
+            m.state = ms.state; m.stateBy = ms.by || "";
+            _msgCacheDirty = true;
+            updateMsgBubbles(m);
+        }
+    });
+}
+
+function updateMsgBubbles(m) {
+    document.querySelectorAll(".msg-bubble[data-key='" + msgKey(m).replace(/'/g, "") + "']").forEach(function(el) {
+        el.className = "msg-bubble msg-tx" + msgStateClass(m);
+        el.querySelectorAll(".msg-state, .msg-retry").forEach(function(x) { x.remove(); });
+        el.insertAdjacentHTML('beforeend', msgStateHtml(m));
+    });
+}
+
+function loadMsgStates() {
+    fetch(baseURL + "msgstate.json?" + Math.random())
+        .then(function(r) { return r.ok ? r.text() : ""; })
+        .then(function(text) {
+            if (!text) return;
+            text.split(/\r?\n/).forEach(function(line) {
+                if (line.trim().length === 0) return;
+                try { applyMsgState(JSON.parse(line).msgState); } catch(e) {}
+            });
+        })
+        .catch(function() { /* no states yet */ });
+}
+
+function retryMessage(key) {
+    var m = null;
+    messages.forEach(function(x) { if (x.id && msgKey(x) === key) m = x; });
+    if (!m) return;
+    sendWS(JSON.stringify({retryMessage: {
+        id: m.id, dst: m.dstCall || "", group: m.dstGroup || "",
+        text: m.text || "", messageType: m.messageType || 0
+    }}));
+    applyMsgState({srcCall: m.srcCall, id: m.id, state: "pending", by: ""});
 }
 
 // periodic save
@@ -573,6 +659,7 @@ function onSettingsReceived(s) {
                 showMessages(true);
                 for (let i = 0; i <= 10; i++) {channels[i] = false;}
                 setUI(ui);
+                loadMsgStates();
             })
             .catch(function(err) {
                 console.warn("messages.json fetch failed, using cache:", err);
@@ -598,6 +685,7 @@ function onSettingsReceived(s) {
                 showMessages(true);
                 for (let i = 0; i <= 10; i++) {channels[i] = false;}
                 setUI(ui);
+                loadMsgStates();
             });
     }
 }
@@ -721,6 +809,11 @@ function onMessage(event) {
         messages.push(d.message);
         _msgCacheDirty = true;
         showMessages();
+    }
+
+    //Delivery state of an own message changed
+    if (d.msgState) {
+        applyMsgState(d.msgState);
     }
 
     //Peers (legacy WebSocket push fallback)
@@ -1353,17 +1446,18 @@ function showMessages(parseAll = false) {
 
         //Process message
         if ((m.messageType == 0) || (m.messageType == 1)) { //only TEXT & TRACE messages
-            var txClass = m.tx ? ' msg-tx' : '';
+            var txClass = m.tx ? ' msg-tx' + msgStateClass(m) : '';
             const date = new Date(m.timestamp * 1000);
             var timeStr = date.toLocaleString("de-DE", {day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit"}).replace(",", "");
             var prefix = "";
             if (m.dstCall)  { prefix += esc(m.dstCall) + ": "; }
             if (m.dstGroup) { prefix += esc(m.dstGroup) + ": "; }
             if (m.messageType == 1) { prefix += "[TRACE] "; }
-            msg += "<div class='msg-bubble" + txClass + "'>";
+            msg += "<div class='msg-bubble" + txClass + "'" + (m.tx && m.id ? " data-key='" + esc(msgKey(m)) + "'" : "") + ">";
             msg += "<span class='msg-time'>" + timeStr + "</span>";
             msg += "<span class='msg-call' onclick='insertCallsign(\"" + esc(m.srcCall).replace(/"/g, '') + "\")'>" + esc(m.srcCall) + "</span>";
             msg += "<span class='msg-text'>" + prefix + esc(m.text || '') + "</span>";
+            if (m.tx) { msg += msgStateHtml(m); }
             msg += "</div>";
         }
         
