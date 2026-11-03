@@ -34,6 +34,9 @@ void sendGroup(const char* dst, const char* text, uint8_t messageType = Frame::M
 void safeUtf8Copy(char* dest, const uint8_t* src, size_t srcLen, size_t dstSize);
 void getFormattedTime(const char* format, char* outBuffer, size_t outSize);
 void sendFrame(Frame &f);
+void enqueueOwnFrame(Frame &f);
+void retryFrame(Frame &f);
+void initMsgState();
 void initPendingSendQueue();
 void processPendingSends();
 uint32_t calculateAckTime();

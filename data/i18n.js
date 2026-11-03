@@ -97,6 +97,8 @@ const I18N = {
         // Mobile
         'mob.message_placeholder': 'Message...',
         'msg.max_length': 'Max message length reached: ',
+        'msg.state_pending': 'sending', 'msg.state_acked': 'confirmed',
+        'msg.state_acked_by': 'Confirmed by', 'msg.state_failed': 'not confirmed', 'msg.retry': 'Retry',
         // Setup password status
         'pw.set': 'Password is set', 'pw.not_set': 'No password set',
         // Peer / Routing table headers
@@ -199,6 +201,8 @@ const I18N = {
         'auth.password_required': 'Passwort erforderlich', 'auth.login': 'Anmelden',
         'mob.message_placeholder': 'Nachricht...',
         'msg.max_length': 'Maximale Nachrichtenlänge erreicht: ',
+        'msg.state_pending': 'wird gesendet', 'msg.state_acked': 'bestätigt',
+        'msg.state_acked_by': 'Bestätigt von', 'msg.state_failed': 'nicht bestätigt', 'msg.retry': 'Erneut senden',
         'pw.set': 'Passwort ist gesetzt', 'pw.not_set': 'Kein Passwort gesetzt',
         'peer.port': 'Port', 'peer.call': 'Call', 'peer.last_rx': 'Last RX',
         'peer.rssi': 'RSSI', 'peer.snr': 'SNR', 'peer.frq_err': 'Frq. Error',
