@@ -231,7 +231,18 @@ void apiMarkMessageAcked(const char* srcCall, uint32_t id) {
         uint8_t idx = (msgHead - msgCount + i + API_MSG_BUFFER_SIZE) % API_MSG_BUFFER_SIZE;
         if (msgBuffer[idx].id == id && strcmp(msgBuffer[idx].src, srcCall) == 0) {
             msgBuffer[idx].acked = true;
+            msgBuffer[idx].failed = false;
             // Not persisted — ack state is rebuilt at boot from ack.json.
+            return;
+        }
+    }
+}
+
+void apiMarkMessageFailed(const char* srcCall, uint32_t id, bool failed) {
+    for (uint8_t i = 0; i < msgCount; i++) {
+        uint8_t idx = (msgHead - msgCount + i + API_MSG_BUFFER_SIZE) % API_MSG_BUFFER_SIZE;
+        if (msgBuffer[idx].id == id && strcmp(msgBuffer[idx].src, srcCall) == 0) {
+            if (!msgBuffer[idx].acked) msgBuffer[idx].failed = failed;
             return;
         }
     }
@@ -476,10 +487,11 @@ static void buildMessages(uint32_t since, int limit, const char* groupFilter) {
         } else {
             jPrintf(",\"via\":null");
         }
-        jPrintf(",\"hops\":%u,\"rssi\":%d,\"snr\":%d,\"dir\":\"%s\",\"ack\":%s}",
+        jPrintf(",\"hops\":%u,\"rssi\":%d,\"snr\":%d,\"dir\":\"%s\",\"ack\":%s,\"failed\":%s}",
                 m.hops, m.rssi, (int)m.snr,
                 m.dir == 1 ? "tx" : "rx",
-                m.acked ? "true" : "false");
+                m.acked ? "true" : "false",
+                m.failed ? "true" : "false");
         count++;
         if (ESP.getFreeHeap() < 20000) break;
     }
@@ -619,9 +631,7 @@ static void handlePostMessage(AsyncWebServerRequest *request, uint8_t *data, siz
     f.messageLength = strlen((char*)f.message);
     f.tx = true;
 
-    // Record in API ring buffer before sending
-    apiRecordMessage(f, true);
-
+    // sendFrame() records the message in the API ring buffer once it has its id
     sendFrame(f);
 
     char resp[64];

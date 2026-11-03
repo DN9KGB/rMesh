@@ -523,7 +523,7 @@ select.input-box {
 /* ===== CHAT MESSAGE — desktop: fixed-width columns ===== */
 .msg-bubble {
     display: grid;
-    grid-template-columns: 17ch 10ch 1fr;
+    grid-template-columns: 17ch 10ch 1fr auto auto;
     gap: 0 4px;
     align-items: baseline;
     line-height: 1.35;
@@ -554,6 +554,44 @@ select.input-box {
 .msg-text {
     min-width: 0;
     word-break: break-word;
+}
+
+/* Delivery state of own messages (#56) */
+.msg-state {
+    font-size: 0.8em;
+    white-space: nowrap;
+}
+
+.msg-bubble.msg-pending {
+    opacity: 0.7;
+}
+
+.msg-bubble.msg-pending .msg-state {
+    color: #aaa;
+}
+
+.msg-bubble.msg-acked .msg-state {
+    color: #4ecca3;
+}
+
+.msg-bubble.msg-failed {
+    background: #3a1a1a;
+}
+
+.msg-bubble.msg-tx.msg-failed .msg-time,
+.msg-bubble.msg-tx.msg-failed .msg-text,
+.msg-bubble.msg-failed .msg-state {
+    color: #ff6b6b;
+}
+
+.msg-retry {
+    background: #1e1e1e;
+    color: #e0e0e0;
+    border: 1px solid #a33;
+    border-radius: 3px;
+    font-size: 0.8em;
+    padding: 1px 8px;
+    cursor: pointer;
 }
 
 /* Message length exceeded — red flash */
@@ -1576,6 +1614,29 @@ select.input-box {
     .msg-bubble.msg-tx .msg-call,
     .msg-bubble.msg-tx .msg-text {
         color: #e2e2e2;
+    }
+
+    /* Delivery state (#56): marker + retry on their own line */
+    .msg-bubble.msg-tx.msg-failed {
+        background: #3a1a1a;
+        border-color: #a33;
+    }
+
+    .msg-bubble.msg-tx.msg-failed .msg-text {
+        color: #e2e2e2;
+    }
+
+    .msg-state {
+        order: 2;
+        margin-left: auto;
+        font-size: 0.72rem;
+    }
+
+    .msg-retry {
+        order: 3;
+        margin-left: 8px;
+        padding: 0 8px;
+        font-size: 0.72rem;
     }
 
     /* Meta line: callsign first, then time */

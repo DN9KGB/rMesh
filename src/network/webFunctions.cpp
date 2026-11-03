@@ -595,8 +595,24 @@ void startWebServer() {
             sendGroup(dst, text);
         }
 
+        // Re-send an own message that was not confirmed (#56), same id
+        if (json["retryMessage"].is<JsonObject>()) {
+            JsonObject rm = json["retryMessage"];
+            const char* text = rm["text"] | "";
+            Frame f;
+            f.frameType = Frame::FrameTypes::MESSAGE_FRAME;
+            f.messageType = rm["messageType"] | (uint8_t)Frame::MessageTypes::TEXT_MESSAGE;
+            f.id = rm["id"] | (uint32_t)0;
+            safeUtf8Copy((char*)f.dstCall, (const uint8_t*)(rm["dst"] | ""), MAX_CALLSIGN_LENGTH, sizeof(f.dstCall));
+            safeUtf8Copy((char*)f.dstGroup, (const uint8_t*)(rm["group"] | ""), MAX_CALLSIGN_LENGTH, sizeof(f.dstGroup));
+            safeUtf8Copy((char*)f.message, (const uint8_t*)text, sizeof(f.message), sizeof(f.message));
+            f.messageLength = strlen((char*)f.message);
+            if (f.id != 0 && f.messageLength > 0) retryFrame(f);
+        }
+
         if (json["deleteMessages"].is<JsonVariant>()) {
             LittleFS.remove("/messages.json");
+            LittleFS.remove("/msgstate.json");
             rebootTimer = millis() + 1000; rebootRequested = true;
         }
 

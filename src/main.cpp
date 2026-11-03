@@ -37,6 +37,7 @@
 #include "util/helperFunctions.h"
 #include "mesh/peer.h"
 #include "mesh/ack.h"
+#include "mesh/msgstate.h"
 #include "network/udp.h"
 #include "network/ethFunctions.h"
 #include "mesh/routing.h"
@@ -393,6 +394,9 @@ void processRxFrame(Frame &f) {
             // Persist the ACK so repeat logic and foreign-ACK forwarding work correctly
             addACK(f.srcCall, f.nodeCall, f.id);
 
+            // Delivery state of our own message (#56): any station's ACK counts
+            if (strcmp(f.srcCall, settings.mycall) == 0) msgStateAcked(f.id, f.nodeCall);
+
             // Record ACK event in API ring buffer and mark message as acked
             #ifdef HAS_WIFI
             apiRecordAckEvent(f);
@@ -433,6 +437,7 @@ void processRxFrame(Frame &f) {
 
             // Remove our own pending copy of this message if another node already
             // relayed it (same srcCall + viaCall + id, still in first-try state)
+            const size_t txBeforeRelayCheck = txBuffer.size();
             txBuffer.erase(
                 std::remove_if(txBuffer.begin(), txBuffer.end(),
                     [&](const Frame& txB) {
@@ -449,6 +454,12 @@ void processRxFrame(Frame &f) {
                     }),
                 txBuffer.end()
             );
+
+            // Our own message was dropped here because a neighbour carries it on:
+            // that counts as delivered, not as a timeout (#56).
+            if (txBuffer.size() != txBeforeRelayCheck && strcmp(f.srcCall, settings.mycall) == 0) {
+                msgStateAcked(f.id, f.nodeCall);
+            }
 
             // Remove any stale ACK frames for this message from txBuffer
             txBuffer.erase(
@@ -911,6 +922,7 @@ void setup() {
     listMutex = xSemaphoreCreateMutex();
     mainLoopTaskHandle = xTaskGetCurrentTaskHandle();
     initPendingSendQueue();
+    initMsgState();
     initFileWriteWorker();
 
     // Load user settings from NVS / InternalFS
@@ -1305,6 +1317,8 @@ void loop() {
                         accountDroppedType(txBuffer[i]);
                         txBuffer.erase(txBuffer.begin() + i);
                     }
+                    // Own messages without frames left are now "not confirmed" (#56)
+                    msgStateSweep();
                     i = -1; // restart iteration since indices shifted
                 }
                 break;
@@ -1375,6 +1389,8 @@ void loop() {
         #endif
         // Expire stale peers once per second
         checkPeerList();
+        // Catch own messages whose frames vanished any other way (#56)
+        msgStateSweep();
         // Flush deferred RSSI/SNR updates to WebSocket clients
         if (peerListDirty) {
             peerListDirty = false;
@@ -1519,10 +1535,12 @@ void loop() {
         // may already be satisfied while the filesystem is still full.
         trimFile("/messages.json", 0);
         trimFile("/ack.json", 0);
+        trimFile("/msgstate.json", 0);
     }
     if (timerExpired(messagesDeleteTimer)) {
         messagesDeleteTimer = millis() + 24 * 60 * 60 * 1000; // repeat every 24 h
         trimFile("/messages.json", maxStoredMessages);
+        trimFile("/msgstate.json", maxStoredMessages);
     }
 
     #ifdef HAS_WIFI

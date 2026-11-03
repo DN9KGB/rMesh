@@ -20,6 +20,11 @@
 #include "config.h"
 #include "mesh/routing.h"
 #include "util/logging.h"
+#include "mesh/msgstate.h"
+#include "util/serial.h"
+#ifdef HAS_WIFI
+#include "network/api.h"
+#endif
 
 
 // Monotonic message-ID counter, seeded with a random value on boot so that
@@ -59,8 +64,13 @@ void printHexArray(uint8_t* data, size_t length) {
 // Instead, background tasks push the prepared Frame into a small queue
 // protected by pendingSendMutex; the main loop drains it once per iteration.
 
+struct PendingSend {
+    Frame frame;
+    bool  retry;    // true: retryFrame() (keep id, no new message entry)
+};
+
 static SemaphoreHandle_t pendingSendMutex = NULL;
-static std::vector<Frame> pendingSendQueue;
+static std::vector<PendingSend> pendingSendQueue;
 
 void initPendingSendQueue() {
     pendingSendMutex = xSemaphoreCreateMutex();
@@ -69,35 +79,85 @@ void initPendingSendQueue() {
 
 void processPendingSends() {
     if (pendingSendQueue.empty()) return;
-    std::vector<Frame> local;
+    std::vector<PendingSend> local;
     if (xSemaphoreTake(pendingSendMutex, pdMS_TO_TICKS(50))) {
         local.swap(pendingSendQueue);
         xSemaphoreGive(pendingSendMutex);
     }
-    for (auto& frame : local) {
-        sendFrame(frame);
+    for (auto& p : local) {
+        if (p.retry) retryFrame(p.frame);
+        else sendFrame(p.frame);
     }
+}
+
+// Returns true if the frame was queued for the main loop (caller must stop).
+static bool deferToMainLoop(const Frame &f, bool retry) {
+    if (mainLoopTaskHandle == NULL || xTaskGetCurrentTaskHandle() == mainLoopTaskHandle) return false;
+    if (pendingSendMutex != NULL && xSemaphoreTake(pendingSendMutex, pdMS_TO_TICKS(500))) {
+        if (pendingSendQueue.size() < TX_BUFFER_SIZE) {
+            pendingSendQueue.push_back(PendingSend{f, retry});
+        } else {
+            logPrintf(LOG_WARN, "TX", "Pending send queue full, dropping frame");
+        }
+        xSemaphoreGive(pendingSendMutex);
+    }
+    return true;
+}
+
+// Own text/trace messages get a delivery state (#56)
+static bool isTrackedOwnMessage(const Frame &f) {
+    return f.frameType == Frame::FrameTypes::MESSAGE_FRAME &&
+           f.messageLength > 0 &&
+           (f.messageType == Frame::MessageTypes::TEXT_MESSAGE ||
+            f.messageType == Frame::MessageTypes::TRACE_MESSAGE) &&
+           strcmp(f.srcCall, settings.mycall) == 0;
 }
 
 void sendFrame(Frame &f) {
     // Defer to main loop if called from a background task (e.g. WebSocket)
-    if (mainLoopTaskHandle != NULL && xTaskGetCurrentTaskHandle() != mainLoopTaskHandle) {
-        if (pendingSendMutex != NULL && xSemaphoreTake(pendingSendMutex, pdMS_TO_TICKS(500))) {
-            if (pendingSendQueue.size() < TX_BUFFER_SIZE) {
-                pendingSendQueue.push_back(f);
-            } else {
-                logPrintf(LOG_WARN, "TX", "Pending send queue full, dropping frame");
-            }
-            xSemaphoreGive(pendingSendMutex);
-        }
-        return;
-    }
+    if (deferToMainLoop(f, false)) return;
 
     //Send frame
     f.id = nextMsgId();
     f.timestamp = time(NULL);
     f.tx = true;
 
+    enqueueOwnFrame(f);
+    if (isTrackedOwnMessage(f)) {
+        #ifdef HAS_WIFI
+        apiRecordMessage(f, true);
+        #endif
+        msgStateTrack(f.id);
+    }
+
+    //Store message in ring buffer
+    strncpy(messages[messagesHead].srcCall, f.srcCall, MAX_CALLSIGN_LENGTH + 1);
+    messages[messagesHead].id = f.id;
+    if (++messagesHead >= MAX_STORED_MESSAGES_RAM) { messagesHead = 0; }                        
+
+    //Send message to WebSocket & store
+    char jsonBuffer[1024];
+    size_t len = f.messageJSON(jsonBuffer, sizeof(jsonBuffer));
+    #ifdef HAS_WIFI
+    wsBroadcast(jsonBuffer, len);
+    #endif
+    addJSONtoFile(jsonBuffer, len, "/messages.json", maxStoredMessages);
+}
+
+void retryFrame(Frame &f) {
+    if (deferToMainLoop(f, true)) return;
+    // Only our own messages, under their original id: stations that already
+    // have it drop the duplicate but still ACK it when addressed directly.
+    strlcpy(f.srcCall, settings.mycall, sizeof(f.srcCall));
+    f.frameType = Frame::FrameTypes::MESSAGE_FRAME;
+    f.tx = true;
+    if (!isTrackedOwnMessage(f) || f.id == 0) return;
+    enqueueOwnFrame(f);
+    msgStateTrack(f.id);
+    logPrintf(LOG_INFO, "Msg", "Retry message %lu", (unsigned long)f.id);
+}
+
+void enqueueOwnFrame(Frame &f) {
     //Search for route
     bool routing = false;
     char viaCall[MAX_CALLSIGN_LENGTH + 1] = {0};
@@ -167,19 +227,60 @@ void sendFrame(Frame &f) {
             txBuffer.push_back(f);
         }
     }
+}
 
-    //Store message in ring buffer
-    strncpy(messages[messagesHead].srcCall, f.srcCall, MAX_CALLSIGN_LENGTH + 1);
-    messages[messagesHead].id = f.id;
-    if (++messagesHead >= MAX_STORED_MESSAGES_RAM) { messagesHead = 0; }                        
+// ── Delivery state of own messages (#56) ────────────────────────────────────
 
-    //Send message to WebSocket & store
-    char jsonBuffer[1024];
-    size_t len = f.messageJSON(jsonBuffer, sizeof(jsonBuffer));
+// A message is still "in flight" while any of its MESSAGE_FRAME copies is queued.
+static bool ownMessageInFlight(uint32_t id) {
+    for (const Frame& txB : txBuffer) {
+        if (txB.id == id && txB.frameType == Frame::FrameTypes::MESSAGE_FRAME &&
+            strcmp(txB.srcCall, settings.mycall) == 0) return true;
+    }
+    return false;
+}
+
+static void onMsgStateChange(uint32_t id, uint8_t state, const char* by) {
+    // JsonDocument (not snprintf): "by" is a received callsign and must be escaped
+    char jsonBuffer[192];
+    size_t len;
+    {
+        JsonDocument doc;
+        JsonObject ms = doc["msgState"].to<JsonObject>();
+        ms["srcCall"] = settings.mycall;
+        ms["id"] = id;
+        ms["state"] = msgStateName(state);
+        ms["by"] = by;
+        len = serializeJson(doc, jsonBuffer, sizeof(jsonBuffer));
+    }
+    if (len == 0 || len >= sizeof(jsonBuffer) - 1) return;
+
     #ifdef HAS_WIFI
     wsBroadcast(jsonBuffer, len);
+    if (state == MSG_STATE_ACKED) apiMarkMessageAcked(settings.mycall, id);
+    else apiMarkMessageFailed(settings.mycall, id, state == MSG_STATE_FAILED);
     #endif
-    addJSONtoFile(jsonBuffer, len, "/messages.json", maxStoredMessages);
+    // Only final states are persisted: a "pending" line would outlive a reboot
+    // (which empties txBuffer) and leave a marker nothing ever resolves.
+    if (state != MSG_STATE_PENDING) {
+        addJSONtoFile(jsonBuffer, len, "/msgstate.json", maxStoredMessages);
+    }
+
+    if (state == MSG_STATE_FAILED) {
+        if (serialDebug || (serialMsgMonitor && serialJsonConsole)) {
+            JsonDocument dbg;
+            dbg["event"] = "msg_failed";
+            dbg["srcCall"] = settings.mycall;
+            dbg["id"] = id;
+            logJson(dbg);
+        } else if (serialMsgMonitor) {
+            logPrintf(LOG_INFO, "Msg", "FAIL: message %lu not confirmed", (unsigned long)id);
+        }
+    }
+}
+
+void initMsgState() {
+    msgStateSetHooks(onMsgStateChange, ownMessageInFlight);
 }
 
 void sendMessage(const char* dst, const char* text, uint8_t messageType) {
