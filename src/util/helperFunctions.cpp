@@ -13,6 +13,8 @@
 #include "hal/settings.h"
 #include "util/helperFunctions.h"
 #include "util/lora_math.h"
+#include "util/link_math.h"
+#include "hal/radio_common.h"
 #include "mesh/frame.h"
 #include "main.h"
 #include "network/webFunctions.h"
@@ -651,10 +653,24 @@ uint32_t calculateAckTime() {
     return time;
 }
 
-uint32_t calculateRetryTime() {
+uint32_t calculateRetryTime(uint8_t attempt, uint8_t intervals) {
     uint32_t time = 20 * getTOA(10 + 2 * MAX_CALLSIGN_LENGTH); // Wait for up to 20 ACK frames
-    time = time + random(0, 5 * getTOA(255));  // 0...5 max-length message frames
+    uint32_t window = 5 * getTOA(255);                        // 0...5 max-length message frames
+    // Retry backoff: the random window grows with every retry while the sum over
+    // all retries stays the same (peer timeout / cooldown are unaffected)
+    if (intervals > 0) window = retryWindowMs(window, attempt, intervals);
+    time = time + random(0, window);
     return time;
+}
+uint32_t calculateRelayTime(float rxSnr, bool snrKnown) {
+    if (radioOpts.relayDelayMode != RELAY_DELAY_SNR || !snrKnown) return calculateRetryTime();
+    // SNR-weighted: a weak (distant) reception relays first, so the node that
+    // extends the range most transmits before the near ones, which then drop
+    // their copy (relay suppression in processRxFrame)
+    uint32_t base   = 20 * getTOA(10 + 2 * MAX_CALLSIGN_LENGTH);
+    uint32_t window = 5 * getTOA(255);
+    float margin = rxSnr - snrLimitForSf(settings.loraSpreadingFactor);
+    return relayDelayMs(base, window, margin, (uint32_t)random(0x7FFFFFFF));
 }
 
 

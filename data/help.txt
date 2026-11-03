@@ -64,6 +64,10 @@ Befehlsuebersicht:
   lora sf <6-12>               Spreading Factor setzen
   lora cr <5-8>                Coding Rate setzen
   lora pl <laenge>             Preamble Length setzen
+  lora profile [name]          Reichweiten-Profil: standard|robust|weit (ohne Name: Liste mit ToA/dB)
+  lora lbt <1/0>               Listen-before-talk (Kanal vor dem Senden pruefen, Standard: an)
+  lora relaydelay <snr|random> Relay-Verzoegerung: SNR-gewichtet (Standard) oder zufaellig
+  lora freqcorr <Hz>           Frequenzkorrektur fuer den Quarz (ohne Wert: anzeigen)
 
   Setup:
   call <rufzeichen>            Rufzeichen setzen
@@ -93,6 +97,7 @@ Befehlsuebersicht:
   updf [0/1]                   Force-Install (optional: Kanal)
 
   Abfragen (JSON):
+  radio [reset]                Radio-Statistik (RX/CRC/Header-Fehler, LBT, Rauschen, Link-Reserve)
   peers                        Peer-Liste abfragen
   routes                       Routing-Tabelle abfragen
   acks                         ACK-Liste abfragen

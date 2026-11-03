@@ -251,8 +251,10 @@ void Frame::importBinary(uint8_t* data, size_t length) {
         switch (header) {
             case Frame::HeaderTypes::NODE_CALL_HEADER:
                 if (i + payloadLength < length) {
-                    if (payloadLength > MAX_CALLSIGN_LENGTH) {payloadLength = MAX_CALLSIGN_LENGTH;}
-                    safeUtf8Copy(nodeCall, (const uint8_t*)(data + i + 1), payloadLength, sizeof(nodeCall));
+                    // Clamp only the copy; advance by the real field length so a foreign
+                    // frame with an over-long call does not desync the header parser.
+                    uint8_t copyLen = (payloadLength > MAX_CALLSIGN_LENGTH) ? MAX_CALLSIGN_LENGTH : payloadLength;
+                    safeUtf8Copy(nodeCall, (const uint8_t*)(data + i + 1), copyLen, sizeof(nodeCall));
                     i += payloadLength + 1;
                 } else {
                     i = length; //Abort
@@ -260,8 +262,10 @@ void Frame::importBinary(uint8_t* data, size_t length) {
                 break;
             case Frame::HeaderTypes::VIA_CALL_HEADER:
                 if (i + payloadLength < length) {
-                    if (payloadLength > MAX_CALLSIGN_LENGTH) {payloadLength = MAX_CALLSIGN_LENGTH;}
-                    safeUtf8Copy(viaCall, (const uint8_t*)(data + i + 1), payloadLength, sizeof(viaCall));
+                    // Clamp only the copy; advance by the real field length so a foreign
+                    // frame with an over-long call does not desync the header parser.
+                    uint8_t copyLen = (payloadLength > MAX_CALLSIGN_LENGTH) ? MAX_CALLSIGN_LENGTH : payloadLength;
+                    safeUtf8Copy(viaCall, (const uint8_t*)(data + i + 1), copyLen, sizeof(viaCall));
                     i += payloadLength + 1;
                 } else {
                     i = length; //Abort
@@ -269,8 +273,10 @@ void Frame::importBinary(uint8_t* data, size_t length) {
                 break;
             case Frame::HeaderTypes::SRC_CALL_HEADER:
                 if (i + payloadLength < length) {
-                    if (payloadLength > MAX_CALLSIGN_LENGTH) {payloadLength = MAX_CALLSIGN_LENGTH;}
-                    safeUtf8Copy(srcCall, (const uint8_t*)(data + i + 1), payloadLength, sizeof(srcCall));
+                    // Clamp only the copy; advance by the real field length so a foreign
+                    // frame with an over-long call does not desync the header parser.
+                    uint8_t copyLen = (payloadLength > MAX_CALLSIGN_LENGTH) ? MAX_CALLSIGN_LENGTH : payloadLength;
+                    safeUtf8Copy(srcCall, (const uint8_t*)(data + i + 1), copyLen, sizeof(srcCall));
                     i += payloadLength + 1;
                 } else {
                     i = length; //Abort
@@ -278,8 +284,10 @@ void Frame::importBinary(uint8_t* data, size_t length) {
                 break;
             case Frame::HeaderTypes::DST_GROUP_HEADER:
                 if (i + payloadLength < length) {
-                    if (payloadLength > MAX_CALLSIGN_LENGTH) {payloadLength = MAX_CALLSIGN_LENGTH;}
-                    safeUtf8Copy(dstGroup, (const uint8_t*)(data + i + 1), payloadLength, sizeof(dstGroup));
+                    // Clamp only the copy; advance by the real field length so a foreign
+                    // frame with an over-long call does not desync the header parser.
+                    uint8_t copyLen = (payloadLength > MAX_CALLSIGN_LENGTH) ? MAX_CALLSIGN_LENGTH : payloadLength;
+                    safeUtf8Copy(dstGroup, (const uint8_t*)(data + i + 1), copyLen, sizeof(dstGroup));
                     i += payloadLength + 1;
                 } else {
                     i = length; //Abort
@@ -287,8 +295,10 @@ void Frame::importBinary(uint8_t* data, size_t length) {
                 break;
             case Frame::HeaderTypes::DST_CALL_HEADER:
                 if (i + payloadLength < length) {
-                    if (payloadLength > MAX_CALLSIGN_LENGTH) {payloadLength = MAX_CALLSIGN_LENGTH;}
-                    safeUtf8Copy(dstCall, (const uint8_t*)(data + i + 1), payloadLength, sizeof(dstCall));
+                    // Clamp only the copy; advance by the real field length so a foreign
+                    // frame with an over-long call does not desync the header parser.
+                    uint8_t copyLen = (payloadLength > MAX_CALLSIGN_LENGTH) ? MAX_CALLSIGN_LENGTH : payloadLength;
+                    safeUtf8Copy(dstCall, (const uint8_t*)(data + i + 1), copyLen, sizeof(dstCall));
                     i += payloadLength + 1;
                 } else {
                     i = length; //Abort

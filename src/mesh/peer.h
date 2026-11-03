@@ -56,7 +56,26 @@ struct Peer {
      * a peer that just failed 10 retries.
      */
     uint32_t cooldownUntil = 0;
+
+    // ── Link quality (runtime only, not persisted; RME-3) ──
+    /** EWMA of the SNR/RSSI (LoRa); valid once linkValid is set. */
+    float snrAvg = 0;
+    float rssiAvg = 0;
+    bool  linkValid = false;
+    /** SNR used for ordering; follows snrAvg only after a LINK_SNR_HYSTERESIS change. */
+    float rankSnr = 0;
+    /** EWMA of the delivery success (1 = ACK on first try). */
+    float successRate = 1.0f;
 };
+
+/** Smoothed SNR of a peer (EWMA, falls back to the last value). */
+float peerLinkSnr(const Peer& p);
+
+/** Record whether a LoRa frame to this peer needed a retry (false) or was ACKed (true). */
+void peerLinkResult(const char* call, uint8_t port, bool success);
+
+/** Route penalty (in hops) of using this peer as next hop; 0 for WiFi/unknown. */
+float peerLinkPenalty(const char* call);
 
 /**
  * @brief Check all peers for inactivity and enforce WiFi-over-LoRa preference.

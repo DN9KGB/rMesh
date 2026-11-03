@@ -4,6 +4,8 @@
 #include "network/apiAuth.h"
 #include "network/auth.h"
 #include "config.h"
+#include "hal/radio_common.h"
+#include "util/link_math.h"
 #include "hal/settings.h"
 #include "mesh/peer.h"
 #include "mesh/routing.h"
@@ -447,6 +449,7 @@ static void buildPeers() {
                 "\"frqError\":%.1f,\"available\":%s",
                 p.port, (long)p.timestamp, p.rssi, p.snr, p.frqError,
                 p.available ? "true" : "false");
+        if (p.port == 0) jPrintf(",\"snrAvg\":%.1f,\"success\":%.2f", peerLinkSnr(p), p.successRate);
         if (dualPath) {
             jPrintf(",\"preferred\":%s", p.available ? "true" : "false");
         }
@@ -1050,6 +1053,37 @@ static void buildDiagnostics() {
                 (int)xTaskGetAffinity(mainLoopTaskHandle));
     }
     jPrintf("]");
+    // Radio statistics and link reserve (RME-3)
+    jPrintf(",\"radio\":{\"rxOk\":%lu,\"crcErr\":%lu,\"hdrErr\":%lu,\"preambleOnly\":%lu",
+            (unsigned long)radioStats.rxOk, (unsigned long)radioStats.crcErr,
+            (unsigned long)radioStats.hdrErr, (unsigned long)radioStats.preambleOnly);
+    jPrintf(",\"txOk\":%lu,\"txFail\":%lu,\"lbtFree\":%lu,\"lbtBusy\":%lu,\"lbtForced\":%lu",
+            (unsigned long)radioStats.txOk, (unsigned long)radioStats.txFail,
+            (unsigned long)radioStats.lbtFree, (unsigned long)radioStats.lbtBusy,
+            (unsigned long)radioStats.lbtForced);
+    if (radioStats.noiseValid) jPrintf(",\"noiseFloor\":%.1f", radioStats.noiseFloor);
+    jPrintf(",\"since\":%lu,\"lbt\":%s,\"relayDelay\":\"%s\",\"freqCorr\":%ld,\"snrLimit\":%.1f",
+            (unsigned long)((millis() - radioStats.sinceMs) / 1000), radioOpts.lbt ? "true" : "false",
+            radioOpts.relayDelayMode == RELAY_DELAY_SNR ? "snr" : "random", (long)radioOpts.freqCorrHz,
+            snrLimitForSf(settings.loraSpreadingFactor));
+    {
+        float med; uint8_t n;
+        if (radioPeerFreqErrorMedian(med, n)) jPrintf(",\"freqErrMedian\":%.0f", med);
+    }
+    jPrintf(",\"peers\":[");
+    {
+        bool first = true;
+        float limit = snrLimitForSf(settings.loraSpreadingFactor);
+        for (const Peer& p : peerList) {
+            if (p.port != 0) continue;
+            if (!first) jPrintf(",");
+            first = false;
+            jPrintf("{\"call\":"); jStr(p.nodeCall);
+            jPrintf(",\"snrAvg\":%.1f,\"margin\":%.1f,\"success\":%.2f}",
+                    peerLinkSnr(p), peerLinkSnr(p) - limit, p.successRate);
+        }
+    }
+    jPrintf("]}");
     jPrintf(",\"ws\":{\"clients\":%u}", (unsigned)ws.count());
     jPrintf(",\"freertos\":{\"taskCount\":%u}", (unsigned)uxTaskGetNumberOfTasks());
     jPrintf("}");

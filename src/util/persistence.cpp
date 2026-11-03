@@ -276,6 +276,7 @@ void loadPeers() {
             p.available = entry.available;
             p.rssi = entry.rssi;
             p.snr = entry.snr;
+            p.rankSnr = entry.snr;   // ordering key until fresh samples arrive
             p.frqError = entry.frqError;
         }
         p.nodeCall[MAX_CALLSIGN_LENGTH] = '\0';

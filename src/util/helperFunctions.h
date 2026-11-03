@@ -40,5 +40,8 @@ void initMsgState();
 void initPendingSendQueue();
 void processPendingSends();
 uint32_t calculateAckTime();
-uint32_t calculateRetryTime();
+// attempt = retries already sent, intervals = gaps over all retries (0 = constant window)
+uint32_t calculateRetryTime(uint8_t attempt = 0, uint8_t intervals = 0);
+// Relay delay for a flooded frame received with rxSnr (snrKnown = received on LoRa)
+uint32_t calculateRelayTime(float rxSnr, bool snrKnown);
 void trimFile(const char* fileName, size_t maxLines);

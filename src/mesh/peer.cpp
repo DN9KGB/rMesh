@@ -23,12 +23,54 @@
 #include "util/persistence.h"
 #include "mesh/routing.h"
 #include "util/logging.h"
+#include "util/link_math.h"
 
 /** Runtime peer table; extern-declared in peer.h. */
 std::vector<Peer> peerList;
 
 /** Deferred-broadcast flag for RSSI/SNR updates (see peer.h). */
 bool peerListDirty = false;
+
+// ── Link quality (RME-3) ────────────────────────────────────────────────────
+
+/** Fold the last rssi/snr of a peer into its averages. */
+static void updateLinkAverages(Peer& p) {
+    if (!p.linkValid) {
+        p.snrAvg = p.snr;
+        p.rssiAvg = p.rssi;
+        p.rankSnr = p.snr;
+        p.linkValid = true;
+        return;
+    }
+    p.snrAvg  = ewma(p.snrAvg,  p.snr,  LINK_SNR_ALPHA);
+    p.rssiAvg = ewma(p.rssiAvg, p.rssi, LINK_SNR_ALPHA);
+    if (fabsf(p.snrAvg - p.rankSnr) >= LINK_SNR_HYSTERESIS) p.rankSnr = p.snrAvg;
+}
+
+float peerLinkSnr(const Peer& p) {
+    return p.linkValid ? p.snrAvg : p.snr;
+}
+
+void peerLinkResult(const char* call, uint8_t port, bool success) {
+    for (auto& p : peerList) {
+        if (p.port == port && strcmp(p.nodeCall, call) == 0) {
+            p.successRate = linkSuccessUpdate(p.successRate, success);
+            return;
+        }
+    }
+}
+
+float peerLinkPenalty(const char* call) {
+    const Peer* lora = nullptr;
+    for (const auto& p : peerList) {
+        if (!p.available || strcmp(p.nodeCall, call) != 0) continue;
+        if (p.port != 0) return 0.0f;   // reachable via WiFi/LAN: no RF penalty
+        lora = &p;
+    }
+    if (!lora) return 0.0f;
+    float margin = peerLinkSnr(*lora) - snrLimitForSf(settings.loraSpreadingFactor);
+    return linkPenalty(margin, lora->successRate);
+}
 
 /**
  * @brief Periodic peer-list maintenance — called once per second from loop().
@@ -123,11 +165,11 @@ void checkPeerList() {
     // Filter LoRa peers below minimum SNR threshold
     if (extSettings.minSnr > -20) {
         for (auto& peer : peerList) {
-            if (peer.available && peer.port == 0 && peer.snr < extSettings.minSnr) {
+            if (peer.available && peer.port == 0 && peerLinkSnr(peer) < extSettings.minSnr) {
                 peer.available = false;
                 update = true;
                 logPrintf(LOG_DEBUG, "Peer", "{\"event\":\"peer\",\"action\":\"unavailable\",\"call\":\"%s\",\"port\":%d,\"reason\":\"snr\",\"snr\":%.1f,\"min_snr\":%d}",
-                        peer.nodeCall, peer.port, peer.snr, extSettings.minSnr);
+                        peer.nodeCall, peer.port, peerLinkSnr(peer), extSettings.minSnr);
                 // Note: do NOT removeDirectRoute() here. Keeping the route entry
                 // allows the LoRa link to act as a last-resort fallback if the
                 // preferred WiFi/multi-hop path disappears (#8 in
@@ -156,7 +198,7 @@ void checkPeerList() {
                 update = true;
                 break;
             } else {
-                if (peerList[i].snr < peerList[j].snr) {
+                if (peerList[i].rankSnr < peerList[j].rankSnr) {
                     peerList[i].available = false;
                     update = true;
                     break;
@@ -215,7 +257,9 @@ void availablePeerList(const char* call, bool available, uint8_t port) {
     if (it != peerList.end()) {
         // Reject availability for LoRa peers below minimum SNR threshold
         bool effectiveAvailable = available;
-        if (available && it->port == 0 && extSettings.minSnr > -20 && it->snr < extSettings.minSnr) {
+        // (hysteresis: re-enable only LINK_MINSNR_HYST dB above the threshold)
+        if (available && it->port == 0 && extSettings.minSnr > -20 &&
+            peerLinkSnr(*it) < extSettings.minSnr + (it->available ? 0.0f : LINK_MINSNR_HYST)) {
             effectiveAvailable = false;
             // Direct route intentionally kept – LoRa stays as fallback (#8).
         }
@@ -310,6 +354,7 @@ void addPeerList(Frame &f) {
             it->rssi = f.rssi;
             it->snr = f.snr;
             it->frqError = f.frqError;
+            updateLinkAverages(*it);
         }
         it->port = f.port;
 
@@ -324,7 +369,7 @@ void addPeerList(Frame &f) {
         // if a WiFi duplicate of the same callsign is still preferred –
         // checkPeerList() will reconcile that on its next pass.
         bool snrBlocks = (extSettings.minSnr > -20) && (it->port == 0) &&
-                         (it->snr < extSettings.minSnr);
+                         (peerLinkSnr(*it) < extSettings.minSnr + LINK_MINSNR_HYST);
         // Don't re-enable a LoRa (port 0) entry when the same callsign is already
         // available via WiFi (port 1): checkPeerList() prefers WiFi and would just
         // disable it again next pass, so the entry would flap available↔unavailable
@@ -359,6 +404,7 @@ void addPeerList(Frame &f) {
         p.frqError = f.frqError;
         p.port = f.port;
         p.available = false;
+        updateLinkAverages(p);
         peerList.push_back(p);
         peersDirty = true;
 
@@ -374,9 +420,10 @@ void addPeerList(Frame &f) {
         }
     }
 
-    // Sort by SNR descending
-    std::sort(peerList.begin(), peerList.end(), [](const Peer& a, const Peer& b) {
-        return a.snr > b.snr;
+    // Sort by smoothed SNR descending (rankSnr only moves on a LINK_SNR_HYSTERESIS
+    // change, so the best-link choice of the flood does not flap between peers)
+    std::stable_sort(peerList.begin(), peerList.end(), [](const Peer& a, const Peer& b) {
+        return a.rankSnr > b.rankSnr;
     });
 
     if (isNew) {

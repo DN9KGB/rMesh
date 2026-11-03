@@ -11,6 +11,7 @@
  */
 
 #include "hal/hal.h"
+#include "hal/radio_common.h"
 #include "display/display_LILYGO_T_LoraPager.h"
 #include "RadioLib.h"
 #include "hal/settings.h"
@@ -27,8 +28,6 @@
 
 // radio is defined by LilyGoLib (via ARDUINO_LILYGO_LORA_SX1262 in LilyGo_LoRa_Pager.cpp)
 
-bool txFlag = false;
-bool rxFlag = false;
 
 // ─── SD card ──────────────────────────────────────────────────────────────
 
@@ -109,7 +108,7 @@ void initHal() {
     }
     printState(radio.setDio2AsRfSwitch(true));
     printState(radio.setSyncWord(settings.loraSyncWord));
-    printState(radio.setFrequency(settings.loraFrequency));
+    printState(radio.setFrequency(radioFrequencyMHz()));
     printState(radio.setOutputPower(settings.loraOutputPower));
     printState(radio.setBandwidth(settings.loraBandwidth));
     printState(radio.setCodingRate(settings.loraCodingRate));
@@ -118,101 +117,19 @@ void initHal() {
     printState(radio.setCRC(true));
     printState(radio.setCurrentLimit(140));
     printState(radio.setRxBoostedGainMode(true));
-    printState(radio.startReceive());
+    // The radio shares its SPI bus with display/SD/NFC: guard every access
+    static const RadioHooks hooks = {
+        [] { instance.lockSPI(); },
+        [] { instance.unlockSPI(); },
+        nullptr,
+        [](Frame& f) { displayMonitorFrame(f); },
+    };
 
     instance.unlockSPI();
+    radioAttachSx126x(&radio, &hooks);  // shared driver: starts RX (takes the lock itself)
 
     loraReady = true;
     logPrintf(LOG_INFO, "LoRa", "SX1262 ready.");
-}
-
-// ─── Reception ───────────────────────────────────────────────────────────
-
-bool checkReceive(Frame &f) {
-    if (!loraReady) return false;
-    instance.lockSPI();
-    uint16_t irqFlags = radio.getIrqFlags();
-    instance.unlockSPI();
-
-    // Channel busy (header detected)
-    if (irqFlags & RADIOLIB_SX126X_IRQ_HEADER_VALID) {
-        if (!rxFlag) { rxFlag = true;  statusTimer = 0; }
-    } else {
-        if (rxFlag)  { rxFlag = false; statusTimer = 0; }
-    }
-
-    // Transmit complete
-    if (irqFlags & RADIOLIB_SX126X_IRQ_TX_DONE) {
-        instance.lockSPI();
-        radio.startReceive();
-        instance.unlockSPI();
-        txFlag = false;
-        statusTimer = 0;
-    }
-
-    // Data received
-    if (irqFlags & RADIOLIB_SX126X_IRQ_RX_DONE) {
-        instance.lockSPI();
-        uint8_t rxBuffer[256];
-        size_t rxBufferLength = radio.getPacketLength();
-        int16_t state = radio.readData(rxBuffer, rxBufferLength);
-        //Read RSSI/SNR BEFORE startReceive(), as startReceive() can reset the registers
-        float rxRssi     = radio.getRSSI();
-        float rxSnr      = radio.getSNR();
-        float rxFrqError = radio.getFrequencyError();
-        radio.startReceive();
-        instance.unlockSPI();
-
-        if (state == RADIOLIB_ERR_NONE) {
-            f.importBinary(rxBuffer, rxBufferLength);
-            f.tx        = false;
-            f.timestamp = time(NULL);
-            f.rssi      = rxRssi;
-            f.snr       = rxSnr;
-            f.frqError  = rxFrqError;
-            f.port      = 0;
-            return true;
-        }
-    }
-    return false;
-}
-
-// ─── Transmit ────────────────────────────────────────────────────────────
-
-void transmitFrame(Frame &f) {
-    if (!loraReady) return;
-
-    uint8_t txBuffer[255];
-    size_t txBufferLength;
-
-    statusTimer = 0;
-    strncpy(f.nodeCall, settings.mycall, sizeof(f.nodeCall));
-    f.tx        = true;
-    f.port      = 0;
-    f.timestamp = time(NULL);
-
-    if (strlen(f.nodeCall) == 0) { return; }
-
-    txBufferLength = f.exportBinary(txBuffer, sizeof(txBuffer));
-
-    // Duty cycle check for public band (10% in 60s)
-    if (isPublicBand(settings.loraFrequency)) {
-        instance.lockSPI();
-        uint32_t toa = (uint32_t)(radio.getTimeOnAir(txBufferLength) / 1000);
-        instance.unlockSPI();
-        if (!dutyCycleAllowed(toa)) {
-            logPrintf(LOG_WARN, "LoRa", "Duty cycle limit reached, TX skipped.");
-            return;
-        }
-    }
-
-    txFlag = true;
-    instance.lockSPI();
-    radio.startTransmit(txBuffer, txBufferLength);
-    instance.unlockSPI();
-
-    f.monitorJSON();
-    displayMonitorFrame(f);
 }
 
 /**

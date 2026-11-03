@@ -8,6 +8,7 @@
 #endif
 
 #include "hal/settings.h"
+#include "hal/radio_common.h"
 #include "util/lora_math.h"
 #include "util/heapdbg.h"
 #include "config.h"
@@ -269,6 +270,7 @@ void loadSettings() {
     uint8_t defaultChannel = (strstr(VERSION, "-dev") != nullptr) ? 1 : 0;
     updateChannel      = prefs.getUChar("updateChannel", defaultChannel);
     loraEnabled        = prefs.getBool("loraEnabled", true);
+    loadRadioOpts();   // LBT / relay delay / frequency correction (own key "radioOpts")
     batteryEnabled     = prefs.getBool("batEnabled", true);
     statusLedEnabled   = prefs.getBool("statusLed", false);
     batteryFullVoltage = prefs.getFloat("batFullV", 4.2f);
@@ -640,6 +642,7 @@ void saveSettings() {
     }
     prefs.putUChar("updateChannel", updateChannel);
     prefs.putBool("loraEnabled", loraEnabled);
+    saveRadioOpts();
     prefs.putBool("batEnabled", batteryEnabled);
     prefs.putBool("statusLed", statusLedEnabled);
     prefs.putFloat("batFullV", batteryFullVoltage);
