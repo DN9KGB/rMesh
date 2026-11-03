@@ -49,6 +49,7 @@
         <div class="status"><span data-i18n="status.txbuf">TX-Buf:</span>&nbsp;<div id="txBuffer"></div></div>
         <div class="status"><span data-i18n="status.retry">Retry:</span>&nbsp;<div id="retry"></div></div>
         <div class="status"><span data-i18n="status.dropped">Verworfen:</span>&nbsp;<div id="dropped"></div></div>
+        <div class="status" title="RX ok / CRC-Fehler / Header-Fehler · LBT belegt · Rauschboden"><span data-i18n="status.radio">Radio:</span>&nbsp;<div id="radioStats"></div></div>
       </div>
     </div>
     <div class="desk-top-right">
@@ -145,6 +146,19 @@
                 <option value="433">433 MHz – Amateurfunk (rMesh)</option>
                 <option value="868">868 MHz – Public (500 mW, Sub-Band P)</option>
               </select>
+            </td>
+          </tr>
+          <tr>
+            <td data-i18n="lora.profile">Reichweite:</td>
+            <td>
+              <select id="loraProfile" class="input-box" onchange="applyLoraProfile(this.value)">
+                <option value="standard" data-i18n="lora.profile_standard">Standard</option>
+                <option value="robust" data-i18n="lora.profile_robust">Robust (SF9, CR 4/8)</option>
+                <option value="weit" data-i18n="lora.profile_weit">Weit (SF11, BW 62,5, CR 4/8)</option>
+                <option value="" data-i18n="lora.profile_custom">Benutzerdefiniert</option>
+              </select>
+              <div id="loraProfileInfo" class="hint"></div>
+              <div class="hint" data-i18n="lora.profile_hint">Alle Nodes eines Netzes brauchen dasselbe Profil.</div>
             </td>
           </tr>
         </table>

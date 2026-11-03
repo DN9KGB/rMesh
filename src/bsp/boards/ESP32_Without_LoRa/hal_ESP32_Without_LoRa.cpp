@@ -7,9 +7,6 @@
 #include "network/webFunctions.h"
 #include "util/logging.h"
 
-bool txFlag = false;
-bool rxFlag = false;
-
 void setWiFiLED(bool value) {
     if (!board->hasWiFiLED()) return;
     digitalWrite(board->pinWiFiLED(), board->wiFiLEDActiveLow() ? !value : value);
@@ -35,15 +32,8 @@ void initHal() {
     loraReady = false;  // No RF module present
 }
 
-
-bool checkReceive(Frame &f) {
-    return false;
-}
-
-void transmitFrame(Frame &f) {
-    txFlag = false;
-    rxFlag = false;
-}
+// checkReceive()/transmitFrame() come from hal/radio_common.cpp: without an
+// attached radio they receive nothing and transmit nothing.
 
 /** Tune carrier (#54): no RF module present — nothing to do. */
 void tuneStart() {

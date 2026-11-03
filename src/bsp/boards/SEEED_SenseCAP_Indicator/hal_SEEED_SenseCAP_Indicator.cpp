@@ -16,6 +16,7 @@
  */
 
 #include "hal/hal.h"
+#include "hal/radio_common.h"
 #include "display/display_SEEED_SenseCAP_Indicator.h"
 #include "hal/settings.h"
 #include "mesh/frame.h"
@@ -28,9 +29,6 @@
 #include <Wire.h>
 #include "util/logging.h"
 
-// ─── Global flags ────────────────────────────────────────────────────────────
-bool txFlag = false;
-bool rxFlag = false;
 
 // ─── SPI instance for SX1262 ─────────────────────────────────────────────────
 static SPIClass loraSPI(FSPI);
@@ -161,7 +159,7 @@ void initHal() {
     }
     printState(radio.setDio2AsRfSwitch(true));
     printState(radio.setSyncWord(settings.loraSyncWord));
-    printState(radio.setFrequency(settings.loraFrequency));
+    printState(radio.setFrequency(radioFrequencyMHz()));
     printState(radio.setOutputPower(settings.loraOutputPower));
     printState(radio.setBandwidth(settings.loraBandwidth));
     printState(radio.setCodingRate(settings.loraCodingRate));
@@ -170,95 +168,10 @@ void initHal() {
     printState(radio.setCRC(true));
     printState(radio.setCurrentLimit(140));
     printState(radio.setRxBoostedGainMode(true));
-    printState(radio.startReceive());
+    radioAttachSx126x(&radio);  // shared driver: starts RX
 
     loraReady = true;
     logPrintf(LOG_INFO, "LoRa", "SenseCAP Indicator D1L – SX1262 ready.");
-}
-
-// ─── Reception (polling via IRQ flags) ───────────────────────────────────────
-bool checkReceive(Frame &f) {
-    if (!loraReady) return false;
-
-    uint16_t irqFlags = radio.getIrqFlags();
-
-    // RX busy flag for status display
-    if (irqFlags & RADIOLIB_SX126X_IRQ_HEADER_VALID) {
-        if (!rxFlag) { rxFlag = true;  statusTimer = 0; }
-    } else {
-        if (rxFlag)  { rxFlag = false; statusTimer = 0; }
-    }
-
-    // TX complete -> back to RX
-    if (irqFlags & RADIOLIB_SX126X_IRQ_TX_DONE) {
-        radio.startReceive();
-        txFlag = false;
-        statusTimer = 0;
-    }
-
-    // Packet received
-    if (irqFlags & RADIOLIB_SX126X_IRQ_RX_DONE) {
-        uint8_t rxBuffer[256];
-        size_t  rxLen = radio.getPacketLength();
-        int16_t state = radio.readData(rxBuffer, rxLen);
-        //Read RSSI/SNR BEFORE startReceive(), as startReceive() can reset the registers
-        float rxRssi     = radio.getRSSI();
-        float rxSnr      = radio.getSNR();
-        float rxFrqError = radio.getFrequencyError();
-        radio.startReceive();
-        if (state == RADIOLIB_ERR_NONE) {
-            f.importBinary(rxBuffer, rxLen);
-            f.tx        = false;
-            f.timestamp = time(NULL);
-            f.rssi      = rxRssi;
-            f.snr       = rxSnr;
-            f.frqError  = rxFrqError;
-            f.port      = 0;
-            return true;
-        }
-    }
-    return false;
-}
-
-// ─── Transmit ────────────────────────────────────────────────────────────────
-void transmitFrame(Frame &f) {
-    if (!loraReady) { logPrintf(LOG_WARN, "LoRa", "loraReady=false, TX aborted"); return; }
-
-    statusTimer = 0;
-    strncpy(f.nodeCall, settings.mycall, sizeof(f.nodeCall));
-    f.tx        = true;
-    f.timestamp = time(NULL);
-    f.port      = 0;
-
-    if (strlen(f.nodeCall) == 0) {
-        logPrintf(LOG_WARN, "LoRa", "nodeCall empty (mycall not set), TX aborted");
-        return;
-    }
-
-    uint8_t txBuf[255];
-    size_t  txLen = f.exportBinary(txBuf, sizeof(txBuf));
-
-    logPrintf(LOG_INFO, "LoRa", "Sending %s->%s type=%d len=%d freq=%.3f",
-              f.nodeCall, f.dstCall, f.frameType, (int)txLen, settings.loraFrequency);
-
-    // Duty cycle check for public band (10% / 60s)
-    if (isPublicBand(settings.loraFrequency)) {
-        uint32_t toa = (uint32_t)(radio.getTimeOnAir(txLen) / 1000);
-        if (!dutyCycleAllowed(toa)) {
-            logPrintf(LOG_WARN, "LoRa", "Duty cycle limit reached, TX skipped.");
-            return;
-        }
-    }
-
-    txFlag = true;
-    int16_t state = radio.startTransmit(txBuf, txLen);
-    if (state != RADIOLIB_ERR_NONE) {
-        logPrintf(LOG_ERROR, "LoRa", "startTransmit ERROR: %d", state);
-        txFlag = false;
-    } else {
-        logPrintf(LOG_INFO, "LoRa", "startTransmit OK");
-    }
-    f.monitorJSON();
 }
 
 /**

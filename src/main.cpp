@@ -28,6 +28,8 @@
 
 #include "config.h"
 #include "hal/hal.h"
+#include "hal/radio_common.h"
+#include "util/link_math.h"
 #include "mesh/frame.h"
 #include "hal/settings.h"
 #include "main.h"
@@ -376,6 +378,15 @@ void processRxFrame(Frame &f) {
                 addRoutingList(f.nodeCall, f.nodeCall, f.hopCount);
                 // Record direct ACK for this node
                 addACK(f.srcCall, settings.mycall, f.id);
+            }
+
+            // Link quality: a pending LoRa frame to this peer got its ACK
+            for (const Frame& txB : txBuffer) {
+                if (txB.port == 0 && strcmp(txB.viaCall, f.nodeCall) == 0 && txB.id == f.id &&
+                    strcmp(txB.srcCall, f.srcCall) == 0 && txB.retry < txB.initRetry) {
+                    peerLinkResult(f.nodeCall, 0, true);
+                    break;
+                }
             }
 
             // Remove all pending retries for this (srcCall, viaCall, id) tuple.
@@ -727,7 +738,7 @@ void processRxFrame(Frame &f) {
                         if (tf.port == 0 && routeViaWifi) continue; // skip LoRa when WiFi route exists
 
                         switch (tf.port){
-                            case 0: tf.transmitMillis = millis() + calculateRetryTime(); break;
+                            case 0: tf.transmitMillis = millis() + (routing ? calculateRetryTime() : calculateRelayTime(f.snr, f.port == 0)); break;
                             case 1: tf.transmitMillis = millis() + UDP_TX_RETRY_TIME; break;
                         }
 
@@ -775,6 +786,22 @@ void processRxFrame(Frame &f) {
     }
  }
 
+
+// ── Frequency error hint ──────────────────────────────────────────────────────
+// Warn (every 10 min while it persists) when the median frequency error of the
+// LoRa neighbours uses more than 20 % of the LoRa tolerance (BW/4). No automatic
+// correction: an AFC on every node could chase each other across the network.
+static void checkFreqErrorHint() {
+    static uint32_t lastCheck = 0;
+    if ((millis() - lastCheck) < 600000UL || !loraReady) return;
+    lastCheck = millis();
+    float median; uint8_t n;
+    if (!radioPeerFreqErrorMedian(median, n)) return;
+    if (!freqErrorWarn(median, settings.loraBandwidth)) return;
+    logPrintf(LOG_WARN, "LoRa", "Median frequency error of %u neighbours is %.0f Hz (tolerance +/-%.0f Hz). "
+              "Check the crystal: 'lora freqcorr' (now %ld Hz), see 'radio'.",
+              (unsigned)n, median, settings.loraBandwidth * 250.0f, (long)radioOpts.freqCorrHz);
+}
 
 // ── Arduino lifecycle ─────────────────────────────────────────────────────────
 
@@ -1222,6 +1249,16 @@ void loop() {
                                 postponed = true;
                                 break;
                             }
+                            // Listen-before-talk: channel busy -> slotted random backoff,
+                            // postponed like the duty-cycle case (no retry consumed)
+                            {
+                                uint32_t lbtWait = lbtCheck();
+                                if (lbtWait > 0) {
+                                    txBuffer[i].transmitMillis = millis() + lbtWait;
+                                    postponed = true;
+                                    break;
+                                }
+                            }
                             transmitFrame(txBuffer[i]);
                             if (isPublicBand(settings.loraFrequency)) {
                                 dutyCycleTrackTx(toa);
@@ -1261,9 +1298,19 @@ void loop() {
                 // Decrement retry counter and track progress for the status update
                 if (txBuffer[i].retry > 0) {txBuffer[i].retry --;}
                 currentRetry = txBuffer[i].initRetry - txBuffer[i].retry;
-                // Schedule next retry
+                // Link quality: a repeated LoRa transmission means the last one was not ACKed
+                if (txBuffer[i].port == 0 && txBuffer[i].initRetry > 1 && currentRetry > 1 &&
+                    strlen(txBuffer[i].viaCall) > 0) {
+                    peerLinkResult(txBuffer[i].viaCall, 0, false);
+                }
+                // Schedule next retry (LoRa: backoff window grows per retry)
                 switch (txBuffer[i].port){
-                    case 0: txBuffer[i].transmitMillis = millis() + calculateRetryTime(); break;
+                    case 0: {
+                        uint8_t intervals = txBuffer[i].initRetry > 1 ? txBuffer[i].initRetry - 1 : 0;
+                        uint8_t attempt = currentRetry > 0 ? currentRetry - 1 : 0;
+                        txBuffer[i].transmitMillis = millis() + calculateRetryTime(attempt, intervals);
+                        break;
+                    }
                     case 1: // WiFi
                     case 2: // LAN
                         txBuffer[i].transmitMillis = millis() + UDP_TX_RETRY_TIME; break;
@@ -1316,6 +1363,8 @@ void loop() {
     // ── 6. Receive dispatch ───────────────────────────────────────────────────
     Frame f;
     if (!tuneActive && checkReceive(f)) { processRxFrame(f); }   // LoRa
+    if (!tuneActive) radioSampleNoise();                           // noise floor statistics
+    checkFreqErrorHint();
     #ifdef HAS_WIFI
     // Reset before the UDP parse: importBinary() only overwrites fields whose header
     // is present in the packet, so a shorter UDP frame in the same loop pass would
@@ -1334,8 +1383,17 @@ void loop() {
         // Only broadcast status if heap has enough room for the WebSocket
         // shared_ptr allocation (~400 bytes per message per client)
         if (ESP.getFreeHeap() > 40000) {
-            char jsonBuffer[640];
+            char jsonBuffer[800];
             int len;
+            // Radio statistics (RME-3): RX ok / CRC / header errors, preamble-only, LBT busy, noise floor
+            char radioJson[176];
+            snprintf(radioJson, sizeof(radioJson),
+                "{\"rxOk\":%lu,\"crcErr\":%lu,\"hdrErr\":%lu,\"preambleOnly\":%lu,\"lbtBusy\":%lu,"
+                "\"lbtForced\":%lu,\"txFail\":%lu,\"noise\":%.1f}",
+                (unsigned long)radioStats.rxOk, (unsigned long)radioStats.crcErr, (unsigned long)radioStats.hdrErr,
+                (unsigned long)radioStats.preambleOnly, (unsigned long)radioStats.lbtBusy,
+                (unsigned long)radioStats.lbtForced, (unsigned long)radioStats.txFail,
+                radioStats.noiseValid ? radioStats.noiseFloor : 0.0f);
             // Compact dropped-frames sub-object (#14): per-reason and per-type counters
             char droppedJson[160];
             snprintf(droppedJson, sizeof(droppedJson),
@@ -1351,22 +1409,22 @@ void loop() {
                 len = snprintf(jsonBuffer, sizeof(jsonBuffer),
                     "{\"status\":{\"time\":%ld,\"tx\":%s,\"rx\":%s,\"txBufferCount\":%u,"
                     "\"retry\":%u,\"dropped\":%lu,\"droppedBy\":%s,\"heap\":%u,\"minHeap\":%u,\"uptime\":%lu,"
-                    "\"cpuFreq\":%u,\"resetReason\":\"%s\",\"battery\":%.2f}}",
+                    "\"cpuFreq\":%u,\"resetReason\":\"%s\",\"radio\":%s,\"battery\":%.2f}}",
                     (long)time(NULL), txFlag ? "true" : "false", rxFlag ? "true" : "false",
                     (unsigned)txBuffer.size(), currentRetry, (unsigned long)droppedFrames, droppedJson,
                     ESP.getFreeHeap(), ESP.getMinFreeHeap(), millis() / 1000, getCpuFrequencyMhz(),
-                    lastResetReason, getBatteryVoltage());
+                    lastResetReason, radioJson, getBatteryVoltage());
             } else
             #endif
             {
                 len = snprintf(jsonBuffer, sizeof(jsonBuffer),
                     "{\"status\":{\"time\":%ld,\"tx\":%s,\"rx\":%s,\"txBufferCount\":%u,"
                     "\"retry\":%u,\"dropped\":%lu,\"droppedBy\":%s,\"heap\":%u,\"minHeap\":%u,\"uptime\":%lu,"
-                    "\"cpuFreq\":%u,\"resetReason\":\"%s\"}}",
+                    "\"cpuFreq\":%u,\"resetReason\":\"%s\",\"radio\":%s}}",
                     (long)time(NULL), txFlag ? "true" : "false", rxFlag ? "true" : "false",
                     (unsigned)txBuffer.size(), currentRetry, (unsigned long)droppedFrames, droppedJson,
                     ESP.getFreeHeap(), ESP.getMinFreeHeap(), millis() / 1000, getCpuFrequencyMhz(),
-                    lastResetReason);
+                    lastResetReason, radioJson);
             }
             if (len > 0 && (size_t)len < sizeof(jsonBuffer)) {
                 wsBroadcast(jsonBuffer, len);

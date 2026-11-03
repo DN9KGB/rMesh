@@ -61,6 +61,22 @@ void test_oversized_callsign_clamped(void) {
     TEST_ASSERT_LESS_OR_EQUAL(MAX_CALLSIGN_LENGTH, (int)strlen(g.srcCall));
 }
 
+// Regression: an over-long call field is clamped on copy, but the parser must
+// advance by the REAL field length so the following header is still found.
+void test_oversized_callsign_keeps_parser_in_sync(void) {
+    uint8_t buf[64];
+    size_t n = 0;
+    buf[n++] = (uint8_t)(Frame::MESSAGE_FRAME & 0x0F);
+    buf[n++] = (uint8_t)((Frame::SRC_CALL_HEADER << 4) | 12);   // 12 > MAX_CALLSIGN_LENGTH
+    for (int i = 0; i < 12; i++) buf[n++] = 'A' + i;
+    buf[n++] = (uint8_t)((Frame::NODE_CALL_HEADER << 4) | 5);
+    memcpy(&buf[n], "NODE1", 5); n += 5;
+    Frame g;
+    g.importBinary(buf, n);
+    TEST_ASSERT_EQUAL_size_t(MAX_CALLSIGN_LENGTH, strlen(g.srcCall));
+    TEST_ASSERT_EQUAL_STRING("NODE1", g.nodeCall);
+}
+
 // A too-short buffer is handled without crashing or writing fields.
 void test_short_buffer(void) {
     uint8_t b[1] = {0x03};
@@ -154,6 +170,7 @@ int main(int, char**) {
     RUN_TEST(test_roundtrip_message);
     RUN_TEST(test_roundtrip_announce);
     RUN_TEST(test_oversized_callsign_clamped);
+    RUN_TEST(test_oversized_callsign_keeps_parser_in_sync);
     RUN_TEST(test_hopcount_wire_masking);
     RUN_TEST(test_short_buffer);
     RUN_TEST(test_export_tiny_buffer_no_overflow);

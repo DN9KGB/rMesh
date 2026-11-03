@@ -12,6 +12,7 @@
 #include "util/persistence.h"
 #include "util/logging.h"
 #include "network/api.h"
+#include "util/link_math.h"
 
 //Routing list
 std::vector<Route> routingList;
@@ -106,26 +107,31 @@ void addRoutingList(const char* srcCall, const char* viaCall, uint8_t hopCount) 
         routesDirty = true;
         logPrintf(LOG_INFO, "Route", "New route: %s via %s (%d hops)", srcCall, viaCall, hopCount);
     } else {
-        // Case B: Destination exists -> Shortest path wins
-        if (hopCount < it->hopCount) {
-            // Shorter path found -> Update route
+        // Case B: Destination exists
+        if (strcmp(it->viaCall, viaCall) == 0) {
+            // Same via node -> refresh. A shorter hop count via the same node is
+            // taken over; otherwise this is the common steady-state case (every
+            // overheard frame refreshes an existing route). Return early then:
+            // re-sorting the whole table and firing a routes WS-notify (→ every WebUI
+            // re-GETs /api/routes) on an unchanged topology is pure CPU/heap/REST churn.
+            it->timestamp = time(NULL);
+            if (hopCount >= it->hopCount) return;
             routesDirty = true;
-            logPrintf(LOG_INFO, "Route", "Updated route: %s via %s (%d hops, was %d)",
-                      srcCall, viaCall, hopCount, it->hopCount);
+            it->hopCount = hopCount;
+        } else {
+            // Different via node -> switch only if the metric (hops + link penalty
+            // of the next hop) is better by more than the hysteresis, so a 1-hop
+            // route over a link at the SF limit can lose against 2 clean hops.
+            float newMetric = routeMetric(hopCount, peerLinkPenalty(viaCall));
+            float oldMetric = routeMetric(it->hopCount, peerLinkPenalty(it->viaCall));
+            if (!routeShouldSwitch(newMetric, oldMetric)) return;
+            routesDirty = true;
+            logPrintf(LOG_INFO, "Route", "Updated route: %s via %s (%d hops, metric %.1f, was %s/%d hops, %.1f)",
+                      srcCall, viaCall, hopCount, newMetric, it->viaCall, it->hopCount, oldMetric);
             strncpy(it->viaCall, viaCall, MAX_CALLSIGN_LENGTH);
             it->viaCall[MAX_CALLSIGN_LENGTH] = '\0';
             it->timestamp = time(NULL);
             it->hopCount = hopCount;
-        } else if (strcmp(it->viaCall, viaCall) == 0) {
-            // Same via node -> only refresh timestamp. This is the common steady-state
-            // case (every overheard frame refreshes an existing route). Return early:
-            // re-sorting the whole table and firing a routes WS-notify (→ every WebUI
-            // re-GETs /api/routes) on an unchanged topology is pure CPU/heap/REST churn.
-            it->timestamp = time(NULL);
-            return;
-        } else {
-            // New path is longer or equal via different node -> ignore
-            return;
         }
     }
 

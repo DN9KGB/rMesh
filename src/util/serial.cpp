@@ -32,6 +32,8 @@
 #include "util/cli_parse.h"
 #include "util/fsCheck.h"
 #include "mesh/peer.h"
+#include "hal/radio_common.h"
+#include "util/link_math.h"
 #include "mesh/routing.h"
 #include "mesh/ack.h"
 
@@ -420,6 +422,41 @@ void checkSerialRX() {
                     } else if (strncmp(sub, "floodsingle", 11) == 0 && (sub[11] == ' ' || sub[11] == '\0')) {
                         if (sub[11] == ' ') { extSettings.loraFloodSingle = (atoi(parameter + 12) != 0); saveSettings(); }
                         logPrintf(LOG_INFO, "Config", "loraFloodSingle: %s", extSettings.loraFloodSingle ? "true" : "false");
+                    } else if (strncmp(sub, "lbt", 3) == 0 && (sub[3] == ' ' || sub[3] == '\0')) {
+                        if (sub[3] == ' ') { radioOpts.lbt = (atoi(parameter + 4) != 0); saveRadioOpts(); }
+                        logPrintf(LOG_INFO, "Config", "Listen-before-talk: %s", radioOpts.lbt ? "on" : "off");
+                    } else if (strncmp(sub, "relaydelay", 10) == 0 && (sub[10] == ' ' || sub[10] == '\0')) {
+                        if (sub[10] == ' ') {
+                            const char* v = parameter + 11;
+                            if (strcmp(v, "snr") == 0) { radioOpts.relayDelayMode = RELAY_DELAY_SNR; saveRadioOpts(); }
+                            else if (strcmp(v, "random") == 0) { radioOpts.relayDelayMode = RELAY_DELAY_RANDOM; saveRadioOpts(); }
+                            else logPrintf(LOG_WARN, "Config", "Usage: lora relaydelay snr|random");
+                        }
+                        logPrintf(LOG_INFO, "Config", "Relay delay: %s", radioOpts.relayDelayMode == RELAY_DELAY_SNR ? "snr" : "random");
+                    } else if (strncmp(sub, "profile", 7) == 0 && (sub[7] == ' ' || sub[7] == '\0')) {
+                        if (sub[7] == ' ') {
+                            int idx = findLoraProfile(parameter + 8);
+                            if (idx >= 0 && applyLoraProfile(idx)) {
+                                saveSettings();
+                                logPrintf(LOG_INFO, "Config", "Profile '%s' applied.", parameter + 8);
+                            } else {
+                                logPrintf(LOG_WARN, "Config", "Unknown profile. Usage: lora profile standard|robust|weit");
+                            }
+                        }
+                        printLoraProfiles();
+                    } else if (strncmp(sub, "freqcorr", 8) == 0 && (sub[8] == ' ' || sub[8] == '\0')) {
+                        if (sub[8] == ' ') {
+                            long hz = atol(parameter + 9);
+                            if (hz < -100000 || hz > 100000) {
+                                logPrintf(LOG_WARN, "Config", "freqcorr out of range (-100000..100000 Hz)");
+                            } else {
+                                radioOpts.freqCorrHz = (int32_t)hz;
+                                saveRadioOpts();
+                                pendingLoraReinit = true;   // retune with the corrected frequency
+                            }
+                        }
+                        logPrintf(LOG_INFO, "Config", "Frequency correction: %ld Hz (TX/RX on %.6f MHz)",
+                                  (long)radioOpts.freqCorrHz, radioFrequencyMHz());
                     } else if (strncmp(sub, "freq ", 5) == 0) {
                         if (strncmp(sub + 5, "433", 3) == 0) {
                             settings.loraFrequency = 434.850f; settings.loraBandwidth = 62.5f;
@@ -842,6 +879,15 @@ void checkSerialRX() {
                 if (strncmp(serialRxBuffer, "tune", 4) == 0 && (serialRxBuffer[4] == '\0' || serialRxBuffer[4] == ' ')) {
                     pendingTune = true;
                     logPrintf(LOG_INFO, "CLI", "Tune carrier triggered.");
+                }
+
+                // Radio statistics (RX/CRC/header errors, LBT, noise floor, link reserve)
+                if (strncmp(serialRxBuffer, "radio", 5) == 0 && (serialRxBuffer[5] == '\0' || serialRxBuffer[5] == ' ')) {
+                    if (strcmp(parameter, "reset") == 0) {
+                        radioResetStats();
+                        logPrintf(LOG_INFO, "Radio", "Statistics reset.");
+                    }
+                    radioPrintStatus(serialJsonConsole);
                 }
 
                 // Query: peer list as JSON

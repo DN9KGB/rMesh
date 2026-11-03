@@ -750,6 +750,11 @@ function onMessage(event) {
         }
         document.getElementById("txBuffer").innerHTML = d.status.txBufferCount;
         document.getElementById("retry").innerHTML = d.status.retry;
+        if (d.status.radio) {
+            var r = d.status.radio, rEl = document.getElementById("radioStats");
+            if (rEl) rEl.textContent = r.rxOk + "/" + r.crcErr + "/" + r.hdrErr
+                + " · LBT " + r.lbtBusy + (r.noise ? " · " + r.noise.toFixed(0) + " dBm" : "");
+        }
         if (d.status.dropped != null) {
             var dropEl = document.getElementById("dropped");
             if (dropEl) dropEl.innerHTML = d.status.dropped;
@@ -868,6 +873,93 @@ function applyLoraPreset(band) {
     document.getElementById('settingsLoraPreambleLength').value  = p.preambleLength;
     document.getElementById('settingsLoraSyncWord').value        = p.syncWord;
     document.getElementById('loraPreset').value                  = band;
+    updateLoraProfileInfo();
+}
+
+// ── Range profiles (RME-3) ────────────────────────────────────────────────────
+// Must match LoraProfile table in src/util/link_math.cpp. bw/cr null = band preset.
+const LORA_PROFILES = {
+    standard: { sf: 7,  bw: null, cr: null },
+    robust:   { sf: 9,  bw: null, cr: 8 },
+    weit:     { sf: 11, bw: 62.5, cr: 8 },
+};
+
+function loraBandPreset(freq) {
+    return (freq < 500) ? LORA_PRESETS['433'] : LORA_PRESETS['868'];
+}
+
+function loraProfileParams(key, freq) {
+    var p = LORA_PROFILES[key], band = loraBandPreset(freq);
+    return { sf: p.sf, bw: p.bw || band.bandwidth, cr: p.cr || band.codingRate };
+}
+
+// Semtech LoRa time-on-air (explicit header, CRC on), ms
+function loraToA(len, sf, bw, cr, preamble) {
+    var tsym = Math.pow(2, sf) / bw;
+    var de = tsym > 16 ? 1 : 0;
+    var n = Math.ceil((8 * len - 4 * sf + 28 + 16) / (4 * (sf - 2 * de)));
+    return (preamble + 4.25) * tsym + (8 + Math.max(n * cr, 0)) * tsym;
+}
+
+// Sensitivity estimate: -174 + 10log10(BW) + NF 6 dB + SNR floor of the SF
+function loraSensitivity(sf, bw) {
+    return -174 + 10 * Math.log10(bw * 1000) + 6 + (-5 - 2.5 * (sf - 6));
+}
+
+function currentLoraProfileKey() {
+    var freq = parseFloat(document.getElementById('settingsLoraFrequency').value) || 0;
+    var sf = parseInt(document.getElementById('settingsLoraSpreadingFactor').value);
+    var bw = parseFloat(document.getElementById('settingsLoraBandwidth').value);
+    var cr = parseInt(document.getElementById('settingsLoraCodingRate').value);
+    for (var key in LORA_PROFILES) {
+        var p = loraProfileParams(key, freq);
+        if (p.sf === sf && p.cr === cr && Math.abs(p.bw - bw) < 0.01) return key;
+    }
+    return '';
+}
+
+function updateLoraProfileInfo() {
+    var sel = document.getElementById('loraProfile');
+    var info = document.getElementById('loraProfileInfo');
+    if (!sel || !info) return;
+    if (!sel.dataset.bound) {
+        // Re-evaluate the profile whenever the modem parameters are edited by hand
+        ['settingsLoraSpreadingFactor', 'settingsLoraBandwidth', 'settingsLoraCodingRate',
+         'settingsLoraFrequency', 'settingsLoraPreambleLength'].forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el) el.addEventListener('change', updateLoraProfileInfo);
+        });
+        sel.dataset.bound = '1';
+    }
+    sel.value = currentLoraProfileKey();
+    var freq = parseFloat(document.getElementById('settingsLoraFrequency').value) || 0;
+    var sf = parseInt(document.getElementById('settingsLoraSpreadingFactor').value);
+    var bw = parseFloat(document.getElementById('settingsLoraBandwidth').value);
+    var cr = parseInt(document.getElementById('settingsLoraCodingRate').value);
+    var pre = parseInt(document.getElementById('settingsLoraPreambleLength').value) || 10;
+    if (!(sf >= 6 && sf <= 12) || !(bw > 0) || !(cr >= 5 && cr <= 8)) { info.textContent = ''; return; }
+    var std = loraProfileParams('standard', freq);
+    var toa = loraToA(100, sf, bw, cr, pre);
+    var sens = loraSensitivity(sf, bw);
+    var gain = loraSensitivity(std.sf, std.bw) - sens;
+    var txt = t('lora.profile_toa') + ' ' + Math.round(toa) + ' ms · '
+            + t('lora.profile_sens') + ' ' + sens.toFixed(1) + ' dBm ('
+            + (gain >= 0 ? '+' : '') + gain.toFixed(1) + ' dB)';
+    if (freq >= 869.4 && freq <= 869.65) {
+        // 10 % duty cycle = 6 s airtime per minute
+        txt += ' · ' + t('lora.profile_duty').replace('{0}', (toa / 60).toFixed(1));
+    }
+    info.textContent = txt;
+}
+
+function applyLoraProfile(key) {
+    if (!LORA_PROFILES[key]) { updateLoraProfileInfo(); return; }
+    var freq = parseFloat(document.getElementById('settingsLoraFrequency').value) || 0;
+    var p = loraProfileParams(key, freq);
+    document.getElementById('settingsLoraSpreadingFactor').value = p.sf;
+    document.getElementById('settingsLoraBandwidth').value       = p.bw;
+    document.getElementById('settingsLoraCodingRate').value      = p.cr;
+    updateLoraProfileInfo();
 }
 
 function onFrequencyChange() {
@@ -1045,6 +1137,7 @@ function fillSettingsForm(s) {
         else if (freq >= 869.4 && freq <= 869.65)  presetEl.value = "868";
         else                                       presetEl.value = "";
     }
+    updateLoraProfileInfo();
     document.getElementById("settingsLoraRepeat").checked = s.loraRepeat;
     var mhmEl = document.getElementById("settingsMaxHopMessage");
     if (mhmEl) mhmEl.value = s.maxHopMessage != null ? s.maxHopMessage : 15;
